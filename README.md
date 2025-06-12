@@ -16,11 +16,11 @@ pip install -r requirements.txt
 mkdir evaluation_gpt4o
 DSPY_CACHEDIR=evaluation_gpt4o/.dspy_cache python -m langProBe.evaluation --benchmark_set=nonagent --file_path=evaluation_gpt4o --lm=openai/gpt-4o
 ```
-
+#### Running local models
 ```bash
 # example with using llama (change `lm_api_base` to your API provider)
 mkdir evaluation_llama3170b
-DSPY_CACHEDIR=evaluation_llama3170b/.dspy_cache python -m langProBe.evaluation --benchmark_set=nonagent --file_path=evaluation_llama3170b --lm=openai/meta-llama/Meta-Llama-3.1-70b-Instruct --lm_api_base=http://future-hgx-1:7410/v1
+DSPY_CACHEDIR=evaluation_llama3170b/.dspy_cache python -m langProBe.evaluation --benchmark_set=nonagent --file_path=evaluation_llama3170b --lm=openai/meta-llama/Meta-Llama-3.1-70b-Instruct --lm_api_base=http://future-hgx-1:7410/v1 --lm_api_key=...
 ```
 
 ## Adding Benchmarks, Programs, Optimizers
