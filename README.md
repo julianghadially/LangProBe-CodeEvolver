@@ -42,24 +42,20 @@ mkdir eval_hover
 export DSPY_CACHEDIR=eval_hover/.dspy_cache
 
 #Hover
-python -m langProBe.evaluation --benchmark hover --lm openai/gpt-4.1-mini --dataset_mode test --program_class single
+python -m langProBe.evaluation --benchmark hover --lm openai/gpt-4.1-mini --dataset_mode test --program HoverMultiHop
 
 #HotpotGEPA
-python -m langProBe.evaluation --benchmark langProPlus.hotpotGEPA --lm openai/gpt-4o-mini --dataset_mode test --program_class single
+python -m langProBe.evaluation --benchmark langProPlus.hotpotGEPA --lm openai/gpt-4o-mini --dataset_mode test --program HotpotMultiHop
 ```
 Key CLI flags:
-  - --benchmark hotpotQA — run a single program (otherwise it runs all benchmarks in aggregate)
+  - --benchmark hotpotQA — run a single benchmark (otherwise it runs all benchmarks and programs in aggregate)
+  - --program `classname` run a single program (otherwise it runs all programs in the current benchmark?)
   - --benchmark_set nonagent|agent|full — run a category of benchmarks in aggregate
   - --lm openai/gpt-4o-mini — which LLM to use
   - --dataset_mode test|tiny|lite|full — controls dataset size (50/200/500/all)
-  - --program_class baseline|single|archon|all — filter which program variants to evaluate
   - --num_threads 16 — parallelism
   - --use_devset — evaluate on dev set instead of test set
 
-  So yes, you can run per-program or in aggregate. --benchmark hotpotQA runs just HotpotQA; omitting it (or using --benchmark_set) runs everything.
-
-  Under the hood, evaluation.py:312-474 parses args, builds the benchmark list, and calls evaluate_all() → loops through each BenchmarkMeta → calls
-  evaluate() → instantiates EvaluateBench → calls evaluate_baseline() which runs dspy.evaluate.Evaluate over the test set.
 
 ## Quick Usage
 ```bash

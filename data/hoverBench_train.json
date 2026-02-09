@@ -1,0 +1,222 @@
+[
+  {
+    "claim": "Montrose Regional Airport is a public airport. As opposed to the airport where Pro-Air Services is based, which is a joint civil-military international airport.",
+    "supporting_facts": [
+      {
+        "key": "Luis Mu\u00f1oz Mar\u00edn International Airport",
+        "value": 0
+      },
+      {
+        "key": "Montrose Regional Airport",
+        "value": 0
+      },
+      {
+        "key": "Pro-Air Services",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The author of the 1934 novel, Call It Sleep, and Lewis Mumford are both American.",
+    "supporting_facts": [
+      {
+        "key": "Henry Roth",
+        "value": 0
+      },
+      {
+        "key": "Lewis Mumford",
+        "value": 0
+      },
+      {
+        "key": "Call It Sleep",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Henson Airlines Flight 1517 crashed at an airport in Virginia. This airport and Santa Barbara Municipal Airport are both in the United States.",
+    "supporting_facts": [
+      {
+        "key": "Shenandoah Valley Regional Airport",
+        "value": 0
+      },
+      {
+        "key": "Santa Barbara Municipal Airport",
+        "value": 0
+      },
+      {
+        "key": "Henson Airlines Flight 1517",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "KlingStubbins designed the casino that the venue of the 10th IIFA Awards is modeled on.",
+    "supporting_facts": [
+      {
+        "key": "The Venetian Macao",
+        "value": 2
+      },
+      {
+        "key": "The Venetian Las Vegas",
+        "value": 1
+      },
+      {
+        "key": "10th IIFA Awards",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Sixpence None the Richer is a christian rock band and not the band who sand A Heavy Abacus.",
+    "supporting_facts": [
+      {
+        "key": "The Joy Formidable",
+        "value": 0
+      },
+      {
+        "key": "Sixpence None the Richer",
+        "value": 0
+      },
+      {
+        "key": "A Heavy Abacus",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Witch Alder, Fothergilla gardenii,  is one of two species in its genus. Plants are the type of vegetation that that genus and Clerodendrum have in common.",
+    "supporting_facts": [
+      {
+        "key": "Fothergilla",
+        "value": 0
+      },
+      {
+        "key": "Clerodendrum",
+        "value": 0
+      },
+      {
+        "key": "Fothergilla gardenii",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The snooker player Chris Norbury lost to made the final of the 2017 China Championship. The player that made the final got the nickname \"The Magician\".",
+    "supporting_facts": [
+      {
+        "key": "Luca Brecel",
+        "value": 3
+      },
+      {
+        "key": "Shaun Murphy (snooker player)",
+        "value": 1
+      },
+      {
+        "key": "Chris Norbury",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The movie. in which David Zayas acted in, is the movie that John Gavin Malkovich had played in with Matt Damon and Edward Norton.",
+    "supporting_facts": [
+      {
+        "key": "John Malkovich",
+        "value": 3
+      },
+      {
+        "key": "Rounders (film)",
+        "value": 0
+      },
+      {
+        "key": "David Zayas",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Sandi Simcha DuBowski directed a documentary released in 2001. The film Zeitgeist was not also released in 2001.",
+    "supporting_facts": [
+      {
+        "key": "Trembling Before G-d",
+        "value": 0
+      },
+      {
+        "key": "Zeitgeist (film series)",
+        "value": 0
+      },
+      {
+        "key": "Sandi Simcha DuBowski",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Second Battle of Bull Run was fought before the battle, where David P. Casey received the Medal of Honor.",
+    "supporting_facts": [
+      {
+        "key": "Battle of Cold Harbor",
+        "value": 0
+      },
+      {
+        "key": "Second Battle of Bull Run",
+        "value": 0
+      },
+      {
+        "key": "David P. Casey",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Actor Travis Oates voiced Piglet in the 2011 movie. The Jungle Book was released before this movie.",
+    "supporting_facts": [
+      {
+        "key": "Winnie the Pooh (2011 film)",
+        "value": 0
+      },
+      {
+        "key": "The Jungle Book (1994 film)",
+        "value": 0
+      },
+      {
+        "key": "Travis Oates",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The squadron that is a geographically separated unit assigned to the 168th Wing division of the U.S. Navy is named in honor of Carl Benjamin \"Ben\" Eielson and is located 26 miles southeast of Fairbanks, Alaska.",
+    "supporting_facts": [
+      {
+        "key": "Carl Ben Eielson",
+        "value": 0
+      },
+      {
+        "key": "Carl Ben Eielson",
+        "value": 1
+      },
+      {
+        "key": "Eielson Air Force Base",
+        "value": 0
+      },
+      {
+        "key": "213th Space Warning Squadron",
+        "value": 1
+      }
+    ],
+    "label": 0
+  }
+]

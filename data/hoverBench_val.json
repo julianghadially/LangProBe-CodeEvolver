@@ -1,0 +1,466 @@
+[
+  {
+    "claim": "The producer of Back to the World (Street Dogs album), is the Executive Vice President and board member of A&R at Capitol Records, not Rod Stewart.",
+    "supporting_facts": [
+      {
+        "key": "Nate Albert",
+        "value": 0
+      },
+      {
+        "key": "Nate Albert",
+        "value": 1
+      },
+      {
+        "key": "Rod Stewart",
+        "value": 0
+      },
+      {
+        "key": "Back to the World (Street Dogs album)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The star of the TV film Ozark Sharks directed by Greg Mitchell had a role in the 2008 comedy film Leatherheads.",
+    "supporting_facts": [
+      {
+        "key": "Thomas Francis Murphy (actor)",
+        "value": 1
+      },
+      {
+        "key": "Leatherheads",
+        "value": 0
+      },
+      {
+        "key": "Ozark Sharks",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Robert Allen \"Bob\" Case is best known for inspiring the naming of the storm, that caused the 1991 Halloween blizzard, which ia an initial area of low pressure developed off Canada on October 29.",
+    "supporting_facts": [
+      {
+        "key": "Robert Case",
+        "value": 2
+      },
+      {
+        "key": "1991 Perfect Storm",
+        "value": 1
+      },
+      {
+        "key": "1991 Halloween blizzard",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Trevor Devall  is best known for voicing a character in  \"Guardians of the Galaxy\". Paul McCartney wrote the song that inspired that Marvel Comics' character.",
+    "supporting_facts": [
+      {
+        "key": "Rocket Raccoon",
+        "value": 3
+      },
+      {
+        "key": "Rocky Raccoon",
+        "value": 1
+      },
+      {
+        "key": "Trevor Devall",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Between the writer writingThe Four-Chambered Heart and Odysseas Elytis, Odysseas Elytis was awarded an award for Literature.",
+    "supporting_facts": [
+      {
+        "key": "Ana\u00efs Nin",
+        "value": 0
+      },
+      {
+        "key": "Odysseas Elytis",
+        "value": 0
+      },
+      {
+        "key": "Odysseas Elytis",
+        "value": 1
+      },
+      {
+        "key": "The Four-Chambered Heart",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The manufacturer that owns the company that currently produced and marketed the candy the video game Darkened Skye uses in magic is headquartered in the US state Kansas-born.",
+    "supporting_facts": [
+      {
+        "key": "Skittles (confectionery)",
+        "value": 0
+      },
+      {
+        "key": "Mars, Incorporated",
+        "value": 1
+      },
+      {
+        "key": "Darkened Skye",
+        "value": 4
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Scadoxus plant not which Enkianthus campanulatus is the hardiest species to be small enough. This plant could to be grown as an ornamental plant in  tiny containers.",
+    "supporting_facts": [
+      {
+        "key": "Enkianthus",
+        "value": 0
+      },
+      {
+        "key": "Scadoxus",
+        "value": 3
+      },
+      {
+        "key": "Enkianthus campanulatus",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Pierre Nlend Wom\u00e9 was born before the Danish midfielder that played in the Denmark v Sweden UEFA Euro 2008 qualifying game.",
+    "supporting_facts": [
+      {
+        "key": "Pierre Wom\u00e9",
+        "value": 0
+      },
+      {
+        "key": "Christian Poulsen",
+        "value": 0
+      },
+      {
+        "key": "Denmark v Sweden (UEFA Euro 2008 qualifying)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Sara Eskander Poulsen, who voiced a Phineas and Ferb character, achieved mainstream success on The Suite Life of Zack & Cody.",
+    "supporting_facts": [
+      {
+        "key": "Candace Flynn",
+        "value": 0
+      },
+      {
+        "key": "Ashley Tisdale",
+        "value": 2
+      },
+      {
+        "key": "Sara Poulsen",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The tennis player Kenneth or Ken Eliot Flach is from a country closer to Canada than the woman who defeated Sharapova in the 2015 French Open- Women's Singles.",
+    "supporting_facts": [
+      {
+        "key": "Ken Flach",
+        "value": 0
+      },
+      {
+        "key": "Lucie \u0160af\u00e1\u0159ov\u00e1",
+        "value": 0
+      },
+      {
+        "key": "2015 French Open \u2013 Women's Singles",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The 2010 population of the 19th-century town where Gale constructed houses, and also constructed in Amherst Avenue Historic District, is located was 5,042",
+    "supporting_facts": [
+      {
+        "key": "Lake George Avenue Historic District",
+        "value": 0
+      },
+      {
+        "key": "Ticonderoga, New York",
+        "value": 0
+      },
+      {
+        "key": "Ticonderoga, New York",
+        "value": 1
+      },
+      {
+        "key": "Amherst Avenue Historic District",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Elwood Zimmerman was an Australian entomologist. He died in a suburb of a town that had a population of 3,544 at the 2016 census.",
+    "supporting_facts": [
+      {
+        "key": "Tura Beach, New South Wales",
+        "value": 0
+      },
+      {
+        "key": "Merimbula",
+        "value": 3
+      },
+      {
+        "key": "Elwood Zimmerman",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Peter Staley was the primary figure in the 1999 documentary that includes footage of a demonstration at a cathedral. The cathedral was located in New York City.",
+    "supporting_facts": [
+      {
+        "key": "How to Survive a Plague",
+        "value": 6
+      },
+      {
+        "key": "St. Patrick's Cathedral (Manhattan)",
+        "value": 0
+      },
+      {
+        "key": "Peter Staley",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The species of mammal which the town, a community that forms part of the Centre USD 397 district, was named after is Antilocapra americana.",
+    "supporting_facts": [
+      {
+        "key": "Antelope, Kansas",
+        "value": 1
+      },
+      {
+        "key": "Pronghorn",
+        "value": 0
+      },
+      {
+        "key": "Pronghorn",
+        "value": 1
+      },
+      {
+        "key": "Centre USD 397",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Emory University was founded before the school that William Ridley Wills attended.",
+    "supporting_facts": [
+      {
+        "key": "Vanderbilt University",
+        "value": 1
+      },
+      {
+        "key": "Emory University",
+        "value": 1
+      },
+      {
+        "key": "Emory University",
+        "value": 2
+      },
+      {
+        "key": "William Ridley Wills",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Car and Driver is the total circulation of the magazine that called a route that runs through Orbiston, Ohio one of the most scenic highways nationwide.",
+    "supporting_facts": [
+      {
+        "key": "Ohio State Route 78",
+        "value": 0
+      },
+      {
+        "key": "Ohio State Route 78",
+        "value": 1
+      },
+      {
+        "key": "Car and Driver",
+        "value": 1
+      },
+      {
+        "key": "Orbiston, Ohio",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Niki Lauda had a near-fatal accident at an event  in 1976, showing the importance of a racing helmet. The winner of that event retired in 1979.",
+    "supporting_facts": [
+      {
+        "key": "1976 German Grand Prix",
+        "value": 2
+      },
+      {
+        "key": "James Hunt",
+        "value": 1
+      },
+      {
+        "key": "Racing helmet",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "One of the contributors to the Candide (operetta) lyrics and the opera Maxine Kumin are the same nationality.",
+    "supporting_facts": [
+      {
+        "key": "Dorothy Parker",
+        "value": 0
+      },
+      {
+        "key": "Maxine Kumin",
+        "value": 0
+      },
+      {
+        "key": "Candide (operetta)",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The L stands for Leroy in the film's star, Samuel L. Jackson's. name. Cynthia Cypert acted in the same movie.",
+    "supporting_facts": [
+      {
+        "key": "Patriot Games (film)",
+        "value": 3
+      },
+      {
+        "key": "Samuel L. Jackson",
+        "value": 0
+      },
+      {
+        "key": "Cynthia Cypert",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The director of Fallo! and Baltasar Korm\u00e1kur are not both from the same country.",
+    "supporting_facts": [
+      {
+        "key": "Tinto Brass",
+        "value": 0
+      },
+      {
+        "key": "Baltasar Korm\u00e1kur",
+        "value": 0
+      },
+      {
+        "key": "Fallo!",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The actor who has performed as Inspector Javert in a Les Mis\u00e9rables production has won the Laurence Olivier Award for Best Actor in a musical multiple times. This actor also starred in the film The Caterpillar Wish.",
+    "supporting_facts": [
+      {
+        "key": "Les Mis\u00e9rables: The Dream Cast in Concert",
+        "value": 4
+      },
+      {
+        "key": "Les Mis\u00e9rables: The Dream Cast in Concert",
+        "value": 5
+      },
+      {
+        "key": "Philip Quast",
+        "value": 0
+      },
+      {
+        "key": "Philip Quast",
+        "value": 1
+      },
+      {
+        "key": "The Caterpillar Wish",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Teide National Park, established in 1943, is located in Spain's Canary Islands. So is the park where you would find the plant Echium wildpretii subsp. trichosiphon.",
+    "supporting_facts": [
+      {
+        "key": "Caldera de Taburiente National Park",
+        "value": 0
+      },
+      {
+        "key": "Teide National Park",
+        "value": 0
+      },
+      {
+        "key": "Echium wildpretii subsp. trichosiphon",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The head coach for the 2012 Columbia Lions football team, and Kirk Kerkorian are both Kerkorian.",
+    "supporting_facts": [
+      {
+        "key": "Pete Mangurian",
+        "value": 0
+      },
+      {
+        "key": "Kirk Kerkorian",
+        "value": 0
+      },
+      {
+        "key": "2012 Columbia Lions football team",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The star of the 2016 film London Town plays a younger version of this Character in HBO's Game of thrones that is also in a fantasy novel Series A Song of Ice and Fire written by Cersei Lannister.",
+    "supporting_facts": [
+      {
+        "key": "Nell Williams",
+        "value": 1
+      },
+      {
+        "key": "Cersei Lannister",
+        "value": 0
+      },
+      {
+        "key": "London Town (2016 film)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  }
+]

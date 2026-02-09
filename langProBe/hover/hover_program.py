@@ -1,4 +1,5 @@
 import dspy
+from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):

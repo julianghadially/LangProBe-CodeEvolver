@@ -8,7 +8,7 @@ from .hover_utils import count_unique_docs
 
 class hoverBench(Benchmark):
     def init_dataset(self):
-        dataset = load_dataset("hover", trust_remote_code=True)
+        dataset = load_dataset("hover-nlp/hover", revision="refs/convert/parquet")
 
         hf_trainset = dataset["train"]
         hf_testset = dataset[

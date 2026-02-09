@@ -10,8 +10,6 @@ langProBe/AppWorld/experiments/
 langProBe/AppWorld/.conda/
 *.png
 
-data/
-
 # result files
 *.txt
 *.model

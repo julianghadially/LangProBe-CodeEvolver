@@ -1,0 +1,446 @@
+[
+  {
+    "claim": "The band that released the song \"Beds Are Burning\" in June, 1987, chose it's name by drawing it out of a hat; Switchfoot didn't.",
+    "supporting_facts": [
+      {
+        "key": "Midnight Oil",
+        "value": 2
+      },
+      {
+        "key": "Switchfoot",
+        "value": 0
+      },
+      {
+        "key": "Switchfoot",
+        "value": 1
+      },
+      {
+        "key": "Beds Are Burning",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The difference between Moses Tyson Jr.'s cousin and his aunt Mary Ramsey, is that Ramsey has also worked with other well-known artists.",
+    "supporting_facts": [
+      {
+        "key": "Sly Stone",
+        "value": 0
+      },
+      {
+        "key": "Mary Ramsey",
+        "value": 1
+      },
+      {
+        "key": "Moses Tyson Jr.",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Commodore, who has three ships named USS Wadsworth in his honor, served during the war that was faught between the United States, the United Kingdom, and their respective allies.",
+    "supporting_facts": [
+      {
+        "key": "Alexander S. Wadsworth",
+        "value": 1
+      },
+      {
+        "key": "War of 1812",
+        "value": 0
+      },
+      {
+        "key": "USS Wadsworth",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The show, in which the host of A Word in Your Ear also hosted, usually aired on Monday.",
+    "supporting_facts": [
+      {
+        "key": "The Krypton Factor",
+        "value": 1
+      },
+      {
+        "key": "Gordon Burns",
+        "value": 1
+      },
+      {
+        "key": "A Word in Your Ear",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "A castle inherited by Baron Leconfield from his father, is located in the market town, civil parish, and two electoral wards of Egremont in the Borough of Copeland in Cumbria, the Borough of Copeland.",
+    "supporting_facts": [
+      {
+        "key": "Egremont Castle",
+        "value": 0
+      },
+      {
+        "key": "Egremont, Cumbria",
+        "value": 0
+      },
+      {
+        "key": "Baron Leconfield",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Bada is a vocalist. So is the singer and songwriter who released the album \"I en tid som v\u00e5r\".",
+    "supporting_facts": [
+      {
+        "key": "Marie Fredriksson",
+        "value": 0
+      },
+      {
+        "key": "Bada (singer)",
+        "value": 0
+      },
+      {
+        "key": "I en tid som v\u00e5r",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Two documentaries, War/Dance and another film, do not have the same director. This other documentary film features Sandy Stone (artist).",
+    "supporting_facts": [
+      {
+        "key": "Traceroute (film)",
+        "value": 0
+      },
+      {
+        "key": "War/Dance",
+        "value": 0
+      },
+      {
+        "key": "Sandy Stone (artist)",
+        "value": 5
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The plant genus Eustoma has a longer common name than the genus for myrtle.",
+    "supporting_facts": [
+      {
+        "key": "Myrtus",
+        "value": 0
+      },
+      {
+        "key": "Eustoma",
+        "value": 0
+      },
+      {
+        "key": "Fidelity (art and symbolism)",
+        "value": 5
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "J\u0101nis Strazdi\u0146\u0161 had the lowest vocal range in the group that produced the work Pa un par.",
+    "supporting_facts": [
+      {
+        "key": "Cosmos (band)",
+        "value": 0
+      },
+      {
+        "key": "Cosmos (band)",
+        "value": 1
+      },
+      {
+        "key": "Bass (voice type)",
+        "value": 0
+      },
+      {
+        "key": "Pa un par",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Wooyoung left the South Korean music group that Lee Jun-ho is a part of, before the release of the group's DVD called \"Take Off\".",
+    "supporting_facts": [
+      {
+        "key": "Ultra Lover",
+        "value": 2
+      },
+      {
+        "key": "2PM",
+        "value": 3
+      },
+      {
+        "key": "Go Crazy (album)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "U.S. Route 51 is the highway Interstate 39 replaces has a junction at Cairo Junction, Illinois. It is 1286 miles long.",
+    "supporting_facts": [
+      {
+        "key": "Cairo Junction, Illinois",
+        "value": 1
+      },
+      {
+        "key": "U.S. Route 51",
+        "value": 0
+      },
+      {
+        "key": "Interstate 39",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Life Is a Minestrone was the other single from Eric Stewart and Graham Gouldman's band's 1975 album, besides the song that inspired the album Relayted.",
+    "supporting_facts": [
+      {
+        "key": "The Original Soundtrack",
+        "value": 2
+      },
+      {
+        "key": "I'm Not in Love",
+        "value": 0
+      },
+      {
+        "key": "Relayted",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The director of the 2017 Carpenters drama, Wonderstruck (film), and Chris Columbus are of the same nationality.",
+    "supporting_facts": [
+      {
+        "key": "Todd Haynes",
+        "value": 0
+      },
+      {
+        "key": "Chris Columbus (filmmaker)",
+        "value": 0
+      },
+      {
+        "key": "Wonderstruck (film)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Arthur Hiller Penn was born before the director and producer of \"We, the Normal\".",
+    "supporting_facts": [
+      {
+        "key": "George Kuchar",
+        "value": 0
+      },
+      {
+        "key": "Arthur Penn",
+        "value": 0
+      },
+      {
+        "key": "We, the Normal",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The producer of the album Beat Pyramid is the British music producer and engineer notable for working wih an British electronic band having the founders: Dave Gahan, Martin Gore, and Andy Fletcher.",
+    "supporting_facts": [
+      {
+        "key": "Gareth Jones (music producer)",
+        "value": 0
+      },
+      {
+        "key": "Depeche Mode",
+        "value": 0
+      },
+      {
+        "key": "Depeche Mode",
+        "value": 1
+      },
+      {
+        "key": "Beat Pyramid",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Bill Boyd works of the company that operates the place Thomas Eje made his debut at.",
+    "supporting_facts": [
+      {
+        "key": "Suncoast Hotel and Casino",
+        "value": 1
+      },
+      {
+        "key": "Boyd Gaming",
+        "value": 1
+      },
+      {
+        "key": "Thomas Eje",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The person who deposed Bernard Coard formed a military government with himself as chairman to rule Grenada, after the killing of a Grenadian politician who was the leader of the New Jewel Movement that was an effort in the areas of socio-economic development, education, and black liberation.",
+    "supporting_facts": [
+      {
+        "key": "Hudson Austin",
+        "value": 1
+      },
+      {
+        "key": "Maurice Bishop",
+        "value": 0
+      },
+      {
+        "key": "Bernard Coard",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The closely related tropical plant that the name Stylophorum diphyllum is derived from is a perennial plant. Duranta is not a perennial plant.",
+    "supporting_facts": [
+      {
+        "key": "Chelidonium",
+        "value": 0
+      },
+      {
+        "key": "Duranta",
+        "value": 0
+      },
+      {
+        "key": "Stylophorum diphyllum",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Michael O'Keefe played Ben Meechum in this American movie. Both the tragic hero as a protagonist and that film are dramas.",
+    "supporting_facts": [
+      {
+        "key": "The Great Santini",
+        "value": 0
+      },
+      {
+        "key": "Tragic hero",
+        "value": 0
+      },
+      {
+        "key": "Michael O'Keefe",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The director of the 1936 film The Singing Cowboy was an Western actor. Kurt Neumann was not an Western actor.",
+    "supporting_facts": [
+      {
+        "key": "Mack V. Wright",
+        "value": 0
+      },
+      {
+        "key": "Kurt Neumann (director)",
+        "value": 0
+      },
+      {
+        "key": "The Singing Cowboy (1936 film)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The British fashion and lifestyle publication, for whom Rachel Egglestone-Evans works at, and InStyle are not both US-based magazines.",
+    "supporting_facts": [
+      {
+        "key": "Vintage Life",
+        "value": 0
+      },
+      {
+        "key": "InStyle",
+        "value": 0
+      },
+      {
+        "key": "Rachel Egglestone-Evans",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The winner of the 1980 Lorraine Open was born before Serena Williams.",
+    "supporting_facts": [
+      {
+        "key": "Gene Mayer",
+        "value": 0
+      },
+      {
+        "key": "Serena Williams",
+        "value": 0
+      },
+      {
+        "key": "1980 Lorraine Open",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Casey Jr. is a water play area featuring fountains and a splash pool across from the elephant version of the TriceraTop Spin. It is an aerial carousel-style ride located in Fantasyland at six Disney parks around the world.",
+    "supporting_facts": [
+      {
+        "key": "Casey Jr. Splash 'n' Soak Station",
+        "value": 3
+      },
+      {
+        "key": "Dumbo the Flying Elephant",
+        "value": 0
+      },
+      {
+        "key": "TriceraTop Spin",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The canadian actor, who played Karl Rove in \"That's My Bush!\", from Stockton, CA appeared in Psych, an American detective comedy-drama television series created by Steve Franks.",
+    "supporting_facts": [
+      {
+        "key": "Kurt Fuller",
+        "value": 2
+      },
+      {
+        "key": "Psych",
+        "value": 0
+      },
+      {
+        "key": "That's My Bush!",
+        "value": 3
+      }
+    ],
+    "label": 0
+  }
+]

@@ -1,0 +1,1002 @@
+[
+  {
+    "claim": "A principal of a Wyoming, D.C.-based lobbying firm, BKSH & Associates Worldwide, is older than a former lobbyist. This lobbyist was at the Trump campaign\u2013Russian meeting.",
+    "supporting_facts": [
+      {
+        "key": "Charles R. Black Jr.",
+        "value": 0
+      },
+      {
+        "key": "Paul Manafort",
+        "value": 0
+      },
+      {
+        "key": "BKSH &amp; Associates Worldwide",
+        "value": 0
+      },
+      {
+        "key": "Trump campaign\u2013Russian meeting",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Ivano Bonetti (born 1 August 1964 in North East Lincolnshire) is an Italian football manager and former midfielder, who appeared for the English club, Grimsby Town Football Club, a professional football club based in the town of Cleethorpes, Lincolnshire, England, that competes in League Two.",
+    "supporting_facts": [
+      {
+        "key": "Ivano Bonetti",
+        "value": 1
+      },
+      {
+        "key": "Grimsby Town F.C.",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "English Mastiff is bigger than a breed that Canine Chiari-like malformation is widespread in.",
+    "supporting_facts": [
+      {
+        "key": "Griffon Bruxellois",
+        "value": 0
+      },
+      {
+        "key": "Griffon Bruxellois",
+        "value": 1
+      },
+      {
+        "key": "English Mastiff",
+        "value": 0
+      },
+      {
+        "key": "English Mastiff",
+        "value": 1
+      },
+      {
+        "key": "Canine Chiari-like malformation",
+        "value": 7
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Norwegian actress  Lillo-Stenberg performed in Anton Checkhov's \"Three Sisters\" as well as a three-act play written by Henrik Ibsen set in Norway around 1879. She is the sister of Fr\u00f8ydis Armand.",
+    "supporting_facts": [
+      {
+        "key": "Gisken Armand",
+        "value": 0
+      },
+      {
+        "key": "Gisken Armand",
+        "value": 3
+      },
+      {
+        "key": "A Doll's House",
+        "value": 0
+      },
+      {
+        "key": "A Doll's House",
+        "value": 2
+      },
+      {
+        "key": "Fr\u00f8ydis Armand",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "In 1998 and 1999 the designer of the McLaren MP4/13 won the Formula One World Champion.",
+    "supporting_facts": [
+      {
+        "key": "McLaren MP4/13",
+        "value": 0
+      },
+      {
+        "key": "Mika H\u00e4kkinen",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "\"Only Love Can Break a Heart\" is performed by a singer-songwriter that died in 2006.",
+    "supporting_facts": [
+      {
+        "key": "Only Love Can Break a Heart",
+        "value": 0
+      },
+      {
+        "key": "Gene Pitney",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "James Hewitt and another family-law solicitor have in common the English country of origin. The other English solicitor was a chair of Global Witness.",
+    "supporting_facts": [
+      {
+        "key": "Mark Stephens (solicitor)",
+        "value": 0
+      },
+      {
+        "key": "James Hewitt",
+        "value": 0
+      },
+      {
+        "key": "Global Witness",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Temple Hill Entertainment produced its first film in 2006. The star the of the film won Best Young Actor/Actress at the 2004 the Broadcast Film Critics Association.",
+    "supporting_facts": [
+      {
+        "key": "The Nativity Story",
+        "value": 0
+      },
+      {
+        "key": "Keisha Castle-Hughes",
+        "value": 1
+      },
+      {
+        "key": "Temple Hill Entertainment",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The MVP of the game Red Flaherty umpired was elected to the Baseball Hall of Fame.",
+    "supporting_facts": [
+      {
+        "key": "1965 World Series",
+        "value": 1
+      },
+      {
+        "key": "Sandy Koufax",
+        "value": 2
+      },
+      {
+        "key": "Red Flaherty",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The former Associate Director of University of Puerto Rico has wrote for a publication which typically falls on the conservative political spectrum.",
+    "supporting_facts": [
+      {
+        "key": "Laura Mansfield",
+        "value": 1
+      },
+      {
+        "key": "Laura Mansfield",
+        "value": 2
+      },
+      {
+        "key": "WorldNetDaily",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "This actor stars in a 2008 American science fiction action film that is loosely based a 1992 novel written by Steven Gould. He also stars in a film adaptation of the novel, Hallam Foe.",
+    "supporting_facts": [
+      {
+        "key": "Jamie Bell",
+        "value": 0
+      },
+      {
+        "key": "Jamie Bell",
+        "value": 1
+      },
+      {
+        "key": "Jumper (2008 film)",
+        "value": 0
+      },
+      {
+        "key": "Hallam Foe (novel)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Swiss music duo, who released a song called \"Devils Ball\", released their best known single \"The Captain of Her Heart\" in 1986.",
+    "supporting_facts": [
+      {
+        "key": "Blue (Double album)",
+        "value": 1
+      },
+      {
+        "key": "Double (band)",
+        "value": 0
+      },
+      {
+        "key": "Devils Ball",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Irish actress, Valene Kane, starred in War Games: At the End of the Day in 1988.",
+    "supporting_facts": [
+      {
+        "key": "War Games: At the End of the Day",
+        "value": 3
+      },
+      {
+        "key": "Valene Kane",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The international arms smuggler who was the subject of the 2014 documentary film \"The Notorious Mr. Bout\" was born in July 1967.",
+    "supporting_facts": [
+      {
+        "key": "The Notorious Mr. Bout",
+        "value": 0
+      },
+      {
+        "key": "The Notorious Mr. Bout",
+        "value": 1
+      },
+      {
+        "key": "Viktor Bout",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The writer of  the novel \"Horizon\" is American. They are younger than the author of \"Dubin's Lives\".",
+    "supporting_facts": [
+      {
+        "key": "Bernard Malamud",
+        "value": 0
+      },
+      {
+        "key": "Lois McMaster Bujold",
+        "value": 0
+      },
+      {
+        "key": "Dubin's Lives",
+        "value": 0
+      },
+      {
+        "key": "Horizon (novel)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The  skyscraper 1717 Broadway in an area of New York is considered to be the tallest hotel in North America. It is taller than where Cleary Gottlieb Steen & Hamilton is headquartered. It is taller than where Cleary Gottlieb Steen & Hamilton is headquartered. The Barclay Tower is also located in the area of New York.",
+    "supporting_facts": [
+      {
+        "key": "One Liberty Plaza",
+        "value": 0
+      },
+      {
+        "key": "1717 Broadway",
+        "value": 0
+      },
+      {
+        "key": "1717 Broadway",
+        "value": 1
+      },
+      {
+        "key": "Cleary Gottlieb Steen &amp; Hamilton",
+        "value": 0
+      },
+      {
+        "key": "Barclay Tower",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Stuart Murdoch (musician) lead singer and songwriter for an indie pop band are from farther west than the band whose second album was called Legao. He was born 25 August 1968.",
+    "supporting_facts": [
+      {
+        "key": "Kings of Convenience",
+        "value": 0
+      },
+      {
+        "key": "Belle and Sebastian",
+        "value": 0
+      },
+      {
+        "key": "Legao",
+        "value": 0
+      },
+      {
+        "key": "Stuart Murdoch (musician)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Don't Worry About Me is the first album released by this singer as a solo artist. He and a band member of Vent 414 do not have the same nationality.",
+    "supporting_facts": [
+      {
+        "key": "Joey Ramone",
+        "value": 0
+      },
+      {
+        "key": "Miles Hunt",
+        "value": 0
+      },
+      {
+        "key": "Don't Worry About Me",
+        "value": 0
+      },
+      {
+        "key": "Vent 414",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "On January 30, 2017, Elaine Duke was nominated by President Donald Trump to become the first female United States Deputy Secretary of Homeland Security under a man born in 1950.",
+    "supporting_facts": [
+      {
+        "key": "Elaine Duke",
+        "value": 1
+      },
+      {
+        "key": "John F. Kelly",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "egend of the Boneknapper Dragon is a 2010 animated short film by DreamWorks Animation. It is contained in the franchise based on the books written by a writer. The writer also wrote \"That Rabbit Belongs to Emily Brown\".",
+    "supporting_facts": [
+      {
+        "key": "How to Train Your Dragon (franchise)",
+        "value": 2
+      },
+      {
+        "key": "Legend of the Boneknapper Dragon",
+        "value": 0
+      },
+      {
+        "key": "Cressida Cowell",
+        "value": 0
+      },
+      {
+        "key": "That Rabbit Belongs to Emily Brown",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Hawaii v. Office of Hawaiian Affairs, 556 U.S. 163 (2009), was U.S. case about the former crown lands of the Hawaiian monarchy, the Court, in an opinion by Samuel Anthony Alito Jr. an Associate Justice of the Supreme Court of the United States who served on the court since January 31, 2006.",
+    "supporting_facts": [
+      {
+        "key": "Hawaii v. Office of Hawaiian Affairs",
+        "value": 1
+      },
+      {
+        "key": "Samuel Alito",
+        "value": 0
+      },
+      {
+        "key": "Samuel Alito",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The band a singer was in was an Australian rock band that was \"one of the most critically acclaimed bands of the 80's\". The band is featured in KSPN's AAA format. Shane Shu has a voice that has been compared to the singer's voice. The band is featured in KSPN's AAA format.",
+    "supporting_facts": [
+      {
+        "key": "KSPN-FM",
+        "value": 4
+      },
+      {
+        "key": "Talking Heads",
+        "value": 0
+      },
+      {
+        "key": "Talking Heads",
+        "value": 2
+      },
+      {
+        "key": "David Byrne",
+        "value": 0
+      },
+      {
+        "key": "Shane Shu",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The player that defeated Brad Gilber in the 1990 Thriftway ATP Championships in LA \u2013 Singles, won more events than \u00c9douard Roger-Vasselin.",
+    "supporting_facts": [
+      {
+        "key": "Stefan Edberg",
+        "value": 0
+      },
+      {
+        "key": "Stefan Edberg",
+        "value": 1
+      },
+      {
+        "key": "Stefan Edberg",
+        "value": 2
+      },
+      {
+        "key": "Stefan Edberg",
+        "value": 3
+      },
+      {
+        "key": "\u00c9douard Roger-Vasselin",
+        "value": 1
+      },
+      {
+        "key": "1990 Thriftway ATP Championships \u2013 Singles",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Alexander Osipovich Gelfond was a Soviet mathematician. He was born before he mathematician for which Alexandrov theorem is named.",
+    "supporting_facts": [
+      {
+        "key": "Alexander Gelfond",
+        "value": 0
+      },
+      {
+        "key": "Aleksandr Danilovich Aleksandrov",
+        "value": 0
+      },
+      {
+        "key": "Alexandrov theorem",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Jon Turteltaub directed a 1993 film. The leader of the band Leon and the Peoples had a part in the film.",
+    "supporting_facts": [
+      {
+        "key": "Leon Robinson",
+        "value": 1
+      },
+      {
+        "key": "Cool Runnings",
+        "value": 0
+      },
+      {
+        "key": "Leon and the Peoples",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The star of The Perfect Match (2016 film) played the role of Kiera Whitaker in the BET Comedy-drama \"Cheapness and Beauty\". This was in addition to her role in the 2006 film whose features the song Git Up, Git Out.",
+    "supporting_facts": [
+      {
+        "key": "Lauren London",
+        "value": 0
+      },
+      {
+        "key": "Lauren London",
+        "value": 1
+      },
+      {
+        "key": "ATL (film)",
+        "value": 0
+      },
+      {
+        "key": "The Perfect Match (2016 film)",
+        "value": 1
+      },
+      {
+        "key": "Git Up, Git Out",
+        "value": 5
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The song featured on the Beatles' album \"Please Please Me\" that was covered by Tiffany is I Saw Her Standing There.",
+    "supporting_facts": [
+      {
+        "key": "Tiffany Darwish",
+        "value": 0
+      },
+      {
+        "key": "Tiffany Darwish",
+        "value": 4
+      },
+      {
+        "key": "I Saw Her Standing There",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The artist, co-creator of short-lived Nickelodeon series \"Robot and Monster\" with Dave Pressler, co-wrote the teleplay of the episode that was part of the sixth season of The Simpsons.",
+    "supporting_facts": [
+      {
+        "key": "Jennifer Ventimilia",
+        "value": 1
+      },
+      {
+        "key": "'Round Springfield",
+        "value": 0
+      },
+      {
+        "key": "Dave Pressler",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The seventh largest inhabited island in Hawaii has the remote wild beach Polihale State Park.",
+    "supporting_facts": [
+      {
+        "key": "Polihale State Park",
+        "value": 0
+      },
+      {
+        "key": "Polihale State Park",
+        "value": 1
+      },
+      {
+        "key": "Niihau",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The film that Chun Woo-hee acted in 2016 was of the horror genre.",
+    "supporting_facts": [
+      {
+        "key": "Chun Woo-hee",
+        "value": 3
+      },
+      {
+        "key": "The Wailing (film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Air Vice Marshal Christopher James \"Chris\" Luck was Commandant of the navy college that was established as the worlds first air academy.",
+    "supporting_facts": [
+      {
+        "key": "Chris Luck",
+        "value": 0
+      },
+      {
+        "key": "Chris Luck",
+        "value": 1
+      },
+      {
+        "key": "Royal Air Force College Cranwell",
+        "value": 0
+      },
+      {
+        "key": "Royal Air Force College Cranwell",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Len Goodman is a judge of Strictly Come Dancing and a former ballroom dancer.",
+    "supporting_facts": [
+      {
+        "key": "Strictly Come Dancing (series 8)",
+        "value": 0
+      },
+      {
+        "key": "Strictly Come Dancing (series 8)",
+        "value": 3
+      },
+      {
+        "key": "Len Goodman",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The director/actor of Rhubarb (1969 film) was in a British comedy film directed by Victor Maddern. Rhubarb also starred Harry Secombe.",
+    "supporting_facts": [
+      {
+        "key": "The Bargee",
+        "value": 0
+      },
+      {
+        "key": "Eric Sykes",
+        "value": 0
+      },
+      {
+        "key": "Rhubarb (1969 film)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The documentary The Ten-Year Lunch was released before the film Matthew O'Neill (filmmaker) is best known for.",
+    "supporting_facts": [
+      {
+        "key": "Baghdad ER",
+        "value": 0
+      },
+      {
+        "key": "The Ten-Year Lunch",
+        "value": 0
+      },
+      {
+        "key": "Matthew O'Neill (filmmaker)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Best of Nanci Griffith song \"The Road to Aberdeen\" was recorded at a concert venue located on the northern edge or South Kensington, London, and had songs chosen from a number of concerts there.",
+    "supporting_facts": [
+      {
+        "key": "Live Wood",
+        "value": 1
+      },
+      {
+        "key": "Royal Albert Hall",
+        "value": 0
+      },
+      {
+        "key": "The Best of Nanci Griffith",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The father of Adam Bakri and another director directed films. This other director directed the film \"Killing Season\".",
+    "supporting_facts": [
+      {
+        "key": "Mark Steven Johnson",
+        "value": 0
+      },
+      {
+        "key": "Mohammad Bakri",
+        "value": 0
+      },
+      {
+        "key": "Killing Season (film)",
+        "value": 0
+      },
+      {
+        "key": "Adam Bakri",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The film John Indi acted in is an American film. The 1998 horror film that Dean Jones (actor) played Albert Dooley is too.",
+    "supporting_facts": [
+      {
+        "key": "The Million Dollar Duck",
+        "value": 0
+      },
+      {
+        "key": "A Far Off Place",
+        "value": 0
+      },
+      {
+        "key": "Dean Jones (actor)",
+        "value": 1
+      },
+      {
+        "key": "John Indi",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A woman was the Queen consort of the man that succeeded his brother, who was king from 1241 until his death in 1250. This woman lived at Nyk\u00f8bing Castle.",
+    "supporting_facts": [
+      {
+        "key": "Christopher I of Denmark",
+        "value": 2
+      },
+      {
+        "key": "Eric IV of Denmark",
+        "value": 0
+      },
+      {
+        "key": "Margaret Sambiria",
+        "value": 0
+      },
+      {
+        "key": "Margaret Sambiria",
+        "value": 1
+      },
+      {
+        "key": "Nyk\u00f8bing Castle",
+        "value": 2
+      },
+      {
+        "key": "Nyk\u00f8bing Castle",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Indigofera does not belong to the cypress family Cupressaceae. The type of tree used to build the hut James Wild Horse Trap does not belong to another cypress family either. Cunninghamites elegans is an extinct species in this other family.",
+    "supporting_facts": [
+      {
+        "key": "Juniper",
+        "value": 0
+      },
+      {
+        "key": "Indigofera",
+        "value": 0
+      },
+      {
+        "key": "James Wild Horse Trap",
+        "value": 1
+      },
+      {
+        "key": "Cunninghamites elegans",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The school that G\u00fcl\u015fen Bayraktar attended is in a city. Yeni Valide Mosque are located in the same city.",
+    "supporting_facts": [
+      {
+        "key": "Istanbul Technical University",
+        "value": 0
+      },
+      {
+        "key": "Yeni Valide Mosque",
+        "value": 0
+      },
+      {
+        "key": "G\u00fcl\u015fen (singer)",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "22 September 1791 is the birth date of this German scientist. His laboratory burner design was later perfected by another scientist, forming the device of which the Teclu burner is a hotter-flamed variant. This other scientist was the laboratory assistant of Robert Bunsen.",
+    "supporting_facts": [
+      {
+        "key": "Peter Desaga",
+        "value": 0
+      },
+      {
+        "key": "Peter Desaga",
+        "value": 1
+      },
+      {
+        "key": "Michael Faraday",
+        "value": 0
+      },
+      {
+        "key": "Robert Bunsen",
+        "value": 3
+      },
+      {
+        "key": "Teclu burner",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Adrian Moss (basketball, born 1988) played high school basketball for a community school. It was headquartered in the same place that Paul William Milhouse died.",
+    "supporting_facts": [
+      {
+        "key": "Franklin Community High School",
+        "value": 1
+      },
+      {
+        "key": "Franklin Community Schools",
+        "value": 0
+      },
+      {
+        "key": "Adrian Moss (basketball, born 1988)",
+        "value": 1
+      },
+      {
+        "key": "Paul William Milhouse",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "co-writer of the After the Fall (song) and Dennis Lyxz\u00e9n are not members of the same band.",
+    "supporting_facts": [
+      {
+        "key": "Steve Perry",
+        "value": 1
+      },
+      {
+        "key": "Dennis Lyxz\u00e9n",
+        "value": 0
+      },
+      {
+        "key": "Dennis Lyxz\u00e9n",
+        "value": 1
+      },
+      {
+        "key": "After the Fall (song)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Adam McKay co-wrote \"SNL\" and served as head writer for \"Saturday Night Live\". The other writer directed the film The Kid Who Would Be King.",
+    "supporting_facts": [
+      {
+        "key": "Joe Cornish",
+        "value": 2
+      },
+      {
+        "key": "Adam McKay",
+        "value": 1
+      },
+      {
+        "key": "The Kid Who Would Be King",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The birthplace of professional squash player, Scott Arnold, is the most populous city in Australia and Oceania, and the birthplace of a silver and bronze medalist from the 1992 Barcelona Paralympics.",
+    "supporting_facts": [
+      {
+        "key": "Marsha Green",
+        "value": 0
+      },
+      {
+        "key": "Marsha Green",
+        "value": 1
+      },
+      {
+        "key": "Sydney",
+        "value": 0
+      },
+      {
+        "key": "Scott Arnold (squash player)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The institute that Jeffrey Trent has been Vice President and Research Director of since 2009 was founded in part by American businessman Jay Van Andel, who was best known as co-founder of the Amway Corporation.",
+    "supporting_facts": [
+      {
+        "key": "Van Andel Institute",
+        "value": 1
+      },
+      {
+        "key": "Jay Van Andel",
+        "value": 0
+      },
+      {
+        "key": "Jeffrey Trent",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "David Knox is the former Chief Executive Officer and Managing Director of a biotech company owned predominantly by nationals of Australia.",
+    "supporting_facts": [
+      {
+        "key": "David Knox (businessman)",
+        "value": 0
+      },
+      {
+        "key": "Santos Limited",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "David May founded the company that the shop, that was an anchor store for Simi Valley Town Center when it opened, is a subsidiary of.",
+    "supporting_facts": [
+      {
+        "key": "Robinsons-May",
+        "value": 1
+      },
+      {
+        "key": "The May Department Stores Company",
+        "value": 1
+      },
+      {
+        "key": "Simi Valley Town Center",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Arundel Castle was damaged during a war between the two groups the Arundel (\"Roundheads\") and the Royalists (\"Cavaliers\").",
+    "supporting_facts": [
+      {
+        "key": "Arundel Castle",
+        "value": 3
+      },
+      {
+        "key": "English Civil War",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Saturday 22 September 1791 is the birth date of this English scientist. His laboratory burner design was later perfected by another scientist, forming the device of which the Teclu burner is a hotter-flamed variant. This other scientist was the laboratory assistant of Robert Bunsen.",
+    "supporting_facts": [
+      {
+        "key": "Peter Desaga",
+        "value": 0
+      },
+      {
+        "key": "Peter Desaga",
+        "value": 1
+      },
+      {
+        "key": "Michael Faraday",
+        "value": 0
+      },
+      {
+        "key": "Robert Bunsen",
+        "value": 3
+      },
+      {
+        "key": "Teclu burner",
+        "value": 0
+      }
+    ],
+    "label": 0
+  }
+]
