@@ -17,7 +17,10 @@ def check_benchmark(benchmark):
 
 def register_benchmark(benchmark: str):
     # import the benchmark module
-    benchmark_metas = importlib.import_module(benchmark, package="langProBe")
+    if benchmark.startswith("."):
+        benchmark_metas = importlib.import_module(benchmark, package="langProBe")
+    else:
+        benchmark_metas = importlib.import_module(benchmark)
     if check_benchmark(benchmark_metas):
         registered_benchmarks.extend(benchmark_metas.benchmark)
     else:

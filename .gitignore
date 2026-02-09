@@ -2,12 +2,12 @@ local_cache
 *__pycache__
 .DS_Store
 temp
+env/*
 
 scratchpad.ipynb
 langProBe/AppWorld/data/
 langProBe/AppWorld/experiments/
 langProBe/AppWorld/.conda/
-*.csv
 *.png
 
 data/
@@ -16,7 +16,6 @@ data/
 *.txt
 *.model
 *.stat
-*.json
 
 .dspy_cache/
 .evaluation_*/

@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
 import copy
 from dataclasses import dataclass, field
+import json
 import os
+from pathlib import Path
 import random
 import dspy
 from typing import Any, Callable, List, Type
@@ -57,6 +59,32 @@ class Benchmark(ABC):
         assert self.train_set is not None, "Train set not initialized"
         assert self.dev_set is not None, "Dev set not initialized"
         assert self.val_set is not None, "Val set not initialized"
+
+        self._save_splits()
+
+    def _save_splits(self):
+        """Save dataset splits to data/ directory for CodeEvolver."""
+        bench_name = self.__class__.__name__
+        data_dir = Path("data")
+        data_dir.mkdir(exist_ok=True)
+
+        def serialize_split(examples):
+            return [{k: v for k, v in ex.items()} for ex in examples]
+
+        splits = {
+            "train": self.train_set,
+            "dev": self.dev_set,
+            "val": self.val_set,
+            "test": self.test_set,
+        }
+
+        for split_name, examples in splits.items():
+            file_path = data_dir / f"{bench_name}_{split_name}.json"
+            if file_path.exists():
+                continue
+            with open(file_path, "w") as f:
+                json.dump(serialize_split(examples), f, indent=2, default=str)
+            print(f"Saved {file_path} ({len(examples)} examples)")
 
     @abstractmethod
     def init_dataset(self) -> None:

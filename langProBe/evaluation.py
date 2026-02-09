@@ -145,6 +145,7 @@ def evaluate(
     use_devset=False,
     missing_mode=False,
     program_class="all",
+    program_name_filter=None,
     api_key=None,
     api_base=None,
 ):
@@ -155,6 +156,7 @@ def evaluate(
     optimizers: List[type(Teleprompter) | (type(Teleprompter), kwargs_for_compile)]
     missing_mode: only evaluate experiments without a result file
     program_class: the program class to evaluate
+    program_name_filter: if provided, only evaluate the program with this name
     """
     dataset_mode = dataset_mode or benchmark_meta.dataset_mode
     benchmark = benchmark_meta.benchmark(dataset_mode=dataset_mode)
@@ -195,6 +197,9 @@ def evaluate(
                 continue
 
         program_name = getattr(program, "_name", program.__class__.__name__)
+
+        if program_name_filter is not None and program_name != program_name_filter:
+            continue
 
         evaluate_baseline_flag = True
         optimizers = copy.deepcopy(benchmark_meta.optimizers)
@@ -279,6 +284,7 @@ def evaluate_all(
     use_devset=False,
     missing_mode=False,
     program_class="all",
+    program_name_filter=None,
     api_key=None,
     api_base=None,
 ):
@@ -297,6 +303,7 @@ def evaluate_all(
             use_devset,
             missing_mode,
             program_class,
+            program_name_filter=program_name_filter,
             api_key=api_key,
             api_base=api_base,
         )
@@ -407,6 +414,13 @@ if __name__ == "__main__":
         default="all",
     )
 
+    parser.add_argument(
+        "--program",
+        help="The specific program name to evaluate (e.g., HotpotMultiHop). If not provided, all programs in the benchmark are evaluated.",
+        type=str,
+        default=None,
+    )
+
     args = parser.parse_args()
 
     suppress_dspy_output = args.suppress_dspy_output
@@ -451,7 +465,10 @@ if __name__ == "__main__":
     )
 
     if args.benchmark:
-        benchmarks = [f".{args.benchmark}"]
+        if "." in args.benchmark:
+            benchmarks = [args.benchmark]
+        else:
+            benchmarks = [f".{args.benchmark}"]
 
     # get current time to append to the file name
     import datetime
@@ -469,6 +486,7 @@ if __name__ == "__main__":
         use_devset=args.use_devset,
         missing_mode=args.missing_mode,
         program_class=args.program_class,
+        program_name_filter=args.program,
         api_key=args.lm_api_key,
         api_base=args.lm_api_base,
     )

@@ -1,14 +1,65 @@
-# LangProBe
+# LangProBe-CodeEvolver
+This project is a fork of LangProBe.
 
-LangProBe (language program benchmark) measures the architectures and optimization strategies for language model programs. Using LangProBe, exploring relationships between cost and language model program performance becomes easy. For a detailed report, read our paper [LangProBe: a Language Programs Benchmark](https://arxiv.org/abs/2502.20315). We welcome contributions from all dimensions, including new programs, new (DSPy) optimizations, new datasets, as well as experiment data for new language models. 
+LangProBe is an AI system benchmark built in DSPY for executing multiple common system types, including the following:
+- Multi-hop question-answering - HotpotQA
+- Multi-hop fact-checking - HoVer
+- RAG question-answering in tech domain - RAGQAArenaTech
+- Math question-answering - GSM8k
+- Task completion - AppWorld
+- Household Task completion - AlfWorld
 
-## Installation
+CodeEvolver is an optimizer that takes an initial program and makes changes to the prompts and the code (including context pipeline, tooling, AI modules, AI module graph, etc.). 
 
+The LangProBe-CodeEvolver benchmark is set up to measure CodeEvolver changes. To produce a useful measurement of impact, CodeEvolver controls for unfair resource changes. For example, the number of hops allowed in the multi hop benchmarks is kept constant. However, in its nature, CodeEvolver is designed to modify the system which inevitably changes resource consumption, including changing the number of AI modules called, and the services used. The controls Ensure that any resource consumption changes are fair.
+
+## LangProBe Usage
+
+### Setup
 ```bash
 conda create -n langprobe python=3.10 -y
 conda activate langprobe
 pip install -r requirements.txt
 ```
+
+### How the flow works
+Calling evaluation.py kicks off the folowing processes
+- langProBe.register_benchmark(".hotpotQA")  # imports hotpotQA/__init__.py
+- gets BenchmarkMeta (dataset class, list of programs, metric)
+- for each program:
+    - EvaluateBench(benchmark, program, metric, lm)
+    - evaluate_baseline()
+        - dspy.evaluate.Evaluate runs program.forward() on each test example
+        - score with answer_exact_match
+        - returns score + token/cost stats
+
+### How to Run the Benchmark for CodeEvolver
+
+Each benchmark should be run as follows:
+```bash
+#make cache directory (modify as needed)
+mkdir eval_hover 
+export DSPY_CACHEDIR=eval_hover/.dspy_cache
+
+#Hover
+python -m langProBe.evaluation --benchmark hover --lm openai/gpt-4.1-mini --dataset_mode test --program_class single
+
+#HotpotGEPA
+python -m langProBe.evaluation --benchmark langProPlus.hotpotGEPA --lm openai/gpt-4o-mini --dataset_mode test --program_class single
+```
+Key CLI flags:
+  - --benchmark hotpotQA — run a single program (otherwise it runs all benchmarks in aggregate)
+  - --benchmark_set nonagent|agent|full — run a category of benchmarks in aggregate
+  - --lm openai/gpt-4o-mini — which LLM to use
+  - --dataset_mode test|tiny|lite|full — controls dataset size (50/200/500/all)
+  - --program_class baseline|single|archon|all — filter which program variants to evaluate
+  - --num_threads 16 — parallelism
+  - --use_devset — evaluate on dev set instead of test set
+
+  So yes, you can run per-program or in aggregate. --benchmark hotpotQA runs just HotpotQA; omitting it (or using --benchmark_set) runs everything.
+
+  Under the hood, evaluation.py:312-474 parses args, builds the benchmark list, and calls evaluate_all() → loops through each BenchmarkMeta → calls
+  evaluate() → instantiates EvaluateBench → calls evaluate_baseline() which runs dspy.evaluate.Evaluate over the test set.
 
 ## Quick Usage
 ```bash
@@ -16,18 +67,11 @@ pip install -r requirements.txt
 mkdir evaluation_gpt4o
 DSPY_CACHEDIR=evaluation_gpt4o/.dspy_cache python -m langProBe.evaluation --benchmark_set=nonagent --file_path=evaluation_gpt4o --lm=openai/gpt-4o
 ```
-#### Running local models
-```bash
-# example with using llama (change `lm_api_base` to your API provider)
-mkdir evaluation_llama3170b
-DSPY_CACHEDIR=evaluation_llama3170b/.dspy_cache python -m langProBe.evaluation --benchmark_set=nonagent --file_path=evaluation_llama3170b --lm=openai/meta-llama/Meta-Llama-3.1-70b-Instruct --lm_api_base=http://future-hgx-1:7410/v1 --lm_api_key=...
-```
 
 ## Adding Benchmarks, Programs, Optimizers
 
 Benchmarks and programs are defined by the `BenchmarkMeta` class. You can program definitions to existing `BenchmarkMeta`s or define your own `BenchmarkMeta`s.
 Additionally, each `BenchmarkMeta` object also has an `optimizers` field, containing optimizer definitions. You can inspect `optimizers.py` to checkout how to define an optimizer and default optimizers in `DEFAULT_OPTIMIZERS`. Currently, optimizers can only be evaluated with DSPy programs.
-
 
 
 ## LangProBe Structure
@@ -62,9 +106,3 @@ This file defines programs for this benchmark. There are a few requirements for 
 #### `bench_name_utils.py`
 This file defines utility functions for this benchmark.
 
-### Contributing
-#### Formatting
-For simplicity, we use `black` formatter with the following command:
-```bash
-black --fast langProBe/*.py langProBe/*/*.py
-```
