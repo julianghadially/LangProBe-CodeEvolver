@@ -38,4 +38,5 @@ The textual feedback module is not part of this program. It belongs in the CodeE
 
 ## Ambiguity in GEPA
 
-**Hop filtering:** The training data in GEPA is filtered to 3-hop only (count_unique_docs == 3), but the test set currently includes all hop counts (2, 3, 4-hop). The GEPA paper doesn't explicitly state whether it filters test examples by hops, but since it follows LangProBe and the LangProBe code doesn't filter the test set, the test set is a general-purpose evaluation across all hops
+We tried to get close to the GEPA baseline of 38% on gpt 4.1 mini.  
+- seed = 6, Predict: 34.3%

@@ -1,438 +1,658 @@
 [
   {
-    "claim": "A principal of a Wyoming, D.C.-based lobbying firm, BKSH & Associates Worldwide, is older than a former lobbyist. This lobbyist was at the Trump campaign\u2013Russian meeting.",
+    "claim": "Antonis Fotsis is a player for the club who's name has the starting letter from an alphabet derived from the Phoenician alphabet.",
     "supporting_facts": [
       {
-        "key": "Charles R. Black Jr.",
-        "value": 0
-      },
-      {
-        "key": "Paul Manafort",
-        "value": 0
-      },
-      {
-        "key": "BKSH &amp; Associates Worldwide",
-        "value": 0
-      },
-      {
-        "key": "Trump campaign\u2013Russian meeting",
-        "value": 0
-      }
-    ],
-    "label": 0
-  },
-  {
-    "claim": "Ivano Bonetti (born 1 August 1964 in North East Lincolnshire) is an Italian football manager and former midfielder, who appeared for the English club, Grimsby Town Football Club, a professional football club based in the town of Cleethorpes, Lincolnshire, England, that competes in League Two.",
-    "supporting_facts": [
-      {
-        "key": "Ivano Bonetti",
-        "value": 1
-      },
-      {
-        "key": "Grimsby Town F.C.",
-        "value": 0
-      }
-    ],
-    "label": 0
-  },
-  {
-    "claim": "English Mastiff is bigger than a breed that Canine Chiari-like malformation is widespread in.",
-    "supporting_facts": [
-      {
-        "key": "Griffon Bruxellois",
-        "value": 0
-      },
-      {
-        "key": "Griffon Bruxellois",
-        "value": 1
-      },
-      {
-        "key": "English Mastiff",
-        "value": 0
-      },
-      {
-        "key": "English Mastiff",
-        "value": 1
-      },
-      {
-        "key": "Canine Chiari-like malformation",
-        "value": 7
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "The Norwegian actress  Lillo-Stenberg performed in Anton Checkhov's \"Three Sisters\" as well as a three-act play written by Henrik Ibsen set in Norway around 1879. She is the sister of Fr\u00f8ydis Armand.",
-    "supporting_facts": [
-      {
-        "key": "Gisken Armand",
-        "value": 0
-      },
-      {
-        "key": "Gisken Armand",
-        "value": 3
-      },
-      {
-        "key": "A Doll's House",
-        "value": 0
-      },
-      {
-        "key": "A Doll's House",
+        "key": "Ilysiakos B.C.",
         "value": 2
       },
       {
-        "key": "Fr\u00f8ydis Armand",
+        "key": "Greek alphabet",
         "value": 1
+      },
+      {
+        "key": "Antonis Fotsis",
+        "value": 0
       }
     ],
     "label": 1
   },
   {
-    "claim": "In 1998 and 1999 the designer of the McLaren MP4/13 won the Formula One World Champion.",
+    "claim": "I would be more worried about playing a chess game against the north Belgian artist that made Prelude to a Broken Arm, than Jiang Wen.",
     "supporting_facts": [
       {
-        "key": "McLaren MP4/13",
+        "key": "Marcel Duchamp",
         "value": 0
       },
       {
-        "key": "Mika H\u00e4kkinen",
-        "value": 1
+        "key": "Jiang Wen",
+        "value": 0
+      },
+      {
+        "key": "Prelude to a Broken Arm",
+        "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "\"Only Love Can Break a Heart\" is performed by a singer-songwriter that died in 2006.",
+    "claim": "Jacob \"Jack\" Kevorkian, born in 1977, is best known for publicly championing a terminal patient's right to die via physician-assisted suicide. Not the Hall of Fame porn star that replaced Juli Ashton on Playboy Radio.",
     "supporting_facts": [
       {
-        "key": "Only Love Can Break a Heart",
+        "key": "Christy Canyon",
         "value": 0
       },
       {
-        "key": "Gene Pitney",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "James Hewitt and another family-law solicitor have in common the English country of origin. The other English solicitor was a chair of Global Witness.",
-    "supporting_facts": [
-      {
-        "key": "Mark Stephens (solicitor)",
+        "key": "Jack Kevorkian",
         "value": 0
       },
       {
-        "key": "James Hewitt",
-        "value": 0
+        "key": "Jack Kevorkian",
+        "value": 1
       },
       {
-        "key": "Global Witness",
+        "key": "Playboy Radio",
         "value": 3
       }
     ],
     "label": 0
   },
   {
-    "claim": "Temple Hill Entertainment produced its first film in 2006. The star the of the film won Best Young Actor/Actress at the 2004 the Broadcast Film Critics Association.",
+    "claim": "Lili Chookasian was born 7 days before the conductor for Where Are You My Brothers?.",
     "supporting_facts": [
       {
-        "key": "The Nativity Story",
+        "key": "Constantine Orbelian",
         "value": 0
       },
       {
-        "key": "Keisha Castle-Hughes",
-        "value": 1
+        "key": "Lili Chookasian",
+        "value": 0
       },
       {
-        "key": "Temple Hill Entertainment",
+        "key": "Where Are You My Brothers?",
         "value": 1
       }
     ],
-    "label": 1
+    "label": 0
   },
   {
-    "claim": "The MVP of the game Red Flaherty umpired was elected to the Baseball Hall of Fame.",
+    "claim": "Zohra Lampert starred alongside Natalie Wood and Warren Beatty in a 1961 comedy movie. That film was directed by a Greek-American director described as \"one of the most honored and influential directors in Broadway and Hollywood history\" by the New York Times.",
     "supporting_facts": [
       {
-        "key": "1965 World Series",
+        "key": "Splendor in the Grass",
+        "value": 0
+      },
+      {
+        "key": "Splendor in the Grass",
         "value": 1
       },
       {
-        "key": "Sandy Koufax",
-        "value": 2
+        "key": "Elia Kazan",
+        "value": 0
       },
       {
-        "key": "Red Flaherty",
-        "value": 2
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "The former Associate Director of University of Puerto Rico has wrote for a publication which typically falls on the conservative political spectrum.",
-    "supporting_facts": [
-      {
-        "key": "Laura Mansfield",
-        "value": 1
-      },
-      {
-        "key": "Laura Mansfield",
-        "value": 2
-      },
-      {
-        "key": "WorldNetDaily",
+        "key": "Zohra Lampert",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "This actor stars in a 2008 American science fiction action film that is loosely based a 1992 novel written by Steven Gould. He also stars in a film adaptation of the novel, Hallam Foe.",
+    "claim": "An South African actor, director, screenwriter, musician, and singer was born on March 26, 1934. This actor performed in Popi and Catch-22. He is the son of the writer of Black and White (Three Dog Night song).",
     "supporting_facts": [
       {
-        "key": "Jamie Bell",
+        "key": "David I. Arkin",
         "value": 0
       },
       {
-        "key": "Jamie Bell",
+        "key": "Alan Arkin",
+        "value": 0
+      },
+      {
+        "key": "Alan Arkin",
         "value": 1
       },
       {
-        "key": "Jumper (2008 film)",
+        "key": "Black and White (Three Dog Night song)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Rudolf Christoph Eucken received the 1908 Nobel Prize for Literature. The author of The Hessian did not.",
+    "supporting_facts": [
+      {
+        "key": "Howard Fast",
         "value": 0
       },
       {
-        "key": "Hallam Foe (novel)",
+        "key": "Rudolf Christoph Eucken",
+        "value": 0
+      },
+      {
+        "key": "The Hessian",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Qutebrowser uses DuckDuckGo to emphasize returning the best results.",
+    "supporting_facts": [
+      {
+        "key": "Qutebrowser",
+        "value": 0
+      },
+      {
+        "key": "Qutebrowser",
+        "value": 2
+      },
+      {
+        "key": "DuckDuckGo",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "\"(I'm 10,000 Years Old)\" was the subtitle of the 11th album by the iconic rock and roll singer, Elvis Presley.",
+    "supporting_facts": [
+      {
+        "key": "Elvis Country (I'm 10,000 Years Old)",
+        "value": 0
+      },
+      {
+        "key": "Elvis Presley",
         "value": 1
       }
     ],
     "label": 1
   },
   {
-    "claim": "The Swiss music duo, who released a song called \"Devils Ball\", released their best known single \"The Captain of Her Heart\" in 1986.",
+    "claim": "Hurricane Beulah was the second tropical storm, second hurricane, and only major hurricane during the 1967 Atlantic hurricane season, which was the first major Atlantic hurricane season to be included in the satellite era.",
     "supporting_facts": [
       {
-        "key": "Blue (Double album)",
-        "value": 1
-      },
-      {
-        "key": "Double (band)",
+        "key": "Hurricane Beulah",
         "value": 0
       },
       {
-        "key": "Devils Ball",
+        "key": "1967 Atlantic hurricane season",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Richard Thomas Griffiths played a role in Bedtime Stories, the 2008 animated movie. That movie is one which Jonathan Morgan Heit played Patrick.",
+    "supporting_facts": [
+      {
+        "key": "Bedtime Stories (film)",
+        "value": 0
+      },
+      {
+        "key": "Richard Griffiths",
+        "value": 0
+      },
+      {
+        "key": "Jonathan Morgan Heit",
         "value": 0
       }
     ],
-    "label": 1
+    "label": 0
   },
   {
-    "claim": "Irish actress, Valene Kane, starred in War Games: At the End of the Day in 1988.",
+    "claim": "Madina Lake plays alternative and indie rock music. The band with the album The Stars Are Indifferent To Astronomy also plays alternative rock music.",
     "supporting_facts": [
       {
-        "key": "War Games: At the End of the Day",
+        "key": "Nada Surf",
+        "value": 0
+      },
+      {
+        "key": "Madina Lake",
+        "value": 0
+      },
+      {
+        "key": "The Stars Are Indifferent to Astronomy",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The 25 square-mile Nantahala National Forest and the forest which Broad Creek (Bogue Sound) runs through are both located in North Carolina.",
+    "supporting_facts": [
+      {
+        "key": "Croatan National Forest",
+        "value": 0
+      },
+      {
+        "key": "Nantahala National Forest",
+        "value": 0
+      },
+      {
+        "key": "Broad Creek (Bogue Sound)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Le roi malgr\u00e9 lui and the opera, in which soprano Nicolai Gedda sang the part of Anatol for it's January 1958 world premiere, contain the same number of acts.",
+    "supporting_facts": [
+      {
+        "key": "Vanessa (opera)",
+        "value": 0
+      },
+      {
+        "key": "Le roi malgr\u00e9 lui",
+        "value": 0
+      },
+      {
+        "key": "Nicolai Gedda",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The movie adaption of the novel \"In Her Shoes\" was released in 2005. Not It was written by the author of Good In Bed.",
+    "supporting_facts": [
+      {
+        "key": "Jennifer Weiner",
         "value": 3
       },
       {
-        "key": "Valene Kane",
+        "key": "In Her Shoes (film)",
+        "value": 0
+      },
+      {
+        "key": "Good in Bed",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The international arms smuggler who was the subject of the 2014 documentary film \"The Notorious Mr. Bout\" was born in July 1967.",
+    "claim": "Both Rod Lurie and Douchan Gersi work in the food industry.",
     "supporting_facts": [
       {
-        "key": "The Notorious Mr. Bout",
+        "key": "Rod Lurie",
         "value": 0
       },
       {
-        "key": "The Notorious Mr. Bout",
-        "value": 1
-      },
-      {
-        "key": "Viktor Bout",
+        "key": "Douchan Gersi",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The writer of  the novel \"Horizon\" is American. They are younger than the author of \"Dubin's Lives\".",
+    "claim": "The Straight Story and Never a Dull Moment do not both Star Dick Van Dyke.",
     "supporting_facts": [
       {
-        "key": "Bernard Malamud",
-        "value": 0
-      },
-      {
-        "key": "Lois McMaster Bujold",
-        "value": 0
-      },
-      {
-        "key": "Dubin's Lives",
-        "value": 0
-      },
-      {
-        "key": "Horizon (novel)",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "The  skyscraper 1717 Broadway in an area of New York is considered to be the tallest hotel in North America. It is taller than where Cleary Gottlieb Steen & Hamilton is headquartered. It is taller than where Cleary Gottlieb Steen & Hamilton is headquartered. The Barclay Tower is also located in the area of New York.",
-    "supporting_facts": [
-      {
-        "key": "One Liberty Plaza",
-        "value": 0
-      },
-      {
-        "key": "1717 Broadway",
-        "value": 0
-      },
-      {
-        "key": "1717 Broadway",
-        "value": 1
-      },
-      {
-        "key": "Cleary Gottlieb Steen &amp; Hamilton",
-        "value": 0
-      },
-      {
-        "key": "Barclay Tower",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Stuart Murdoch (musician) lead singer and songwriter for an indie pop band are from farther west than the band whose second album was called Legao. He was born 25 August 1968.",
-    "supporting_facts": [
-      {
-        "key": "Kings of Convenience",
-        "value": 0
-      },
-      {
-        "key": "Belle and Sebastian",
-        "value": 0
-      },
-      {
-        "key": "Legao",
-        "value": 0
-      },
-      {
-        "key": "Stuart Murdoch (musician)",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Don't Worry About Me is the first album released by this singer as a solo artist. He and a band member of Vent 414 do not have the same nationality.",
-    "supporting_facts": [
-      {
-        "key": "Joey Ramone",
-        "value": 0
-      },
-      {
-        "key": "Miles Hunt",
-        "value": 0
-      },
-      {
-        "key": "Don't Worry About Me",
-        "value": 0
-      },
-      {
-        "key": "Vent 414",
-        "value": 1
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "On January 30, 2017, Elaine Duke was nominated by President Donald Trump to become the first female United States Deputy Secretary of Homeland Security under a man born in 1950.",
-    "supporting_facts": [
-      {
-        "key": "Elaine Duke",
-        "value": 1
-      },
-      {
-        "key": "John F. Kelly",
-        "value": 0
-      }
-    ],
-    "label": 0
-  },
-  {
-    "claim": "egend of the Boneknapper Dragon is a 2010 animated short film by DreamWorks Animation. It is contained in the franchise based on the books written by a writer. The writer also wrote \"That Rabbit Belongs to Emily Brown\".",
-    "supporting_facts": [
-      {
-        "key": "How to Train Your Dragon (franchise)",
-        "value": 2
-      },
-      {
-        "key": "Legend of the Boneknapper Dragon",
-        "value": 0
-      },
-      {
-        "key": "Cressida Cowell",
-        "value": 0
-      },
-      {
-        "key": "That Rabbit Belongs to Emily Brown",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Hawaii v. Office of Hawaiian Affairs, 556 U.S. 163 (2009), was U.S. case about the former crown lands of the Hawaiian monarchy, the Court, in an opinion by Samuel Anthony Alito Jr. an Associate Justice of the Supreme Court of the United States who served on the court since January 31, 2006.",
-    "supporting_facts": [
-      {
-        "key": "Hawaii v. Office of Hawaiian Affairs",
-        "value": 1
-      },
-      {
-        "key": "Samuel Alito",
-        "value": 0
-      },
-      {
-        "key": "Samuel Alito",
-        "value": 1
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "The band a singer was in was an Australian rock band that was \"one of the most critically acclaimed bands of the 80's\". The band is featured in KSPN's AAA format. Shane Shu has a voice that has been compared to the singer's voice. The band is featured in KSPN's AAA format.",
-    "supporting_facts": [
-      {
-        "key": "KSPN-FM",
+        "key": "The Straight Story",
         "value": 4
       },
       {
-        "key": "Talking Heads",
+        "key": "Never a Dull Moment (1968 film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Victoria Larimore and Mauritz Stiller have both worked as independent directors.",
+    "supporting_facts": [
+      {
+        "key": "Victoria Larimore",
         "value": 0
       },
       {
-        "key": "Talking Heads",
+        "key": "Mauritz Stiller",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Arne Berge helped rescue the inmates of a concentration camp during operation White Buses.",
+    "supporting_facts": [
+      {
+        "key": "Arne Berge",
+        "value": 0
+      },
+      {
+        "key": "Arne Berge",
+        "value": 1
+      },
+      {
+        "key": "White Buses",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The star of the film Lovelace also appeared in such films as \" The Dark Knight Rises\", \"The Other Boleyn Girl\", \"Wild Child\", \"Atonement\", \"Maleficent\", \"The Three Musketeers\" and \"The Dark Knight Rises\".",
+    "supporting_facts": [
+      {
+        "key": "One Percent More Humid",
+        "value": 1
+      },
+      {
+        "key": "Juno Temple",
+        "value": 1
+      },
+      {
+        "key": "Lovelace (film)",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "This peptide hormone stimulates the release of the main mineralocorticoid hormone from the adrenal cortex, a part of the adrenal gland. H295R is responsive to this hormone.",
+    "supporting_facts": [
+      {
+        "key": "Angiotensin",
+        "value": 0
+      },
+      {
+        "key": "Angiotensin",
         "value": 2
       },
       {
-        "key": "David Byrne",
+        "key": "Aldosterone",
         "value": 0
       },
       {
-        "key": "Shane Shu",
+        "key": "H295R",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Kentucky Department of Corrections is headquarted along Mississippi River.",
+    "supporting_facts": [
+      {
+        "key": "Kentucky Department of Corrections",
+        "value": 2
+      },
+      {
+        "key": "Frankfort, Kentucky",
         "value": 3
       }
     ],
     "label": 0
   },
   {
-    "claim": "The player that defeated Brad Gilber in the 1990 Thriftway ATP Championships in LA \u2013 Singles, won more events than \u00c9douard Roger-Vasselin.",
+    "claim": "The character Father Frank Kelly in \"Father Ted\" was played by an actor who acted alongside Sara Martins.",
+    "supporting_facts": [
+      {
+        "key": "Death in Paradise (TV series)",
+        "value": 0
+      },
+      {
+        "key": "Ardal O'Hanlon",
+        "value": 1
+      },
+      {
+        "key": "Sara Martins",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Aleksey Petrovich Yermolov, was a Russian Imperial general, of the 19th century who commanded Russian troops in the Caucasian War, he distinguished himself during the Napoleonic Wars at the Battle of Paris that was fought on March 30\u201331, 1814 between the Sixth Coalition\u2014consisting of Russia, Austria, and Prussia against the French Empire.",
+    "supporting_facts": [
+      {
+        "key": "Aleksey Petrovich Yermolov",
+        "value": 4
+      },
+      {
+        "key": "Battle of Paris (1814)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The place where John Farr Abbott is buried and Brentwood Cathedral are in the same northern country.",
+    "supporting_facts": [
+      {
+        "key": "York Minster",
+        "value": 0
+      },
+      {
+        "key": "Brentwood Cathedral",
+        "value": 0
+      },
+      {
+        "key": "John Farr Abbott",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The first name, of the founder and owner of the Poker Hall of Fame's, father is Lester.",
+    "supporting_facts": [
+      {
+        "key": "Jack Binion",
+        "value": 0
+      },
+      {
+        "key": "Jack Binion",
+        "value": 1
+      },
+      {
+        "key": "Benny Binion",
+        "value": 0
+      },
+      {
+        "key": "Poker Hall of Fame",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "This athlete and Fabrice Santoro were both professional tennis players. The athlete won the title at the 1984 Bavarian Tennis Championships \u2013 Singles.",
+    "supporting_facts": [
+      {
+        "key": "Tom\u00e1\u0161 \u0160m\u00edd",
+        "value": 0
+      },
+      {
+        "key": "Fabrice Santoro",
+        "value": 0
+      },
+      {
+        "key": "1984 Bavarian Tennis Championships \u2013 Singles",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The band, whose second album is Stupid Stupid Stupid, and \"Balance and Composure\" are from the same country.",
+    "supporting_facts": [
+      {
+        "key": "Black Grape",
+        "value": 0
+      },
+      {
+        "key": "Balance and Composure",
+        "value": 0
+      },
+      {
+        "key": "Stupid Stupid Stupid",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The birthplace of American engineer Alfred L.Rives is a plantation near Monticello, the primary residence of Clinton.",
+    "supporting_facts": [
+      {
+        "key": "Castle Hill (Virginia)",
+        "value": 0
+      },
+      {
+        "key": "Monticello",
+        "value": 0
+      },
+      {
+        "key": "Alfred L. Rives",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The practical purposes that Adailiya's public works park likely serve are the distribution of potable water, and to provide emergency storage for fire protection.",
+    "supporting_facts": [
+      {
+        "key": "Adiliya",
+        "value": 3
+      },
+      {
+        "key": "Water tower",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "\"the Redemptress\" was the nickname of the orphaned Brazilian heiress that signed the Lei Aurea.",
+    "supporting_facts": [
+      {
+        "key": "Lei \u00c1urea",
+        "value": 0
+      },
+      {
+        "key": "Lei \u00c1urea",
+        "value": 1
+      },
+      {
+        "key": "Isabel, Princess Imperial of Brazil",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Pavel V\u00edzner and his partner were the defending champions of the 2007 Brasil Open \u2013 Doubles. Vizner's partner and Oliver Marach were both professional tennis players.",
+    "supporting_facts": [
+      {
+        "key": "Luk\u00e1\u0161 Dlouh\u00fd",
+        "value": 0
+      },
+      {
+        "key": "Oliver Marach",
+        "value": 0
+      },
+      {
+        "key": "2007 Brasil Open \u2013 Doubles",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "This is the island that has parts leased to Apia and a bridge to Apia. It is also the home of the Chimelong International Ocean Resort.",
+    "supporting_facts": [
+      {
+        "key": "L\u00f3tus Bridge",
+        "value": 0
+      },
+      {
+        "key": "L\u00f3tus Bridge",
+        "value": 1
+      },
+      {
+        "key": "Hengqin",
+        "value": 0
+      },
+      {
+        "key": "Hengqin",
+        "value": 2
+      },
+      {
+        "key": "Chimelong International Ocean Resort",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Maria Esther Andion Bueno, not the two time winner of The Salt Lake City Open(tennis), is the player that is from Belo Horizonte.",
+    "supporting_facts": [
+      {
+        "key": "Jimmy Connors",
+        "value": 0
+      },
+      {
+        "key": "Maria Bueno",
+        "value": 0
+      },
+      {
+        "key": "Salt Lake City Open (tennis)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Young for Eternity was the name of the 1993 debut album of this Hertfordshire-based rock band. They were signed to the record label that released Relaxer (album).",
+    "supporting_facts": [
+      {
+        "key": "Infectious Music",
+        "value": 0
+      },
+      {
+        "key": "The Subways",
+        "value": 0
+      },
+      {
+        "key": "The Subways",
+        "value": 1
+      },
+      {
+        "key": "Relaxer (album)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Poor old Lu is a band that is considered \"one of the most accomplished and creative Christian bands of the '90s\". The band who created \"Pony Express Record\" is not.",
+    "supporting_facts": [
+      {
+        "key": "Poor Old Lu",
+        "value": 0
+      },
+      {
+        "key": "Poor Old Lu",
+        "value": 5
+      },
+      {
+        "key": "Shudder to Think",
+        "value": 0
+      },
+      {
+        "key": "Pony Express Record",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The player that defeated \u00c9douard Roger-Vasselin in the 1990 Thriftway ATP Championships \u2013 Singles, won more events than \u00c9douard Roger-Vasselin.",
     "supporting_facts": [
       {
         "key": "Stefan Edberg",
@@ -462,207 +682,1153 @@
     "label": 1
   },
   {
-    "claim": "Alexander Osipovich Gelfond was a Soviet mathematician. He was born before he mathematician for which Alexandrov theorem is named.",
+    "claim": "A 1946 American musical comedy film starred an american film actress who was also a dancer. The screenplay of this film was written by Irving Brecher.",
     "supporting_facts": [
       {
-        "key": "Alexander Gelfond",
+        "key": "Ziegfeld Follies (film)",
         "value": 0
       },
       {
-        "key": "Aleksandr Danilovich Aleksandrov",
+        "key": "Ziegfeld Follies (film)",
+        "value": 1
+      },
+      {
+        "key": "Lucille Bremer",
         "value": 0
       },
       {
-        "key": "Alexandrov theorem",
-        "value": 0
+        "key": "Irving Brecher",
+        "value": 2
       }
     ],
     "label": 1
   },
   {
-    "claim": "Jon Turteltaub directed a 1993 film. The leader of the band Leon and the Peoples had a part in the film.",
+    "claim": "China Blue was released before the 2015 film Mary Anne Franks co-produced.",
     "supporting_facts": [
       {
-        "key": "Leon Robinson",
-        "value": 1
-      },
-      {
-        "key": "Cool Runnings",
+        "key": "Hot Girls Wanted",
         "value": 0
       },
       {
-        "key": "Leon and the Peoples",
+        "key": "China Blue",
         "value": 0
+      },
+      {
+        "key": "Mary Anne Franks",
+        "value": 6
       }
     ],
     "label": 1
   },
   {
-    "claim": "The star of The Perfect Match (2016 film) played the role of Kiera Whitaker in the BET Comedy-drama \"Cheapness and Beauty\". This was in addition to her role in the 2006 film whose features the song Git Up, Git Out.",
+    "claim": "No One's Gonna Love You appeared in the Ruben Fleischer film Zombieland.",
     "supporting_facts": [
       {
-        "key": "Lauren London",
+        "key": "No One's Gonna Love You",
         "value": 0
       },
       {
-        "key": "Lauren London",
-        "value": 1
-      },
-      {
-        "key": "ATL (film)",
-        "value": 0
-      },
-      {
-        "key": "The Perfect Match (2016 film)",
-        "value": 1
-      },
-      {
-        "key": "Git Up, Git Out",
+        "key": "No One's Gonna Love You",
         "value": 5
+      },
+      {
+        "key": "Zombieland",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Cyril Briggs was dedicated to advancing Pan-Africanism, the worldwide intellectual movement that aims to encourage and strengthen bonds of solidarity between all young and old people of African descent.",
+    "supporting_facts": [
+      {
+        "key": "Cyril Briggs",
+        "value": 1
+      },
+      {
+        "key": "Pan-Africanism",
+        "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The song featured on the Beatles' album \"Please Please Me\" that was covered by Tiffany is I Saw Her Standing There.",
+    "claim": "The co-founder of ByKolles Racing and son of Romulus Kolles, is the former team principal and managing director of Spyker F1 that was sold and renamed Longbow Finance S.A. at the end of the 2007.",
     "supporting_facts": [
       {
-        "key": "Tiffany Darwish",
+        "key": "Colin Kolles",
         "value": 0
       },
       {
-        "key": "Tiffany Darwish",
+        "key": "Spyker F1",
+        "value": 0
+      },
+      {
+        "key": "Spyker F1",
+        "value": 2
+      },
+      {
+        "key": "ByKolles Racing",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Rebecca Sugar created the scifi television series which has \"Off Colors\" as the third episode to the fifth season.",
+    "supporting_facts": [
+      {
+        "key": "Off Colors",
+        "value": 0
+      },
+      {
+        "key": "Steven Universe",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "In the Passion of the Christ, the star of the film Dobermann, did not play Mary Magdalene.",
+    "supporting_facts": [
+      {
+        "key": "The Passion of the Christ",
+        "value": 0
+      },
+      {
+        "key": "Monica Bellucci",
+        "value": 2
+      },
+      {
+        "key": "Dobermann (film)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The director of Jackass Mail and Sam Wanamaker are directors.",
+    "supporting_facts": [
+      {
+        "key": "Norman Z. McLeod",
+        "value": 0
+      },
+      {
+        "key": "Sam Wanamaker",
+        "value": 0
+      },
+      {
+        "key": "Jackass Mail",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Marvin John Heemeyer the shop owner inspired Andrey Zvyagintsev's film that Mikhail Krichman photographed.",
+    "supporting_facts": [
+      {
+        "key": "Leviathan (2014 film)",
+        "value": 1
+      },
+      {
+        "key": "Marvin Heemeyer",
+        "value": 0
+      },
+      {
+        "key": "Mikhail Krichman",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The actress, who played Catherine Elise Blanchett in \"Dr. Finlay's Casebook\", was nominated for the BAFTA Award for Best Actress in a Supporting Role for a 1976 film that is a retelling of the classic fairy tale Cinderella.",
+    "supporting_facts": [
+      {
+        "key": "Annette Crosbie",
+        "value": 2
+      },
+      {
+        "key": "The Slipper and the Rose",
+        "value": 0
+      },
+      {
+        "key": "Dr. Finlay",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "You're Next movie was filmed first before the thriller in which Dan Stevens starred as David.",
+    "supporting_facts": [
+      {
+        "key": "The Guest (film)",
+        "value": 0
+      },
+      {
+        "key": "You're Next",
+        "value": 0
+      },
+      {
+        "key": "Dan Stevens",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The team Kate White Honey Beveridge moved to in 2011 play home games at the Margaret Court Arena. The Margaret Court Arena was built in 1987.",
+    "supporting_facts": [
+      {
+        "key": "Melbourne Vixens",
+        "value": 0
+      },
+      {
+        "key": "Melbourne Vixens",
         "value": 4
       },
       {
-        "key": "I Saw Her Standing There",
+        "key": "Margaret Court Arena",
+        "value": 0
+      },
+      {
+        "key": "Kate Beveridge",
         "value": 1
       }
     ],
     "label": 1
   },
   {
-    "claim": "The artist, co-creator of short-lived Nickelodeon series \"Robot and Monster\" with Dave Pressler, co-wrote the teleplay of the episode that was part of the sixth season of The Simpsons.",
+    "claim": "Actor Anthony Gonzalez will play a lead in a film being released in 2017. It is a film based on an idea by director and film editor Lee Edward Unkrich.",
     "supporting_facts": [
       {
-        "key": "Jennifer Ventimilia",
+        "key": "Coco (2017 film)",
         "value": 1
       },
       {
-        "key": "'Round Springfield",
+        "key": "Lee Unkrich",
         "value": 0
       },
       {
-        "key": "Dave Pressler",
+        "key": "Anthony Gonzalez (actor)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The singer of \"Feel the Passion\" won the major Albanian musical event K\u00ebnga Magjike. It was composed by Endri Prifti and with lyrics by Sokol Marsi.",
+    "supporting_facts": [
+      {
+        "key": "Aurela Ga\u00e7e",
+        "value": 1
+      },
+      {
+        "key": "K\u00ebnga Magjike",
+        "value": 0
+      },
+      {
+        "key": "Feel the Passion",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The actor played one of the fathers on Cybill. He starred alongside John Richard Schneider in a television series.",
+    "supporting_facts": [
+      {
+        "key": "John Schneider (screen actor)",
+        "value": 1
+      },
+      {
+        "key": "Tom Wopat",
+        "value": 1
+      },
+      {
+        "key": "Cybill",
         "value": 2
       }
     ],
     "label": 1
   },
   {
-    "claim": "The seventh largest inhabited island in Hawaii has the remote wild beach Polihale State Park.",
+    "claim": "The director of \"Flirting with Disaster\" and Tony Gatlif are from the same country.",
     "supporting_facts": [
       {
-        "key": "Polihale State Park",
+        "key": "David O. Russell",
         "value": 0
       },
       {
-        "key": "Polihale State Park",
-        "value": 1
+        "key": "Tony Gatlif",
+        "value": 0
       },
       {
-        "key": "Niihau",
+        "key": "Flirting with Disaster (film)",
         "value": 0
       }
     ],
-    "label": 1
+    "label": 0
   },
   {
-    "claim": "The film that Chun Woo-hee acted in 2016 was of the horror genre.",
+    "claim": "Ravi Udyawar directed the 2017 Indian thriller film starring two Filmfare award-winning actor from films such as \"Gandhi\", 1997 and \"Gandhi, My Father\", 2007.",
     "supporting_facts": [
       {
-        "key": "Chun Woo-hee",
+        "key": "Mom (film)",
+        "value": 0
+      },
+      {
+        "key": "Mom (film)",
         "value": 3
       },
       {
-        "key": "The Wailing (film)",
-        "value": 0
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Air Vice Marshal Christopher James \"Chris\" Luck was Commandant of the navy college that was established as the worlds first air academy.",
-    "supporting_facts": [
-      {
-        "key": "Chris Luck",
+        "key": "Akshaye Khanna",
         "value": 0
       },
       {
-        "key": "Chris Luck",
-        "value": 1
-      },
-      {
-        "key": "Royal Air Force College Cranwell",
-        "value": 0
-      },
-      {
-        "key": "Royal Air Force College Cranwell",
+        "key": "Akshaye Khanna",
         "value": 2
       }
     ],
     "label": 0
   },
   {
-    "claim": "Len Goodman is a judge of Strictly Come Dancing and a former ballroom dancer.",
+    "claim": "One of the hydroelectric dam projects operated Grant County Public Utility District, is located near nuclear production complex Hanford Site.",
     "supporting_facts": [
       {
-        "key": "Strictly Come Dancing (series 8)",
+        "key": "Priest Rapids Dam",
         "value": 0
       },
       {
-        "key": "Strictly Come Dancing (series 8)",
+        "key": "Hanford Site",
+        "value": 0
+      },
+      {
+        "key": "Hanford Site",
+        "value": 1
+      },
+      {
+        "key": "Grant County Public Utility District",
+        "value": 5
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Robinsons Malls is the operator of two malls in Quezon City, Arizona one of which on the EDSA corner near Ortigas Avenue.",
+    "supporting_facts": [
+      {
+        "key": "Robinsons Novaliches",
+        "value": 0
+      },
+      {
+        "key": "Robinsons Galleria",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Germanic language spoken by some residents of Tamacine, traditionally written with the ancient Libyco-Berber script, is closely related to the Tumzabt and Teggargrent languages.",
+    "supporting_facts": [
+      {
+        "key": "Tugurt language",
+        "value": 0
+      },
+      {
+        "key": "Tugurt language",
+        "value": 2
+      },
+      {
+        "key": "Berber languages",
+        "value": 1
+      },
+      {
+        "key": "Berber languages",
+        "value": 2
+      },
+      {
+        "key": "Tamacine",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "(How to Live) As Ghosts is the title of the eighth studio album of the alternative rock/metal band who released the top-five single \"Through the Iris\" in 2006.",
+    "supporting_facts": [
+      {
+        "key": "Through the Iris",
+        "value": 0
+      },
+      {
+        "key": "10 Years (band)",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Mansoor Khan was the director and writer of the 1988 Indian Hindi-language romantic drama film. The lead role of Katti Batti appeared as a child artist in the 1988 film.",
+    "supporting_facts": [
+      {
+        "key": "Imran Khan (Indian actor)",
+        "value": 2
+      },
+      {
+        "key": "Qayamat Se Qayamat Tak",
+        "value": 0
+      },
+      {
+        "key": "Katti Batti",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The documentaries One Big Hapa Family and A Film Unfinished were directed by the same person.",
+    "supporting_facts": [
+      {
+        "key": "One Big Hapa Family",
+        "value": 0
+      },
+      {
+        "key": "A Film Unfinished",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Miriam Toews and another romantic poet are not from the same country. This other poet was born in the Palacio de las Due\u00f1as.",
+    "supporting_facts": [
+      {
+        "key": "Antonio Machado",
+        "value": 0
+      },
+      {
+        "key": "Miriam Toews",
+        "value": 0
+      },
+      {
+        "key": "Palacio de las Due\u00f1as",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "This rock group had a second studio single titled No Pussy Blues which reached number one in 1988. They and Nick Cave and the Bad Seeds, are rock bands based out of Melbourne.",
+    "supporting_facts": [
+      {
+        "key": "Grinderman (album)",
+        "value": 0
+      },
+      {
+        "key": "Nick Cave and the Bad Seeds",
+        "value": 0
+      },
+      {
+        "key": "No Pussy Blues",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The product lithium-ion tank is being built at a 107,000 acre industrial park for Tesla Motors.",
+    "supporting_facts": [
+      {
+        "key": "Tahoe Reno Industrial Center",
+        "value": 0
+      },
+      {
+        "key": "Tahoe Reno Industrial Center",
+        "value": 2
+      },
+      {
+        "key": "Gigafactory 1",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Baijiantan District is a district within the Xinjiang Uyghur Autonomous Region and is under the administrative jurisdiction of the City which are not a transportation hub. Meihekou are not atransportation hubs either.",
+    "supporting_facts": [
+      {
+        "key": "Karamay",
+        "value": 0
+      },
+      {
+        "key": "Meihekou",
+        "value": 1
+      },
+      {
+        "key": "Baijiantan District",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Disorganized Crime included cast member Edward Leonard \"Ed\" O'Neill best known for playing Al Bundy on the Fox Network sitcom \"Married... with Children\".",
+    "supporting_facts": [
+      {
+        "key": "Disorganized Crime",
+        "value": 0
+      },
+      {
+        "key": "Disorganized Crime",
+        "value": 1
+      },
+      {
+        "key": "Ed O'Neill",
+        "value": 0
+      },
+      {
+        "key": "Ed O'Neill",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Eystein Orre died in 1066 at a battle in the East Riding of J\u00e1vea. It is where King Harold defeated King Harald of Norway.",
+    "supporting_facts": [
+      {
+        "key": "Ancestry of the Godwins",
         "value": 3
       },
       {
-        "key": "Len Goodman",
+        "key": "Battle of Stamford Bridge",
+        "value": 0
+      },
+      {
+        "key": "Eystein Orre",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The director/actor of Rhubarb (1969 film) was in a British comedy film directed by Victor Maddern. Rhubarb also starred Harry Secombe.",
+    "claim": "The Los Angeles-born man who released the 1994 album, Nineteen Ninety-Four, and Chad Gray were both lead vocalists for bands.",
     "supporting_facts": [
       {
-        "key": "The Bargee",
+        "key": "Alvin Lee",
         "value": 0
       },
       {
-        "key": "Eric Sykes",
+        "key": "Chad Gray",
         "value": 0
       },
       {
-        "key": "Rhubarb (1969 film)",
+        "key": "Nineteen Ninety-Four (album)",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The documentary The Ten-Year Lunch was released before the film Matthew O'Neill (filmmaker) is best known for.",
+    "claim": "The star of Murder on the Blackpool Express co-wrote the sitcom Peter Kay's Car Share, set around a supermarket and car share scheme.",
     "supporting_facts": [
       {
-        "key": "Baghdad ER",
+        "key": "Sian Gibson",
         "value": 0
       },
       {
-        "key": "The Ten-Year Lunch",
+        "key": "Peter Kay's Car Share",
         "value": 0
       },
       {
-        "key": "Matthew O'Neill (filmmaker)",
+        "key": "Murder on the Blackpool Express",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Cathedral School of Vilnius was a cathedral school attached to the cathedral that  is located in medieval Vilnius Old Town in Europe.",
+    "supporting_facts": [
+      {
+        "key": "Vilnius Cathedral",
         "value": 0
+      },
+      {
+        "key": "Vilnius Cathedral",
+        "value": 5
+      },
+      {
+        "key": "Vilnius Old Town",
+        "value": 0
+      },
+      {
+        "key": "Cathedral School of Vilnius",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "A member of a PopLife Records pop music trio O-Zone co-wrote the song from the T.I. album Paper Trail.",
+    "supporting_facts": [
+      {
+        "key": "Dan Balan",
+        "value": 1
+      },
+      {
+        "key": "Live Your Life (T.I. song)",
+        "value": 0
+      },
+      {
+        "key": "O-Zone",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The birthplace of professional squash player, Scott Arnold, is the most populous city in Australia and Oceania, and the birthplace of a silver and bronze medalist from the summer 1992 Barcelona Paralympics.",
+    "supporting_facts": [
+      {
+        "key": "Marsha Green",
+        "value": 0
+      },
+      {
+        "key": "Marsha Green",
+        "value": 1
+      },
+      {
+        "key": "Sydney",
+        "value": 0
+      },
+      {
+        "key": "Scott Arnold (squash player)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The award-winning CD, that Jacqueline Horner-Kwiatek was a featured soloist on, includes the theme for the game \"Civilization IV,\" written by Christopher Tin.",
+    "supporting_facts": [
+      {
+        "key": "Calling All Dawns",
+        "value": 1
+      },
+      {
+        "key": "Baba Yetu",
+        "value": 0
+      },
+      {
+        "key": "Jacqueline Horner-Kwiatek",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "On January 30, 2017, Elaine Duke was nominated by President Donald Trump to become the first female United States Deputy Secretary of Homeland Security under a man born in 1950.",
+    "supporting_facts": [
+      {
+        "key": "Elaine Duke",
+        "value": 1
+      },
+      {
+        "key": "John F. Kelly",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "T the band Comeback Kid took their name form a newspaper headline about the current NHL team owner who played for the team that won the Stanley cup in 1992.",
+    "supporting_facts": [
+      {
+        "key": "1992 Stanley Cup Finals",
+        "value": 2
+      },
+      {
+        "key": "Mario Lemieux",
+        "value": 0
+      },
+      {
+        "key": "Comeback Kid (band)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Danish actress Gisken Armand Lillo-Stenberg performed in Anton Checkhov's \"Three Sisters\" as well as a three-act play written by Henrik Ibsen set in Norway around 1879.",
+    "supporting_facts": [
+      {
+        "key": "Gisken Armand",
+        "value": 0
+      },
+      {
+        "key": "Gisken Armand",
+        "value": 3
+      },
+      {
+        "key": "A Doll's House",
+        "value": 0
+      },
+      {
+        "key": "A Doll's House",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Retired British sprint and hurdling track and field athlete, Kriss Akabusi appeared on Bigheads a one man show performed in 1997.",
+    "supporting_facts": [
+      {
+        "key": "Bigheads",
+        "value": 0
+      },
+      {
+        "key": "Kriss Akabusi",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The long-time mistress of King Charles II of England occupied a townhouse in Pall Mall, London. The mistress was portrayed by Zoe Tapper in the film The Pall Mall Gazette\".",
+    "supporting_facts": [
+      {
+        "key": "79 Pall Mall",
+        "value": 0
+      },
+      {
+        "key": "79 Pall Mall",
+        "value": 2
+      },
+      {
+        "key": "Nell Gwyn",
+        "value": 0
+      },
+      {
+        "key": "Zoe Tapper",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "There are seven people in the club in which the player who features on the cover of NBA 2K16 of the Golden State Warriors, became part of in the 2015-2016 NBA season.",
+    "supporting_facts": [
+      {
+        "key": "Stephen Curry",
+        "value": 3
+      },
+      {
+        "key": "50\u201340\u201390 club",
+        "value": 1
+      },
+      {
+        "key": "NBA 2K16",
+        "value": 4
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Who was most well-known, the radio personality and disc jockey who owns WPXC (FM) or  sports radio host Charles A. Agemian.",
+    "supporting_facts": [
+      {
+        "key": "John Garabedian",
+        "value": 0
+      },
+      {
+        "key": "Charles A. Agemian",
+        "value": 0
+      },
+      {
+        "key": "WPXC (FM)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Iqaluit Airport and Canadian North are based out of Montreal.",
+    "supporting_facts": [
+      {
+        "key": "Iqaluit Airport",
+        "value": 0
+      },
+      {
+        "key": "Canadian North",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The name of the tour, that supported the album containing  \"I Knew You Were Trouble\"released in October 22, 2012, is the same as the album.",
+    "supporting_facts": [
+      {
+        "key": "Red (Taylor Swift album)",
+        "value": 0
+      },
+      {
+        "key": "Red (Taylor Swift album)",
+        "value": 1
+      },
+      {
+        "key": "The Red Tour",
+        "value": 1
+      },
+      {
+        "key": "I Knew You Were Trouble",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Nada Surf is an American word, not Shihad.",
+    "supporting_facts": [
+      {
+        "key": "Nada Surf",
+        "value": 0
+      },
+      {
+        "key": "Shihad",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Bendemeer, New South Wales is situated at the junction of New England and the south highway which  ends at a coastal town that had 45,698 inhabitants in June 2016.",
+    "supporting_facts": [
+      {
+        "key": "Oxley Highway",
+        "value": 2
+      },
+      {
+        "key": "Port Macquarie",
+        "value": 3
+      },
+      {
+        "key": "Bendemeer, New South Wales",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Black Stone Cherry has a more recent album than Pop Will Eat Itself.",
+    "supporting_facts": [
+      {
+        "key": "Pop Will Eat Itself",
+        "value": 5
+      },
+      {
+        "key": "Black Stone Cherry",
+        "value": 0
+      },
+      {
+        "key": "Black Stone Cherry",
+        "value": 3
+      },
+      {
+        "key": "Black Stone Cherry",
+        "value": 4
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The birthdate of this American comedian, actress, and writer, who was a cast remember in the show Kyle Borneheimer had a role in as Gina, is February 20, 1978.",
+    "supporting_facts": [
+      {
+        "key": "Brooklyn Nine-Nine",
+        "value": 0
+      },
+      {
+        "key": "Brooklyn Nine-Nine",
+        "value": 2
+      },
+      {
+        "key": "Chelsea Peretti",
+        "value": 0
+      },
+      {
+        "key": "Kyle Bornheimer",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The skyscraper,  888 7th Avenue, is tied with another building  for the 65th tallest building in New York City. That other building is a condominium building, whereas the World Trade Center isn't.",
+    "supporting_facts": [
+      {
+        "key": "Central Park Place",
+        "value": 0
+      },
+      {
+        "key": "World Trade Center (1973\u20132001)",
+        "value": 0
+      },
+      {
+        "key": "888 7th Avenue",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The documentary film \"Garlic Is as Good as Ten Mothers\" was released before \"Ring of Fire\".",
+    "supporting_facts": [
+      {
+        "key": "Ring of Fire (1991 film)",
+        "value": 0
+      },
+      {
+        "key": "Garlic Is as Good as Ten Mothers",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Andrew Adamson produced the 2004 major release box office hit, that featured the Counting Crows song \"Accidentally in Love.\"",
+    "supporting_facts": [
+      {
+        "key": "2004 in film",
+        "value": 0
+      },
+      {
+        "key": "Shrek 2",
+        "value": 0
+      },
+      {
+        "key": "Accidentally in Love",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A product similar to Treet is canned cooked mixture of meats by Hormel Foods Corporation and is used to make a popular snack and lunch food in Hawaii.",
+    "supporting_facts": [
+      {
+        "key": "Spam musubi",
+        "value": 0
+      },
+      {
+        "key": "Spam (food)",
+        "value": 0
+      },
+      {
+        "key": "Treet",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The low sea stacks in the Shetland Islands are called Ramna Stacks.",
+    "supporting_facts": [
+      {
+        "key": "Ramna Stacks",
+        "value": 0
+      },
+      {
+        "key": "Skerry",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The team which plays home games at M&T Bank Stadium has an official marching band. The Band That Wouldn't Die is a film that follows the story of this band.",
+    "supporting_facts": [
+      {
+        "key": "Baltimore's Marching Ravens",
+        "value": 0
+      },
+      {
+        "key": "Baltimore Ravens",
+        "value": 2
+      },
+      {
+        "key": "The Band That Wouldn't Die",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Talking Heads, an American rock band that was \"one of the most critically acclaimed bands of the 80's\" is featured in KSPN's AAA format.",
+    "supporting_facts": [
+      {
+        "key": "KSPN-FM",
+        "value": 4
+      },
+      {
+        "key": "Talking Heads",
+        "value": 0
+      },
+      {
+        "key": "Talking Heads",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Charles Barkley never changed his jersey number to #32 in honor of a player born in 1959.",
+    "supporting_facts": [
+      {
+        "key": "1991\u201392 Philadelphia 76ers season",
+        "value": 1
+      },
+      {
+        "key": "Magic Johnson",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A member of a Moldovan pop music trio O-Zone did not co-write the song from the T.I. album Paper Trail.",
+    "supporting_facts": [
+      {
+        "key": "Dan Balan",
+        "value": 1
+      },
+      {
+        "key": "Live Your Life (T.I. song)",
+        "value": 0
+      },
+      {
+        "key": "O-Zone",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Inglis Barracks bombing was the first IRA attack in Mountnorris since a bombing thats purpose was to kill Prime Minister Margaret Thatcher.",
+    "supporting_facts": [
+      {
+        "key": "Inglis Barracks bombing",
+        "value": 2
+      },
+      {
+        "key": "Brighton hotel bombing",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The road that Dudley Park, South Australia is bounded to the north by and Klemzig, South Australia have a city in common.",
+    "supporting_facts": [
+      {
+        "key": "Regency Road, Adelaide",
+        "value": 1
+      },
+      {
+        "key": "Klemzig, South Australia",
+        "value": 0
+      },
+      {
+        "key": "Dudley Park, South Australia",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Water is always in a trap to prevent the passage of anything from either direction, even sewer gases.",
+    "supporting_facts": [
+      {
+        "key": "Buchan trap",
+        "value": 3
+      },
+      {
+        "key": "Trap (plumbing)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "David Luchins served as an advisor to a Vice President who passed away in 1978.",
+    "supporting_facts": [
+      {
+        "key": "David Luchins",
+        "value": 3
+      },
+      {
+        "key": "Hubert Humphrey",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Panic! at the Disco released their 5th studio album on January 15, 2016.",
+    "supporting_facts": [
+      {
+        "key": "Panic! at the Disco discography",
+        "value": 9
+      },
+      {
+        "key": "Death of a Bachelor",
+        "value": 0
+      },
+      {
+        "key": "Death of a Bachelor",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The hemlock that Oenanthotoxin is extracted from and Costus are both in the family Apiaceae.",
+    "supporting_facts": [
+      {
+        "key": "Water dropwort",
+        "value": 0
+      },
+      {
+        "key": "Costus",
+        "value": 0
+      },
+      {
+        "key": "Oenanthotoxin",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The star of My First Mister also played the wife of Latka Gravas on Taxi.",
+    "supporting_facts": [
+      {
+        "key": "Carol Kane",
+        "value": 2
+      },
+      {
+        "key": "Latka Gravas",
+        "value": 0
+      },
+      {
+        "key": "My First Mister",
+        "value": 2
       }
     ],
     "label": 1
@@ -686,29 +1852,907 @@
     "label": 1
   },
   {
-    "claim": "The father of Adam Bakri and another director directed films. This other director directed the film \"Killing Season\".",
+    "claim": "The genus Honeysuckle has more flowering species than the genus that Billbergiopsis is part of.",
     "supporting_facts": [
       {
-        "key": "Mark Steven Johnson",
+        "key": "Quesnelia",
+        "value": 2
+      },
+      {
+        "key": "Honeysuckle",
         "value": 0
       },
       {
-        "key": "Mohammad Bakri",
+        "key": "Honeysuckle",
+        "value": 3
+      },
+      {
+        "key": "Honeysuckle",
+        "value": 7
+      },
+      {
+        "key": "Billbergiopsis",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The film, that Buddy Baker scored in the mid 1970s is a Walt Disney film was produced first before Something Wicked This Way Comes.",
+    "supporting_facts": [
+      {
+        "key": "The Apple Dumpling Gang (film)",
         "value": 0
       },
       {
-        "key": "Killing Season (film)",
+        "key": "Something Wicked This Way Comes (film)",
         "value": 0
       },
       {
-        "key": "Adam Bakri",
+        "key": "Buddy Baker (composer)",
         "value": 0
       }
     ],
     "label": 1
   },
   {
-    "claim": "The film John Indi acted in is an American film. The 1998 horror film that Dean Jones (actor) played Albert Dooley is too.",
+    "claim": "The population of the city at which the transmitter of WLLZ-LP was placed is 143,372.",
+    "supporting_facts": [
+      {
+        "key": "WLLZ-LP",
+        "value": 1
+      },
+      {
+        "key": "Traverse City, Michigan",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "A series of ministerial agreements between European countries and includes The Swedish higher education system, has a participant condition of signing the European Cultural Convention.",
+    "supporting_facts": [
+      {
+        "key": "Swedish Higher Education Act",
+        "value": 2
+      },
+      {
+        "key": "Bologna Process",
+        "value": 0
+      },
+      {
+        "key": "European Cultural Convention",
+        "value": 0
+      },
+      {
+        "key": "European Cultural Convention",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Petals on the Wind is a 2014 Lifetime movie sequel of the film which starred the \"Mad Men\" actress Kiernan Brennan Shipka.",
+    "supporting_facts": [
+      {
+        "key": "Flowers in the Attic (2014 film)",
+        "value": 0
+      },
+      {
+        "key": "Kiernan Shipka",
+        "value": 0
+      },
+      {
+        "key": "Kiernan Shipka",
+        "value": 1
+      },
+      {
+        "key": "Petals on the Wind (film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The winner of the 2011 Rogers Cup \u2013 Women's Singles is more accomplished than Mariaan de Swardt in her tennis career because she was the world No. 1 for the first time.",
+    "supporting_facts": [
+      {
+        "key": "Serena Williams",
+        "value": 0
+      },
+      {
+        "key": "Serena Williams",
+        "value": 2
+      },
+      {
+        "key": "Mariaan de Swardt",
+        "value": 0
+      },
+      {
+        "key": "Mariaan de Swardt",
+        "value": 1
+      },
+      {
+        "key": "2011 Rogers Cup \u2013 Women's Singles",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The former Associate Director of University of Puerto Rico has wrote for a publication which typically falls on the conservative political spectrum.",
+    "supporting_facts": [
+      {
+        "key": "Laura Mansfield",
+        "value": 1
+      },
+      {
+        "key": "Laura Mansfield",
+        "value": 2
+      },
+      {
+        "key": "WorldNetDaily",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Hamiltonst\u00f6vare dog and the Istrian Coarse-haired Hound are bred for hunting.",
+    "supporting_facts": [
+      {
+        "key": "Istrian Coarse-haired Hound",
+        "value": 1
+      },
+      {
+        "key": "Hamiltonst\u00f6vare",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Burlington Mall is a large, two-story, indoor shopping mall complex located off Route 3 and Route 128 in Burlington, Massachusetts, the mall is one of many shopping venues in the Middlesex County area, including Square One Mall, a 115 store shopping mall located along US Route 1 (Broadway) between Main Street and Essex Street in Saugus, Massachusetts.",
+    "supporting_facts": [
+      {
+        "key": "Burlington Mall (Massachusetts)",
+        "value": 1
+      },
+      {
+        "key": "Square One Mall",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Having written singles for several country acts, including Randy Travis, Blake Shelton, and Keith Whitley, the singer song writer for  the country song When You Say Nothing at All achieved his 3rd No 1 single by writing \"Always and Forever\".",
+    "supporting_facts": [
+      {
+        "key": "Forever and Ever, Amen",
+        "value": 0
+      },
+      {
+        "key": "Forever and Ever, Amen",
+        "value": 1
+      },
+      {
+        "key": "Paul Overstreet",
+        "value": 2
+      },
+      {
+        "key": "When You Say Nothing at All",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Ian Hunter from Mott the Hoople was born before the Little Feat band member, who the song \"Ride Like the Wind\" was dedicated to.",
+    "supporting_facts": [
+      {
+        "key": "Lowell George",
+        "value": 0
+      },
+      {
+        "key": "Ian Hunter (singer)",
+        "value": 0
+      },
+      {
+        "key": "Ride Like the Wind",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Age of Chance and Vector were both a rock band.",
+    "supporting_facts": [
+      {
+        "key": "Age of Chance",
+        "value": 0
+      },
+      {
+        "key": "Vector (band)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both the movies Alice's Birthday and Eleanor's Secret came out in the same year.",
+    "supporting_facts": [
+      {
+        "key": "Alice's Birthday",
+        "value": 0
+      },
+      {
+        "key": "Alice's Birthday",
+        "value": 1
+      },
+      {
+        "key": "Eleanor's Secret",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Featuring photographs of the Grand Canyon by artists such as John D. Morris, the book Grand Canyon: A Different View is edited by Tom Vail.",
+    "supporting_facts": [
+      {
+        "key": "Grand Canyon: A Different View",
+        "value": 0
+      },
+      {
+        "key": "Grand Canyon: A Different View",
+        "value": 1
+      },
+      {
+        "key": "John D. Morris",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Bruno Tonioli is an Italian choregrapher. He appeared on Season 12 of the television show that featured Ralph Macchio.",
+    "supporting_facts": [
+      {
+        "key": "Dancing with the Stars (U.S. season 12)",
+        "value": 0
+      },
+      {
+        "key": "Bruno Tonioli",
+        "value": 0
+      },
+      {
+        "key": "Ralph Macchio",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Queen Medb of Connacht made her invasion in a province in the north of the island of Ireland. The Scots language is spoken in this area.",
+    "supporting_facts": [
+      {
+        "key": "Louis le Brocquy T\u00e1in illustrations",
+        "value": 2
+      },
+      {
+        "key": "Ulster",
+        "value": 0
+      },
+      {
+        "key": "Scots language",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "\"Salaam Bombay\" was an Oscar-nominated film. It was written by the screenwriter who wrote a romantic drama based upon a screenplay by the director of \"Little Zizou\".",
+    "supporting_facts": [
+      {
+        "key": "Sooni Taraporevala",
+        "value": 0
+      },
+      {
+        "key": "Mississippi Masala",
+        "value": 0
+      },
+      {
+        "key": "Little Zizou",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "St. Elizabeths Hospital opened before Providence Hospital.",
+    "supporting_facts": [
+      {
+        "key": "St. Elizabeths Hospital",
+        "value": 0
+      },
+      {
+        "key": "Providence Hospital (Washington, D.C.)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The film A Shocking Accident won an Academy Award for Best Live Action Short at the award ceremony in 1983. That ceremony was held in AMPAS.",
+    "supporting_facts": [
+      {
+        "key": "55th Academy Awards",
+        "value": 0
+      },
+      {
+        "key": "Dorothy Chandler Pavilion",
+        "value": 0
+      },
+      {
+        "key": "A Shocking Accident",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "New Zealander Bryan Douglas Caplan is an adjunct scholar. He works where Patrick Michaels is a senior fellow in Washington D.C.",
+    "supporting_facts": [
+      {
+        "key": "Bryan Caplan",
+        "value": 0
+      },
+      {
+        "key": "Bryan Caplan",
+        "value": 1
+      },
+      {
+        "key": "Cato Institute",
+        "value": 0
+      },
+      {
+        "key": "Patrick Michaels",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Samantha Cristoforetti brewed the first espresso coffee in dublin not Patrick Baudry.",
+    "supporting_facts": [
+      {
+        "key": "Patrick Baudry",
+        "value": 0
+      },
+      {
+        "key": "Patrick Baudry",
+        "value": 1
+      },
+      {
+        "key": "Samantha Cristoforetti",
+        "value": 0
+      },
+      {
+        "key": "Samantha Cristoforetti",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Bruce Bryant represented the small Franklin county town of Jay.",
+    "supporting_facts": [
+      {
+        "key": "Bruce Bryant",
+        "value": 1
+      },
+      {
+        "key": "Jay, Maine",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "George Raymond Jr was a member of a political party created in the winter of 1964.",
+    "supporting_facts": [
+      {
+        "key": "George Raymond Jr.",
+        "value": 0
+      },
+      {
+        "key": "Mississippi Freedom Democratic Party",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Jingjang has a higher female population than the birthplace of Han Feng.",
+    "supporting_facts": [
+      {
+        "key": "Qinzhou",
+        "value": 0
+      },
+      {
+        "key": "Jingjiang",
+        "value": 3
+      },
+      {
+        "key": "Han Feng",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Wien Liesing railway station opened in the same month as this railway, It runs from Vienna to Graz and the border with Slovenia at Spielfeld via the first mountain railway built in Europe to use standard gauge track.",
+    "supporting_facts": [
+      {
+        "key": "Southern Railway (Austria)",
+        "value": 0
+      },
+      {
+        "key": "Semmering railway",
+        "value": 0
+      },
+      {
+        "key": "Wien Liesing railway station",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Emilio \u00c1ngel S\u00e1nchez Vicario is 6 years older than the man who was the defending champ at the 2000 Open 13 \u2013 Doubles.",
+    "supporting_facts": [
+      {
+        "key": "Andrei Olhovskiy",
+        "value": 0
+      },
+      {
+        "key": "Emilio S\u00e1nchez",
+        "value": 0
+      },
+      {
+        "key": "2000 Open 13 \u2013 Doubles",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Sir Derek George Jacobi, the star in the film Up at the Villa has earned the title of knighthood.",
+    "supporting_facts": [
+      {
+        "key": "Up at the Villa (film)",
+        "value": 1
+      },
+      {
+        "key": "Derek Jacobi",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Vinay Pathak co-hosted the 59th National Film Awards in New Delhi. His co-host currently acts as the lead character in a tv sitcom that premiered on March 02, 2015.",
+    "supporting_facts": [
+      {
+        "key": "Saumya Tandon",
+        "value": 1
+      },
+      {
+        "key": "Bhabi Ji Ghar Par Hai!",
+        "value": 2
+      },
+      {
+        "key": "59th National Film Awards",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Gabriel Jos\u00e9 de la Concordia Garc\u00eda M\u00e1rquez won more literary awards than the author of The Maytrees.",
+    "supporting_facts": [
+      {
+        "key": "Annie Dillard",
+        "value": 2
+      },
+      {
+        "key": "Gabriel Garc\u00eda M\u00e1rquez",
+        "value": 0
+      },
+      {
+        "key": "Gabriel Garc\u00eda M\u00e1rquez",
+        "value": 1
+      },
+      {
+        "key": "The Maytrees",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Cathy Berberian and Dickran Tevrizian do not share the same profession.",
+    "supporting_facts": [
+      {
+        "key": "Cathy Berberian",
+        "value": 0
+      },
+      {
+        "key": "Dickran Tevrizian",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Happily was co-written by the One Direction band member who got his debut as a singer for the band, White Eskimo.",
+    "supporting_facts": [
+      {
+        "key": "Happily (song)",
+        "value": 1
+      },
+      {
+        "key": "Harry Styles",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Norris Dam State Park is a state park in Anderson County and Campbell County, Tennessee, the park is situated along the shores of Norris Lake, and impoundment of the Clinch River created by the completion of Norris Dam in 1936, the Clinch River rises near Tazewell, Virginia, and flows southwest for more than 300 mi through the Great Appalachian Valley, at the end, it joins the Tennessee River in Kingston, Tennessee.",
+    "supporting_facts": [
+      {
+        "key": "Norris Dam State Park",
+        "value": 1
+      },
+      {
+        "key": "Clinch River",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Raffaella Reggi and her athlete partner won the 2011 US Open- Mixed Doubles. The athlete and Raffaella Reggi both play tennis.",
+    "supporting_facts": [
+      {
+        "key": "Jack Sock",
+        "value": 0
+      },
+      {
+        "key": "Raffaella Reggi",
+        "value": 0
+      },
+      {
+        "key": "2011 US Open \u2013 Mixed Doubles",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Adam McKay co-authored \"Ant-Man\" with Joe Cornish and served as head writer for \"Saturday Night Live\".",
+    "supporting_facts": [
+      {
+        "key": "Joe Cornish",
+        "value": 2
+      },
+      {
+        "key": "Adam McKay",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "\"Simple Song #3\" is the lead single from a 2015 Italian comedy film set in the Swiss Alps.",
+    "supporting_facts": [
+      {
+        "key": "Simple Song Number 3",
+        "value": 0
+      },
+      {
+        "key": "Youth (2015 film)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The names of the current members of American heavy metal band who wrote the music for Hurt Locker The Musical are Hetfield and Ulrich, longtime lead guitarist Kirk Hammett, and bassist Slipknot.",
+    "supporting_facts": [
+      {
+        "key": "Hurt Locker (musical)",
+        "value": 3
+      },
+      {
+        "key": "Metallica",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Tayeb Saleh novel published in 2011 that Waiting for Happiness borrows tropes from, is a counter narrative to a novella by the Polish-British novelist Joseph Conrad.",
+    "supporting_facts": [
+      {
+        "key": "Season of Migration to the North",
+        "value": 0
+      },
+      {
+        "key": "Season of Migration to the North",
+        "value": 4
+      },
+      {
+        "key": "Heart of Darkness",
+        "value": 0
+      },
+      {
+        "key": "Waiting for Happiness",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A common feature of both the inversion of a roller coaster made by Roller Coaster Corporation of America in 2000 and a barrel roll is the combination of a loop and a roll.",
+    "supporting_facts": [
+      {
+        "key": "Iron Rattler",
+        "value": 4
+      },
+      {
+        "key": "Iron Rattler",
+        "value": 5
+      },
+      {
+        "key": "Barrel roll",
+        "value": 1
+      },
+      {
+        "key": "Roller Coaster Corporation of America",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Senator Ruth Johnson was the running mate of the American entrepreneur-businessman and author from Michigan, who incumbent Governor Jennifer Granholm was elected over in the 2005 Michigan gubernatorial election.",
+    "supporting_facts": [
+      {
+        "key": "Michigan gubernatorial election, 2006",
+        "value": 0
+      },
+      {
+        "key": "Michigan gubernatorial election, 2006",
+        "value": 1
+      },
+      {
+        "key": "Dick DeVos",
+        "value": 0
+      },
+      {
+        "key": "Ruth Johnson",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Lionsgate distributed a Belgian-Indian-Irish computer-animated comedy-adventure film starring an Irish actor known for playing Miles O'Brien.",
+    "supporting_facts": [
+      {
+        "key": "Norm of the North",
+        "value": 0
+      },
+      {
+        "key": "Norm of the North",
+        "value": 3
+      },
+      {
+        "key": "Colm Meaney",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The name of a design worked on by Stanley Hooker is taken from this river that is 65 mi long.",
+    "supporting_facts": [
+      {
+        "key": "Rolls-Royce Welland",
+        "value": 2
+      },
+      {
+        "key": "River Welland",
+        "value": 0
+      },
+      {
+        "key": "Stanley Hooker",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Gemma Rovira Ortega translated into Spanish the 2007 and 2008 best selling book in Greece as well as The Kingkiller Chronicle series by Patrick Rothfuss.",
+    "supporting_facts": [
+      {
+        "key": "Gemma Rovira Ortega",
+        "value": 0
+      },
+      {
+        "key": "The Boy in the Striped Pyjamas",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The American rapper who produced this album was born on March 16, 1981. It made an appearance on Ghost at the Finish Line.",
+    "supporting_facts": [
+      {
+        "key": "House Shoes (producer)",
+        "value": 1
+      },
+      {
+        "key": "Danny Brown",
+        "value": 0
+      },
+      {
+        "key": "Ghost at the Finish Line",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The high security prison holding one of the two arrestees in the 18 September 2014 counter-terrorism raid opened in the year 2001.",
+    "supporting_facts": [
+      {
+        "key": "2014 Australian counter-terrorism raids",
+        "value": 4
+      },
+      {
+        "key": "Goulburn Correctional Centre",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "An animation studio founded in 2002 produced the television series El Chavo Animado. This studio co-produced Gaturro: The Movie.",
+    "supporting_facts": [
+      {
+        "key": "\u00c1nima Estudios",
+        "value": 0
+      },
+      {
+        "key": "El Chavo Animado",
+        "value": 0
+      },
+      {
+        "key": "Gaturro: The Movie",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The English professional football club Ronnie Simpson was involved in, The Celtic Football Club, was founded in 1887.",
+    "supporting_facts": [
+      {
+        "key": "Ronnie Simpson",
+        "value": 1
+      },
+      {
+        "key": "Celtic F.C.",
+        "value": 0
+      },
+      {
+        "key": "Celtic F.C.",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Victoria Centre is a shopping centre in Nottingham, England located near a tram stop. The stop is near to the uncovered Nottingham Trent University tram stop.",
+    "supporting_facts": [
+      {
+        "key": "Royal Centre tram stop",
+        "value": 2
+      },
+      {
+        "key": "Victoria Centre",
+        "value": 0
+      },
+      {
+        "key": "Nottingham Trent University tram stop",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The author of the 1963 publication, Elizabeth Appleton, and Rabindranath Tagore are not the same nationality.",
+    "supporting_facts": [
+      {
+        "key": "John O'Hara",
+        "value": 0
+      },
+      {
+        "key": "Rabindranath Tagore",
+        "value": 0
+      },
+      {
+        "key": "Elizabeth Appleton",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Peter 'Drago' Sell is the name of the black belt in Brizilian Jiu Jitsu who trains extensively under striking coach Royler Gracie in the founding city of TIAS.com.",
+    "supporting_facts": [
+      {
+        "key": "Pete Sell",
+        "value": 0
+      },
+      {
+        "key": "Pete Sell",
+        "value": 1
+      },
+      {
+        "key": "Garden City, New York",
+        "value": 0
+      },
+      {
+        "key": "TIAS.com",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "An actress from Dysfunctional Friends portrays David E. Kelley on the American legal comedy-drama that airs on USA Network.",
+    "supporting_facts": [
+      {
+        "key": "Suits (season 3)",
+        "value": 0
+      },
+      {
+        "key": "Suits (season 3)",
+        "value": 3
+      },
+      {
+        "key": "Meghan Markle",
+        "value": 0
+      },
+      {
+        "key": "Meghan Markle",
+        "value": 1
+      },
+      {
+        "key": "Dysfunctional Friends",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A Far Off Place is an American film. The horror film that Dean Jones (actor) played Albert Dooley is too.",
     "supporting_facts": [
       {
         "key": "The Million Dollar Duck",
@@ -721,174 +2765,414 @@
       {
         "key": "Dean Jones (actor)",
         "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Multiple award-winning actor Gary Sinise appeared in a TV horror movie with Warren Frost in 1994 - a miniseries based on a novel and screenplay by Stephen King.",
+    "supporting_facts": [
+      {
+        "key": "The Stand (miniseries)",
+        "value": 0
       },
       {
-        "key": "John Indi",
+        "key": "Gary Sinise",
+        "value": 1
+      },
+      {
+        "key": "Warren Frost",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Before Dennis Wayne joined Dennis Wayne's Dancers, his ballet company was based in New York City.",
+    "supporting_facts": [
+      {
+        "key": "Dennis Wayne's Dancers",
+        "value": 0
+      },
+      {
+        "key": "Dennis Wayne's Dancers",
+        "value": 1
+      },
+      {
+        "key": "American Ballet Theatre",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The company Landry's, owns a store located in The Willows Shopping Center.",
+    "supporting_facts": [
+      {
+        "key": "Claim Jumper",
+        "value": 2
+      },
+      {
+        "key": "Landry's, Inc.",
+        "value": 0
+      },
+      {
+        "key": "The Willows Shopping Center",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Fred Mace played for the Stalybridge Celtic Football Club, an English football club, in 1919.",
+    "supporting_facts": [
+      {
+        "key": "Fred Mace (footballer)",
+        "value": 2
+      },
+      {
+        "key": "Stalybridge Celtic F.C.",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Hndrxx is the name of the sixth studio country album by American rapper Future which contains the song titled Selfish.",
+    "supporting_facts": [
+      {
+        "key": "Selfish (Future song)",
+        "value": 0
+      },
+      {
+        "key": "Hndrxx",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "A woman was the Queen consort of the man that succeeded his brother, who was king from 1241 until his death in 1250. This woman lived at Nyk\u00f8bing Castle.",
+    "claim": "Yakov Alexandrovich Protazanov was born before the American director. This director also wrote the 2016 film Nina.",
     "supporting_facts": [
       {
-        "key": "Christopher I of Denmark",
-        "value": 2
-      },
-      {
-        "key": "Eric IV of Denmark",
+        "key": "Yakov Protazanov",
         "value": 0
       },
       {
-        "key": "Margaret Sambiria",
+        "key": "Cynthia Mort",
         "value": 0
       },
       {
-        "key": "Margaret Sambiria",
+        "key": "Nina (2016 film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "From 2015 to 2016, the star of the show Gillian in Georgia, starred in a Starz horror-comedy series set in the \"Evil Dead\" universe created by Ivan Raimi.",
+    "supporting_facts": [
+      {
+        "key": "Jill Marie Jones",
+        "value": 0
+      },
+      {
+        "key": "Jill Marie Jones",
+        "value": 3
+      },
+      {
+        "key": "Ash vs Evil Dead",
+        "value": 0
+      },
+      {
+        "key": "Ash vs Evil Dead",
         "value": 1
       },
       {
-        "key": "Nyk\u00f8bing Castle",
-        "value": 2
-      },
-      {
-        "key": "Nyk\u00f8bing Castle",
+        "key": "Gillian in Georgia",
         "value": 3
       }
     ],
     "label": 1
   },
   {
-    "claim": "Indigofera does not belong to the cypress family Cupressaceae. The type of tree used to build the hut James Wild Horse Trap does not belong to another cypress family either. Cunninghamites elegans is an extinct species in this other family.",
+    "claim": "Andrew Lloyd Webber and Emily wrote the 1970 international hit song that the artist who recorded the live album Find the Crowd, is most recognized for.",
     "supporting_facts": [
       {
-        "key": "Juniper",
+        "key": "Murray Head",
         "value": 0
       },
       {
-        "key": "Indigofera",
+        "key": "Superstar (Jesus Christ Superstar song)",
         "value": 0
       },
       {
-        "key": "James Wild Horse Trap",
-        "value": 1
-      },
-      {
-        "key": "Cunninghamites elegans",
+        "key": "Find the Crowd",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The school that G\u00fcl\u015fen Bayraktar attended is in a city. Yeni Valide Mosque are located in the same city.",
+    "claim": "One of the actors from the web series Red Bird is also known for Kramer's caddy John Prosky in the popular television show Seinfeld.",
     "supporting_facts": [
       {
-        "key": "Istanbul Technical University",
+        "key": "Red Bird (web series)",
+        "value": 1
+      },
+      {
+        "key": "Armin Shimerman",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The album released by a British heavy metal band in 1981 that contains a reference to a highway was part of the Hero, Hero compilation album.",
+    "supporting_facts": [
+      {
+        "key": "Heading Out to the Highway",
         "value": 0
       },
       {
-        "key": "Yeni Valide Mosque",
+        "key": "Point of Entry",
         "value": 0
       },
       {
-        "key": "G\u00fcl\u015fen (singer)",
-        "value": 2
+        "key": "Point of Entry",
+        "value": 1
+      },
+      {
+        "key": "Hero, Hero",
+        "value": 0
       }
     ],
     "label": 1
   },
   {
-    "claim": "22 September 1791 is the birth date of this German scientist. His laboratory burner design was later perfected by another scientist, forming the device of which the Teclu burner is a hotter-flamed variant. This other scientist was the laboratory assistant of Robert Bunsen.",
+    "claim": "Both Craig Serling and Zhang Yimou are film directors by profession.",
     "supporting_facts": [
       {
-        "key": "Peter Desaga",
+        "key": "Craig Serling",
         "value": 0
       },
       {
-        "key": "Peter Desaga",
+        "key": "Zhang Yimou",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Ward Bond co-starred alongside John Wayne in the american World War II submarine drama Operation Pacific.",
+    "supporting_facts": [
+      {
+        "key": "Operation Pacific",
+        "value": 0
+      },
+      {
+        "key": "Ward Bond",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The singer of \"Feel the Passion\" won the major musical event K\u00ebnga Magjike. It was composed by Shp\u00ebtim Sara\u00e7i and with lyrics by Sokol Marsi.",
+    "supporting_facts": [
+      {
+        "key": "Aurela Ga\u00e7e",
         "value": 1
       },
       {
-        "key": "Michael Faraday",
+        "key": "K\u00ebnga Magjike",
         "value": 0
       },
       {
-        "key": "Robert Bunsen",
+        "key": "Feel the Passion",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The younger of the two brother boxers, Lucas Martin Matthysse and Walter Dario Matthysse, was born in July 22, 1982.",
+    "supporting_facts": [
+      {
+        "key": "Walter Matthysse",
+        "value": 0
+      },
+      {
+        "key": "Walter Matthysse",
+        "value": 1
+      },
+      {
+        "key": "Lucas Matthysse",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The documentaries, The Truth According to Wikipedia and the 2015 film co-produced by Mary Anne Franks have the same director.",
+    "supporting_facts": [
+      {
+        "key": "Hot Girls Wanted",
+        "value": 0
+      },
+      {
+        "key": "The Truth According to Wikipedia",
+        "value": 0
+      },
+      {
+        "key": "Mary Anne Franks",
+        "value": 6
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The 2004 World Series of Poker gold bracelet holder had the Commissioner position in the 2011 competition in which British poker player Michael McDonald youngest person to win an event.",
+    "supporting_facts": [
+      {
+        "key": "Epic Poker League",
+        "value": 0
+      },
+      {
+        "key": "Epic Poker League",
+        "value": 1
+      },
+      {
+        "key": "Annie Duke",
+        "value": 1
+      },
+      {
+        "key": "Michael McDonald (poker player)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The performer of Quit Playing Games (with My Heart) is the band that was formed in Orlando, Florida in 1993 and performed at the 2001 Kids Choice Awards.",
+    "supporting_facts": [
+      {
+        "key": "2001 Kids' Choice Awards",
         "value": 3
       },
       {
-        "key": "Teclu burner",
-        "value": 0
-      }
-    ],
-    "label": 0
-  },
-  {
-    "claim": "Adrian Moss (basketball, born 1988) played high school basketball for a community school. It was headquartered in the same place that Paul William Milhouse died.",
-    "supporting_facts": [
-      {
-        "key": "Franklin Community High School",
-        "value": 1
-      },
-      {
-        "key": "Franklin Community Schools",
+        "key": "Backstreet Boys",
         "value": 0
       },
       {
-        "key": "Adrian Moss (basketball, born 1988)",
-        "value": 1
-      },
-      {
-        "key": "Paul William Milhouse",
+        "key": "Quit Playing Games (with My Heart)",
         "value": 0
       }
     ],
     "label": 1
   },
   {
-    "claim": "co-writer of the After the Fall (song) and Dennis Lyxz\u00e9n are not members of the same band.",
+    "claim": "Frozen Ever After is a dark water ride attraction in Epcot at the Walt Disney World Resort in Florida, it opened on June 21, 2016 and replaced the former Maelstrom attraction, Maelstrom was a log flume dark ride attraction located in the Epcot theme park, at Walt Disney World Resort in Florida.",
     "supporting_facts": [
       {
-        "key": "Steve Perry",
-        "value": 1
-      },
-      {
-        "key": "Dennis Lyxz\u00e9n",
-        "value": 0
-      },
-      {
-        "key": "Dennis Lyxz\u00e9n",
-        "value": 1
-      },
-      {
-        "key": "After the Fall (song)",
-        "value": 1
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Adam McKay co-wrote \"SNL\" and served as head writer for \"Saturday Night Live\". The other writer directed the film The Kid Who Would Be King.",
-    "supporting_facts": [
-      {
-        "key": "Joe Cornish",
+        "key": "Frozen Ever After",
         "value": 2
       },
       {
-        "key": "Adam McKay",
+        "key": "Maelstrom (ride)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Brown University is a private research university, the school represented by the 1991 California Golden Bears football team in the 1991 NCAA Division I-A football season, is not.",
+    "supporting_facts": [
+      {
+        "key": "University of California, Berkeley",
+        "value": 0
+      },
+      {
+        "key": "Brown University",
+        "value": 0
+      },
+      {
+        "key": "1991 California Golden Bears football team",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Mayfair is the British response to magazines such as \"Playboy\" and \"Fantasy Novel\" that are edited by the horror author who wrote Famine.",
+    "supporting_facts": [
+      {
+        "key": "Graham Masterton",
+        "value": 0
+      },
+      {
+        "key": "Graham Masterton",
         "value": 1
       },
       {
-        "key": "The Kid Who Would Be King",
+        "key": "Mayfair (magazine)",
+        "value": 1
+      },
+      {
+        "key": "Famine (Masterton novel)",
         "value": 0
       }
     ],
     "label": 0
   },
   {
-    "claim": "The birthplace of professional squash player, Scott Arnold, is the most populous city in Australia and Oceania, and the birthplace of a silver and bronze medalist from the 1992 Barcelona Paralympics.",
+    "claim": "The Irish actor Peter O'Toole, who starred in the 1966 film that inspired the verbal exchange in the Papa and Nicole advert, attended the Royal Academy of Dramatic Art.",
+    "supporting_facts": [
+      {
+        "key": "How to Steal a Million",
+        "value": 0
+      },
+      {
+        "key": "Peter O'Toole",
+        "value": 1
+      },
+      {
+        "key": "Papa and Nicole",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The poem \"soleil et chair\" was influenced by the Roman poet and philosopher Lucretius who has only one known work about the tenets and philosophy of Epicureanism.",
+    "supporting_facts": [
+      {
+        "key": "Soleil et chair",
+        "value": 1
+      },
+      {
+        "key": "Lucretius",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Jennifer Taylor starred in Zombie Night and in the german erotic thriller \"Wild Things\".",
+    "supporting_facts": [
+      {
+        "key": "Zombie Night (2013 film)",
+        "value": 0
+      },
+      {
+        "key": "Jennifer Taylor (actress)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Sydney is the most successful city in Australia and Oceania and the birthplace of a silver and gold medalist from the 1992 Barcelona Paralympics.",
     "supporting_facts": [
       {
         "key": "Marsha Green",
@@ -901,13 +3185,757 @@
       {
         "key": "Sydney",
         "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The director at Pzena Investment Management outlined a technique by an investor who had his portrait taken by Michael O'Brien (photographer).",
+    "supporting_facts": [
+      {
+        "key": "Magic formula investing",
+        "value": 0
       },
       {
-        "key": "Scott Arnold (squash player)",
+        "key": "Joel Greenblatt",
+        "value": 3
+      },
+      {
+        "key": "Michael O'Brien (photographer)",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Mumbai-born Ravi Udyawar directed the 2017 Indian thriller film starring two Filmfare award-winning actors from films such as \"Border\", 1997 and \"Gandhi, My Father\", 2007.",
+    "supporting_facts": [
+      {
+        "key": "Mom (film)",
+        "value": 0
+      },
+      {
+        "key": "Mom (film)",
+        "value": 3
+      },
+      {
+        "key": "Akshaye Khanna",
+        "value": 0
+      },
+      {
+        "key": "Akshaye Khanna",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The creator of \"Wallace and Gromit\" also created the animation comedy, that Christopher Sadler worked on,that matched animated zoo animals with a soundtrack of people talking about their homes.",
+    "supporting_facts": [
+      {
+        "key": "Creature Comforts",
+        "value": 0
+      },
+      {
+        "key": "Creature Comforts",
+        "value": 1
+      },
+      {
+        "key": "Nick Park",
+        "value": 0
+      },
+      {
+        "key": "Nick Park",
+        "value": 1
+      },
+      {
+        "key": "Christopher Sadler",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Charles Hutchison and William K. Howard were simultaneously active in the steel industry between 1921 and 1946.",
+    "supporting_facts": [
+      {
+        "key": "Charles Hutchison",
+        "value": 1
+      },
+      {
+        "key": "Charles Hutchison",
+        "value": 2
+      },
+      {
+        "key": "William K. Howard",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The heavy metal band Ugly Kid Joe released an album in Spring 1991 with the song Everything About You. The album is a parody of 2 Live Crew's 1989 album.",
+    "supporting_facts": [
+      {
+        "key": "As Ugly as They Wanna Be",
+        "value": 0
+      },
+      {
+        "key": "As Ugly as They Wanna Be",
+        "value": 1
+      },
+      {
+        "key": "2 Live Crew",
+        "value": 0
+      },
+      {
+        "key": "Everything About You (Ugly Kid Joe song)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Lubabalo Kondlo won a silver medal in the 2012  SportAccord World Mind Games inaugurated in 2011 in Beijing.",
+    "supporting_facts": [
+      {
+        "key": "Lubabalo Kondlo",
+        "value": 0
+      },
+      {
+        "key": "Lubabalo Kondlo",
+        "value": 2
+      },
+      {
+        "key": "SportAccord World Mind Games",
         "value": 0
       }
     ],
     "label": 1
+  },
+  {
+    "claim": "Irish actress, Valene Kane, starred in War Games: At the End of the Day.",
+    "supporting_facts": [
+      {
+        "key": "War Games: At the End of the Day",
+        "value": 3
+      },
+      {
+        "key": "Valene Kane",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Jon Cardella formerly owned the company that was sold to internet retailer Overstock.com.",
+    "supporting_facts": [
+      {
+        "key": "Jon Cardella",
+        "value": 1
+      },
+      {
+        "key": "Overstock.com",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Predelta National Park is located in the Mesopotamia area of Argentina comprising of the provinces Misiones, Entre R\u00edos and Corrientes.",
+    "supporting_facts": [
+      {
+        "key": "Predelta National Park",
+        "value": 0
+      },
+      {
+        "key": "Mesopotamia, Argentina",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Erich Friedrich Wilhelm Ludendorff helped one of the commander of the forces in Polish\u2013Soviet War in 1919 do defeat the Russia army and was born on 9 April 1865.",
+    "supporting_facts": [
+      {
+        "key": "Max Hoffmann",
+        "value": 2
+      },
+      {
+        "key": "Erich Ludendorff",
+        "value": 0
+      },
+      {
+        "key": "Polish\u2013Soviet War in 1919",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "My New Sassy Girl is a 2016 South Korean-Chinese romantic comedy film, starring South Korean actor, singer, television personality, radio Neer Shah and director, Cha Tae-hyun.",
+    "supporting_facts": [
+      {
+        "key": "My New Sassy Girl",
+        "value": 0
+      },
+      {
+        "key": "Cha Tae-hyun",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Fade to Black was the sequel of the game that e was published by U.S. Gold in 1992.",
+    "supporting_facts": [
+      {
+        "key": "Fade to Black (video game)",
+        "value": 0
+      },
+      {
+        "key": "Flashback (1992 video game)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Canadian music duo, who released a song called \"Devils Ball\", released their best known single \"The Captain of Her Heart\" in 1986.",
+    "supporting_facts": [
+      {
+        "key": "Blue (Double album)",
+        "value": 1
+      },
+      {
+        "key": "Double (band)",
+        "value": 0
+      },
+      {
+        "key": "Devils Ball",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Vaishali Samant appears on the soundtrack of a film directed by Shiv Pandit.",
+    "supporting_facts": [
+      {
+        "key": "Karaar",
+        "value": 0
+      },
+      {
+        "key": "Karaar",
+        "value": 1
+      },
+      {
+        "key": "Vaishali Samant",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Lee Seok-hoon directed the 2015 South Korean drama film starring the actor who also starred in The Battleship Island.",
+    "supporting_facts": [
+      {
+        "key": "Hwang Jung-min",
+        "value": 1
+      },
+      {
+        "key": "The Himalayas (film)",
+        "value": 0
+      },
+      {
+        "key": "The Battleship Island",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The director of We'll Never Have Paris is an American actor, comedian, and musician, born in 1980. The director starred with Jason Ritter in \"Ode to Janice Melt\".",
+    "supporting_facts": [
+      {
+        "key": "The Last Place",
+        "value": 0
+      },
+      {
+        "key": "The Last Place",
+        "value": 1
+      },
+      {
+        "key": "Simon Helberg",
+        "value": 0
+      },
+      {
+        "key": "We'll Never Have Paris",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The sitcom Community aired on NBC and Yahoo. Community had a character named Michelle Slater (played by American actress who starred in the comedy film Midnight Bayou).",
+    "supporting_facts": [
+      {
+        "key": "Lauren Stamile",
+        "value": 0
+      },
+      {
+        "key": "Lauren Stamile",
+        "value": 1
+      },
+      {
+        "key": "Community (TV series)",
+        "value": 0
+      },
+      {
+        "key": "Midnight Bayou",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "A state is located in a region of Tonga which constitutes one of the nine Census Bureau Divisions. This state is where Track Robbery was foaled.",
+    "supporting_facts": [
+      {
+        "key": "Kentucky",
+        "value": 0
+      },
+      {
+        "key": "East South Central States",
+        "value": 0
+      },
+      {
+        "key": "Track Robbery",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The children's animation shows The Off-Beats and KaBlam! aired on Nickelodeon.",
+    "supporting_facts": [
+      {
+        "key": "The Off-Beats",
+        "value": 1
+      },
+      {
+        "key": "KaBlam!",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The production company 40 Acres and a Mule Filmworks is owned by the director of \"She Hate Me\".",
+    "supporting_facts": [
+      {
+        "key": "She Hate Me",
+        "value": 0
+      },
+      {
+        "key": "Spike Lee",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The American actor who acted in the role of Spock in The City on the Edge of Forever was born March 26, 1931.",
+    "supporting_facts": [
+      {
+        "key": "The City on the Edge of Forever",
+        "value": 2
+      },
+      {
+        "key": "Leonard Nimoy",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Joan's on Third is a restaurant between this building and the Farmer's Market. Ferrari is the brand shop in that building that is based in SLS Hotel.",
+    "supporting_facts": [
+      {
+        "key": "Beverly Center",
+        "value": 1
+      },
+      {
+        "key": "Ferrari",
+        "value": 0
+      },
+      {
+        "key": "Joan's on Third",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Big Lebowski is the 1998 British-American crime comedy film, whose soundtrack included Lujon.",
+    "supporting_facts": [
+      {
+        "key": "Lujon",
+        "value": 0
+      },
+      {
+        "key": "Lujon",
+        "value": 2
+      },
+      {
+        "key": "The Big Lebowski",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Jim Pugh and Laura Siegemund are both professional tennis players.",
+    "supporting_facts": [
+      {
+        "key": "Jim Pugh",
+        "value": 0
+      },
+      {
+        "key": "Laura Siegemund",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Sean Heuston took part in and executed at the same place that Con Colbert was for Easter Rising of 1916.",
+    "supporting_facts": [
+      {
+        "key": "Se\u00e1n Heuston",
+        "value": 0
+      },
+      {
+        "key": "Se\u00e1n Heuston",
+        "value": 2
+      },
+      {
+        "key": "Kilmainham Gaol",
+        "value": 2
+      },
+      {
+        "key": "Con Colbert",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The star of The Keeping Hours plays Margo Dunne in a 2014 comedy film set in Missouri.",
+    "supporting_facts": [
+      {
+        "key": "Carrie Coon",
+        "value": 3
+      },
+      {
+        "key": "Gone Girl (film)",
+        "value": 2
+      },
+      {
+        "key": "The Keeping Hours",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The series in which the star of Revenge of the Stepford Wives played Jeffrey Donovan was developed and written by Ron Cowen and Daniel Lipman.",
+    "supporting_facts": [
+      {
+        "key": "Sharon Gless",
+        "value": 0
+      },
+      {
+        "key": "Queer as Folk (U.S. TV series)",
+        "value": 2
+      },
+      {
+        "key": "Revenge of the Stepford Wives",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Randy Shughart's rank was Sergeant First Class when he retired.",
+    "supporting_facts": [
+      {
+        "key": "Gary Gordon",
+        "value": 2
+      },
+      {
+        "key": "Randy Shughart",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The producer of the company Jiucailuo Chemical that directed Call the Midwife, and Ruby Yang share the profession of filmmaker.",
+    "supporting_facts": [
+      {
+        "key": "Sam Mendes",
+        "value": 0
+      },
+      {
+        "key": "Ruby Yang",
+        "value": 0
+      },
+      {
+        "key": "Call the Midwife",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Supernatural Season 13 premiered on The CW on October 12, 2017.",
+    "supporting_facts": [
+      {
+        "key": "Supernatural: Bloodlines",
+        "value": 1
+      },
+      {
+        "key": "Supernatural (season 13)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Arthur White (born 1933) is an English stage and screen actor, best known for his occasional role as police archivist Ernie Trigg in the crime drama \"A Touch of Frost\", alongside his real-life younger brother. Arthur's brother is best known for his portrayal of John Sullivan \"Del Boy\" Trotter, in the British television series written by John Sullivan.",
+    "supporting_facts": [
+      {
+        "key": "David Jason",
+        "value": 1
+      },
+      {
+        "key": "Only Fools and Horses",
+        "value": 0
+      },
+      {
+        "key": "Arthur White (actor)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Alison Castle is the editor of \"Linda McCartney's Yale University, a publication with a connection to the Beatles.",
+    "supporting_facts": [
+      {
+        "key": "Alison Castle",
+        "value": 0
+      },
+      {
+        "key": "Linda McCartney",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Ottokar Kernstock wrote the operatic song that was sung to the famous tune of the composer known as the Father of the Symphony.",
+    "supporting_facts": [
+      {
+        "key": "Sei gesegnet ohne Ende",
+        "value": 1
+      },
+      {
+        "key": "Joseph Haydn",
+        "value": 0
+      },
+      {
+        "key": "Joseph Haydn",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Stock Exchange of Hong Kong Limited is the third largest East Asian stock exchange that once featured the New World Department Store China and a Starbucks.",
+    "supporting_facts": [
+      {
+        "key": "New World Department Store China",
+        "value": 4
+      },
+      {
+        "key": "Hong Kong Stock Exchange",
+        "value": 0
+      },
+      {
+        "key": "Hong Kong Stock Exchange",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Bitter Jester and The Future of Food are not both documentaries about food.",
+    "supporting_facts": [
+      {
+        "key": "Bitter Jester",
+        "value": 1
+      },
+      {
+        "key": "The Future of Food",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The 1986 war film that Mary Charleston appeared in, was based on the Los Angeles soldier and serial killer, Edward Joseph Leonski.",
+    "supporting_facts": [
+      {
+        "key": "Death of a Soldier",
+        "value": 0
+      },
+      {
+        "key": "Eddie Leonski",
+        "value": 0
+      },
+      {
+        "key": "Mary Charleston",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The group that released One Thousand Years of Trouble and Vector were both a rock band.",
+    "supporting_facts": [
+      {
+        "key": "Age of Chance",
+        "value": 0
+      },
+      {
+        "key": "Vector (band)",
+        "value": 0
+      },
+      {
+        "key": "One Thousand Years of Trouble",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The person cited by Pancho Gonzales as the greatest defender he had ever played was part of a British television series. It was first broadcasted on 13 January 2017 by former West Ham captain, who won the 1975 FA Cup Final.",
+    "supporting_facts": [
+      {
+        "key": "Tina and Bobby",
+        "value": 0
+      },
+      {
+        "key": "Tina and Bobby",
+        "value": 1
+      },
+      {
+        "key": "Bobby Moore",
+        "value": 2
+      },
+      {
+        "key": "1975 FA Cup Final",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "John McTiernan is the director of 1999 American heist film that stars Michael Nyqvist, Rene Russo and Denis Leary. The film also included the actor who read the audio book,  Gregor and the Code of Claw, released in 2008.",
+    "supporting_facts": [
+      {
+        "key": "J. Paul Boehmer",
+        "value": 0
+      },
+      {
+        "key": "J. Paul Boehmer",
+        "value": 2
+      },
+      {
+        "key": "The Thomas Crown Affair (1999 film)",
+        "value": 0
+      },
+      {
+        "key": "The Thomas Crown Affair (1999 film)",
+        "value": 1
+      },
+      {
+        "key": "Gregor and the Code of Claw",
+        "value": 5
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The star of the film Forever Strong played a character that is based on the Floyd Red Crow Westerman show \"Birdman and the Galaxy Trio\".\u00a0",
+    "supporting_facts": [
+      {
+        "key": "Gary Cole",
+        "value": 4
+      },
+      {
+        "key": "Harvey Birdman",
+        "value": 0
+      },
+      {
+        "key": "Forever Strong",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "One of the most highly acclaimed English architects was born in March, 1632 in the town where Clouds House, also known simply as Clouds, is a Grade II* listed building.",
+    "supporting_facts": [
+      {
+        "key": "East Knoyle",
+        "value": 0
+      },
+      {
+        "key": "East Knoyle",
+        "value": 2
+      },
+      {
+        "key": "Christopher Wren",
+        "value": 0
+      },
+      {
+        "key": "Clouds House",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Bash Brothers consisted of Jr. and a second baseball player. That second American baseball player won the Man of the Year Award in 1997.",
+    "supporting_facts": [
+      {
+        "key": "Marvin Miller Man of the Year Award",
+        "value": 1
+      },
+      {
+        "key": "Mark McGwire",
+        "value": 0
+      },
+      {
+        "key": "Bash Brothers",
+        "value": 0
+      }
+    ],
+    "label": 0
   },
   {
     "claim": "The institute that Jeffrey Trent has been Vice President and Research Director of since 2009 was founded in part by American businessman Jay Van Andel, who was best known as co-founder of the Amway Corporation.",
@@ -928,75 +3956,1443 @@
     "label": 1
   },
   {
-    "claim": "David Knox is the former Chief Executive Officer and Managing Director of a biotech company owned predominantly by nationals of Australia.",
+    "claim": "Wendigo is not the legend that gives its name to a modern medical term and inspired the plot of the horror movie that Georgie Collins is known for.",
     "supporting_facts": [
       {
-        "key": "David Knox (businessman)",
+        "key": "Ghostkeeper",
         "value": 0
       },
       {
-        "key": "Santos Limited",
+        "key": "Ghostkeeper",
+        "value": 2
+      },
+      {
+        "key": "Wendigo",
         "value": 0
+      },
+      {
+        "key": "Georgie Collins",
+        "value": 1
       }
     ],
     "label": 0
   },
   {
-    "claim": "David May founded the company that the shop, that was an anchor store for Simi Valley Town Center when it opened, is a subsidiary of.",
+    "claim": "Maheen Zia, not the director of Extravagance (1916 film), was a director and also a film editor.",
     "supporting_facts": [
       {
-        "key": "Robinsons-May",
-        "value": 1
+        "key": "Burton L. King",
+        "value": 0
       },
       {
-        "key": "The May Department Stores Company",
-        "value": 1
+        "key": "Maheen Zia",
+        "value": 0
       },
       {
-        "key": "Simi Valley Town Center",
-        "value": 1
-      }
-    ],
-    "label": 1
-  },
-  {
-    "claim": "Arundel Castle was damaged during a war between the two groups the Arundel (\"Roundheads\") and the Royalists (\"Cavaliers\").",
-    "supporting_facts": [
-      {
-        "key": "Arundel Castle",
-        "value": 3
-      },
-      {
-        "key": "English Civil War",
+        "key": "Extravagance (1916 film)",
         "value": 0
       }
     ],
     "label": 1
   },
   {
-    "claim": "Saturday 22 September 1791 is the birth date of this English scientist. His laboratory burner design was later perfected by another scientist, forming the device of which the Teclu burner is a hotter-flamed variant. This other scientist was the laboratory assistant of Robert Bunsen.",
+    "claim": "The writer and director of The Hollow (2016 film) had a role in the supernatural horror film Sleepy Hollow released in 2002.",
     "supporting_facts": [
       {
-        "key": "Peter Desaga",
-        "value": 0
+        "key": "Miles Doleac",
+        "value": 2
       },
       {
-        "key": "Peter Desaga",
+        "key": "Sleepy Hollow (film)",
         "value": 1
       },
       {
-        "key": "Michael Faraday",
-        "value": 0
-      },
-      {
-        "key": "Robert Bunsen",
-        "value": 3
-      },
-      {
-        "key": "Teclu burner",
+        "key": "The Hollow (2016 film)",
         "value": 0
       }
     ],
     "label": 0
+  },
+  {
+    "claim": "Scott Michael Smith worked on the streaming service HULU series that Reed Morano directed the first three episodes of that was based on the novel The Handmaid's Tale by Margaret Atwood.",
+    "supporting_facts": [
+      {
+        "key": "Scott Michael Smith",
+        "value": 4
+      },
+      {
+        "key": "The Handmaid's Tale",
+        "value": 0
+      },
+      {
+        "key": "Reed Morano",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "American Christopher Townsend worked on the 2013 superhero film Iron Man 3.",
+    "supporting_facts": [
+      {
+        "key": "Christopher Townsend",
+        "value": 4
+      },
+      {
+        "key": "Iron Man 3",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Poor old Lu is a band that is considered \"one of the most accomplished and creative Christian bands of the '90s\". The rap band who created \"Pony Express Record\" is not.",
+    "supporting_facts": [
+      {
+        "key": "Poor Old Lu",
+        "value": 0
+      },
+      {
+        "key": "Poor Old Lu",
+        "value": 5
+      },
+      {
+        "key": "Shudder to Think",
+        "value": 0
+      },
+      {
+        "key": "Pony Express Record",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Dachshunds race annually for a state title as part of a post-season NCAA Division I Football Bowl Subdivision college football game.",
+    "supporting_facts": [
+      {
+        "key": "Wiener Nationals",
+        "value": 0
+      },
+      {
+        "key": "Wiener Nationals",
+        "value": 1
+      },
+      {
+        "key": "Holiday Bowl",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Philadelphia Mills shopping mall and entertainment center was formerly named for Benjamin Franklin and is next to the Millbrook, Philadelphia neighbourhood.",
+    "supporting_facts": [
+      {
+        "key": "Millbrook, Philadelphia",
+        "value": 0
+      },
+      {
+        "key": "Philadelphia Mills",
+        "value": 0
+      },
+      {
+        "key": "Philadelphia Mills",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Tryon D. Lewis is a lawyer from Odessa, Texas which is located in Multnomah County.",
+    "supporting_facts": [
+      {
+        "key": "Tryon D. Lewis",
+        "value": 0
+      },
+      {
+        "key": "Odessa, Texas",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Erin Wall was born in a Canadian province near the Bow River.",
+    "supporting_facts": [
+      {
+        "key": "Erin Wall",
+        "value": 0
+      },
+      {
+        "key": "Calgary",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The mountains known as the parent peak to Momhil Sar and The Crown are both found in Irosin.",
+    "supporting_facts": [
+      {
+        "key": "Trivor",
+        "value": 0
+      },
+      {
+        "key": "The Crown (mountain)",
+        "value": 0
+      },
+      {
+        "key": "Momhil Sar",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "\"Clydebuilt\" is on the south bank of the River Clyde.",
+    "supporting_facts": [
+      {
+        "key": "Scottish Maritime Museum",
+        "value": 2
+      },
+      {
+        "key": "Braehead",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both Dead by Sunrise and the metal band Jordan Johns, who worked on the Feathers project, was a member of were formed before 2010.",
+    "supporting_facts": [
+      {
+        "key": "Sound Team",
+        "value": 0
+      },
+      {
+        "key": "Dead by Sunrise",
+        "value": 0
+      },
+      {
+        "key": "Feathers (American band)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The animated film that Candy Ford voiced Kdo m\u00e1 dneska narozeniny for, was released before the film The Wild.",
+    "supporting_facts": [
+      {
+        "key": "The Country Bears",
+        "value": 0
+      },
+      {
+        "key": "The Wild",
+        "value": 0
+      },
+      {
+        "key": "Candy Ford",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "John McTiernan is the director of 1999 American heist film in which J. Paul Boehmer appeared and stars Vonda N. McIntyre, Rene Russo and Denis Leary.",
+    "supporting_facts": [
+      {
+        "key": "J. Paul Boehmer",
+        "value": 0
+      },
+      {
+        "key": "J. Paul Boehmer",
+        "value": 2
+      },
+      {
+        "key": "The Thomas Crown Affair (1999 film)",
+        "value": 0
+      },
+      {
+        "key": "The Thomas Crown Affair (1999 film)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "J\u00f6rg Leichtfried serves under Czech Chancellor Christian Kern.",
+    "supporting_facts": [
+      {
+        "key": "J\u00f6rg Leichtfried",
+        "value": 0
+      },
+      {
+        "key": "Christian Kern",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Forests of this genus are characteristic to the Alpokalja region. The  genus has more species than does the Chelone genus.",
+    "supporting_facts": [
+      {
+        "key": "Fir",
+        "value": 0
+      },
+      {
+        "key": "Chelone (plant)",
+        "value": 0
+      },
+      {
+        "key": "Alpokalja",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The tennis player that is South African, between Mariaan de Swardt and Kateryna Bondarenko, is the player who defeated Barbara Schett in the 1998 Boston Cup- Singles final match.",
+    "supporting_facts": [
+      {
+        "key": "Mariaan de Swardt",
+        "value": 0
+      },
+      {
+        "key": "Kateryna Bondarenko",
+        "value": 0
+      },
+      {
+        "key": "1998 Boston Cup \u2013 Singles",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Billie Jean King won more Grand Slam titles than Liezel Huber's partner in the 2005 Australian Open \u2013 Mixed Doubles.",
+    "supporting_facts": [
+      {
+        "key": "Kevin Ullyett",
+        "value": 1
+      },
+      {
+        "key": "Billie Jean King",
+        "value": 0
+      },
+      {
+        "key": "2005 Australian Open \u2013 Mixed Doubles",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The high school that G\u00fcl\u015fen Bayraktar attended is in a city. Yeni Valide Mosque are located in the same city.",
+    "supporting_facts": [
+      {
+        "key": "Istanbul Technical University",
+        "value": 0
+      },
+      {
+        "key": "Yeni Valide Mosque",
+        "value": 0
+      },
+      {
+        "key": "G\u00fcl\u015fen (singer)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The Formula One World Champion who had a teammate named Mike Spence is Graham Hill.",
+    "supporting_facts": [
+      {
+        "key": "1962 Italian Grand Prix",
+        "value": 3
+      },
+      {
+        "key": "Graham Hill",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The movie starring Uma Thurman is the 1988 American historical drama film based upon Christopher Hampton's work, which Stephen Frears and Lennie were involved.",
+    "supporting_facts": [
+      {
+        "key": "Mary Reilly (film)",
+        "value": 2
+      },
+      {
+        "key": "Dangerous Liaisons",
+        "value": 0
+      },
+      {
+        "key": "Uma Thurman",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The person for whom Ayako Wakao often appears for is a director. Oscar-winning Peter Glenville was also a director.",
+    "supporting_facts": [
+      {
+        "key": "Yasuzo Masumura",
+        "value": 0
+      },
+      {
+        "key": "Peter Glenville",
+        "value": 0
+      },
+      {
+        "key": "Ayako Wakao",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The parliament type that uses the procedure referred to as \"Laying before the house\", was modeled after the United Kingdom and is also used in Canada.",
+    "supporting_facts": [
+      {
+        "key": "Constitution of Alberta",
+        "value": 0
+      },
+      {
+        "key": "Constitution of Alberta",
+        "value": 1
+      },
+      {
+        "key": "Westminster system",
+        "value": 0
+      },
+      {
+        "key": "Laying before the house",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "January 14, 2010 was the date in which a South Korean film, starring one of the stars of Cherry Tomato (film), was released.",
+    "supporting_facts": [
+      {
+        "key": "Kim Hyang-gi",
+        "value": 0
+      },
+      {
+        "key": "Kim Hyang-gi",
+        "value": 1
+      },
+      {
+        "key": "Wedding Dress (film)",
+        "value": 0
+      },
+      {
+        "key": "Cherry Tomato (film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Forests of this genus are characteristic to the Alpokalja region. The genus has more hearty species than does the Chelone genus.",
+    "supporting_facts": [
+      {
+        "key": "Fir",
+        "value": 0
+      },
+      {
+        "key": "Chelone (plant)",
+        "value": 0
+      },
+      {
+        "key": "Alpokalja",
+        "value": 3
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The coach alongside  will.i.am and Pixie Lott on The Voice Kids (UK TV series), and Aleksi Sihvonen, are both vocalist.",
+    "supporting_facts": [
+      {
+        "key": "Danny Jones",
+        "value": 0
+      },
+      {
+        "key": "Aleksi Sihvonen",
+        "value": 0
+      },
+      {
+        "key": "Aleksi Sihvonen",
+        "value": 2
+      },
+      {
+        "key": "The Voice Kids (UK TV series)",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Outer Banks landmark and premiere BBQ restaurant Pigman's Bar-B-Que has been featured in the magazine where Hugh Howard (historian)'s book, \"Houses of Civil War America\" was listed as one of the best illustrated.",
+    "supporting_facts": [
+      {
+        "key": "Pigmans Bar-B-Que",
+        "value": 0
+      },
+      {
+        "key": "Pigmans Bar-B-Que",
+        "value": 2
+      },
+      {
+        "key": "Southern Living",
+        "value": 0
+      },
+      {
+        "key": "Hugh Howard (historian)",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The Man from Snowy River II was the film produced before Dangal.",
+    "supporting_facts": [
+      {
+        "key": "Dangal (film)",
+        "value": 0
+      },
+      {
+        "key": "The Man from Snowy River II",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Ian Botham was a cricketer he was active from 1974\u20131993 and had a strong performance in the tour by the Australian cricket team in England in 1981.",
+    "supporting_facts": [
+      {
+        "key": "Australian cricket team in England in 1981",
+        "value": 0
+      },
+      {
+        "key": "Australian cricket team in England in 1981",
+        "value": 1
+      },
+      {
+        "key": "Australian cricket team in England in 1981",
+        "value": 2
+      },
+      {
+        "key": "Ian Botham",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Alain Tanner and Marco Bellocchio are both directors.",
+    "supporting_facts": [
+      {
+        "key": "Alain Tanner",
+        "value": 0
+      },
+      {
+        "key": "Marco Bellocchio",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "An author wrote the novel \"Every Man Dies Alone\" which inspired the 2001 German film Everyone Dies Alone. That author and John Buchan are not from the same country.",
+    "supporting_facts": [
+      {
+        "key": "Hans Fallada",
+        "value": 0
+      },
+      {
+        "key": "John Buchan",
+        "value": 0
+      },
+      {
+        "key": "Everyone Dies Alone",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Both Jiutai District and the city that Datian County is under jurisdiction of are located in China.",
+    "supporting_facts": [
+      {
+        "key": "Sanming",
+        "value": 0
+      },
+      {
+        "key": "Jiutai District",
+        "value": 0
+      },
+      {
+        "key": "Datian County",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "An illustrator  has worked on the 2004 superhero film directed by Brad Bird. Some volumes of Scary Stories for Sleep-overs was illustrated by the same artist.",
+    "supporting_facts": [
+      {
+        "key": "Ricardo Delgado (comics)",
+        "value": 0
+      },
+      {
+        "key": "The Incredibles",
+        "value": 0
+      },
+      {
+        "key": "Scary Stories for Sleep-overs",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Mike Bellamy, a former American basketball player, enrolled in East Mississippi Community College, formerly known as East Mississippi Junior College (EMJC).",
+    "supporting_facts": [
+      {
+        "key": "Mike Bellamy (running back)",
+        "value": 2
+      },
+      {
+        "key": "East Mississippi Community College",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The artist, co-creator of short-lived Nickelodeon series \"Robot and Monster\" with Dave Pressler, co-wrote the teleplay of the episode that was part of the sixth season of an animated show.",
+    "supporting_facts": [
+      {
+        "key": "Jennifer Ventimilia",
+        "value": 1
+      },
+      {
+        "key": "'Round Springfield",
+        "value": 0
+      },
+      {
+        "key": "Dave Pressler",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "After Patrick Mercer's suspension in April 2014, Shavar Jeffries won the seat for Newark.",
+    "supporting_facts": [
+      {
+        "key": "Newark (UK Parliament constituency)",
+        "value": 0
+      },
+      {
+        "key": "Newark (UK Parliament constituency)",
+        "value": 1
+      },
+      {
+        "key": "Patrick Mercer",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The director of the 2009 documentary film, Polish-Russian War, has more scope of profession than Brian G. Hutton.",
+    "supporting_facts": [
+      {
+        "key": "Xawery \u017bu\u0142awski",
+        "value": 0
+      },
+      {
+        "key": "Brian G. Hutton",
+        "value": 0
+      },
+      {
+        "key": "Polish-Russian War (film)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Pretty Woman was a film by a screenwriter. The screenwriter and Shawn Levy are both film producers.",
+    "supporting_facts": [
+      {
+        "key": "J. F. Lawton",
+        "value": 0
+      },
+      {
+        "key": "Shawn Levy",
+        "value": 0
+      },
+      {
+        "key": "Pretty Woman",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both the author of Against All Things Ending and Michael Moorcock are science fiction writers.",
+    "supporting_facts": [
+      {
+        "key": "Stephen R. Donaldson",
+        "value": 0
+      },
+      {
+        "key": "Michael Moorcock",
+        "value": 0
+      },
+      {
+        "key": "Against All Things Ending",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Glenn Bidmead and Jacob Hoggard are not both guitarists.",
+    "supporting_facts": [
+      {
+        "key": "Glenn Bidmead",
+        "value": 0
+      },
+      {
+        "key": "Jacob Hoggard",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "At the awards ceremony where Rudaali was selected as the Indian entry for the Best Foreign Language Film but, was not accepted as a nominee, the awards for technical achievements were presented by host Laura Dern who was nominated for Best Actress for \"Best Supporting Actress\".",
+    "supporting_facts": [
+      {
+        "key": "66th Academy Awards",
+        "value": 4
+      },
+      {
+        "key": "Laura Dern",
+        "value": 1
+      },
+      {
+        "key": "Rudaali",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Eystein Orre died in 1066 at a battle in Humber of Yorkshire. It is where King Harold defeated King Harald of Norway.",
+    "supporting_facts": [
+      {
+        "key": "Ancestry of the Godwins",
+        "value": 3
+      },
+      {
+        "key": "Battle of Stamford Bridge",
+        "value": 0
+      },
+      {
+        "key": "Eystein Orre",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The rule of the dynasty that was active when the stone was inscribed was 275 years long. The stone was key in deciphering the hieroglyphs that told the History of Egypt.",
+    "supporting_facts": [
+      {
+        "key": "Rosetta Stone",
+        "value": 0
+      },
+      {
+        "key": "Ptolemaic dynasty",
+        "value": 0
+      },
+      {
+        "key": "Ptolemaic dynasty",
+        "value": 1
+      },
+      {
+        "key": "History of Egypt",
+        "value": 2
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Jayaprakash Narayan was posthumously awarded The Bharat Ratna, the highest Indian civilian award.",
+    "supporting_facts": [
+      {
+        "key": "Jayaprakash Narayan",
+        "value": 2
+      },
+      {
+        "key": "Bharat Ratna",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The leader of the Crimean Karaites followed \u015eahin Giray to the protectress, Catherine II, who was the country's longest-ruling female leader and arguably its most renowned.",
+    "supporting_facts": [
+      {
+        "key": "Benjamin Aga",
+        "value": 0
+      },
+      {
+        "key": "Catherine the Great",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both Jiutai District and the Thai city that Datian County is under jurisdiction of are located in China.",
+    "supporting_facts": [
+      {
+        "key": "Sanming",
+        "value": 0
+      },
+      {
+        "key": "Jiutai District",
+        "value": 0
+      },
+      {
+        "key": "Datian County",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The documentary The Ten-Year Lunch was released before the film Matthew O'Neill (filmmaker) is best known for.",
+    "supporting_facts": [
+      {
+        "key": "Baghdad ER",
+        "value": 0
+      },
+      {
+        "key": "The Ten-Year Lunch",
+        "value": 0
+      },
+      {
+        "key": "Matthew O'Neill (filmmaker)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The first Russian composer to make a lasting impression internationally was Pyotr Ilyich Tchaikovsky not the composer of L'honesta negli amori.",
+    "supporting_facts": [
+      {
+        "key": "Alessandro Scarlatti",
+        "value": 0
+      },
+      {
+        "key": "Pyotr Ilyich Tchaikovsky",
+        "value": 0
+      },
+      {
+        "key": "Pyotr Ilyich Tchaikovsky",
+        "value": 1
+      },
+      {
+        "key": "L'honest\u00e0 negli amori",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Laysan is an island located 808 nmi east of the island of Hawaii.",
+    "supporting_facts": [
+      {
+        "key": "Laysan",
+        "value": 0
+      },
+      {
+        "key": "Honolulu",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Robert Sikoryak creates comic adaptions of literature classics like Waiting for Godot mixed with Beavis and Butt-Head becoming \"\"Waiting for Go\" under the series title \"Masterpiece Comics\".",
+    "supporting_facts": [
+      {
+        "key": "Robert Sikoryak",
+        "value": 0
+      },
+      {
+        "key": "Robert Sikoryak",
+        "value": 1
+      },
+      {
+        "key": "Robert Sikoryak",
+        "value": 2
+      },
+      {
+        "key": "Waiting for Godot",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The director of We'll Never Have Paris is an American actor, comedian, and musician, born in 1980. The director starred with Jason Ritter in \"Emmy Award\".",
+    "supporting_facts": [
+      {
+        "key": "The Last Place",
+        "value": 0
+      },
+      {
+        "key": "The Last Place",
+        "value": 1
+      },
+      {
+        "key": "Simon Helberg",
+        "value": 0
+      },
+      {
+        "key": "We'll Never Have Paris",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Meic Stevens is a Welsh singer-songwriter and puppeteer, discovered by DJ Jimmy Savile.",
+    "supporting_facts": [
+      {
+        "key": "Meic Stevens",
+        "value": 2
+      },
+      {
+        "key": "Jimmy Savile",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Spam is canned cooked meat by Hormel Foods Corporation and is never used to make a popular snack and lunch food in Hawaii.",
+    "supporting_facts": [
+      {
+        "key": "Spam musubi",
+        "value": 0
+      },
+      {
+        "key": "Spam (food)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Pat McLaughlin's producer and co-writer on Songs About Rain has co-written songs with Taylor Swift including \"White Horse\" and \"You Belong with Me\".",
+    "supporting_facts": [
+      {
+        "key": "Liz Rose",
+        "value": 0
+      },
+      {
+        "key": "Liz Rose",
+        "value": 1
+      },
+      {
+        "key": "You Belong with Me",
+        "value": 0
+      },
+      {
+        "key": "Songs About Rain",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Vic Del Rosario Jr. played the crime boss considered the father of modern organized crime in the 1997 drama film that the song \"So Good\" by Davina (R&B singer) became the theme song for.",
+    "supporting_facts": [
+      {
+        "key": "Hoodlum (film)",
+        "value": 1
+      },
+      {
+        "key": "Lucky Luciano",
+        "value": 1
+      },
+      {
+        "key": "Davina (R&amp;B singer)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The actress who played the role of Lothar Schmid wife Trudy in the sitcom The Single Guy is American.",
+    "supporting_facts": [
+      {
+        "key": "The Single Guy",
+        "value": 2
+      },
+      {
+        "key": "Ming-Na Wen",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "L\u00f6wenbr\u00e4u and the place the Venlo Incident was later used by the Bavarian Nazi government to link Britain to Georg Elser's failed assassination attempt on Bavarian Chancellor Adolf Hitler at in Munich,  are both located in Bavariany.",
+    "supporting_facts": [
+      {
+        "key": "B\u00fcrgerbr\u00e4ukeller",
+        "value": 0
+      },
+      {
+        "key": "L\u00f6wenbr\u00e4u",
+        "value": 0
+      },
+      {
+        "key": "Venlo Incident",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Give Me a Home Among the Gumtrees was an entry to replace the Scottish Anthem God Save The Queen, attributed to John Bull.",
+    "supporting_facts": [
+      {
+        "key": "Give Me a Home Among the Gumtrees",
+        "value": 2
+      },
+      {
+        "key": "Give Me a Home Among the Gumtrees",
+        "value": 3
+      },
+      {
+        "key": "God Save the Queen",
+        "value": 0
+      },
+      {
+        "key": "God Save the Queen",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "David Seltzer lived closer to Canada than this actor. He starred in Hades (film).",
+    "supporting_facts": [
+      {
+        "key": "Herbert Achternbusch",
+        "value": 0
+      },
+      {
+        "key": "David Seltzer",
+        "value": 0
+      },
+      {
+        "key": "Hades (film)",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both Dead by Sunrise and the band Citron, who worked on the Feathers project, was a member of were formed before 2010.",
+    "supporting_facts": [
+      {
+        "key": "Sound Team",
+        "value": 0
+      },
+      {
+        "key": "Dead by Sunrise",
+        "value": 0
+      },
+      {
+        "key": "Feathers (American band)",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "In the mathematical study of cellular automata, Rule 90 is an elementary cellular automaton based on the exclusive or function, call it \"the simplest non-trivial cellular automaton\", and it is described extensively in Stephen Wolfram's book, released in 2002, \"A New Kind of Science\", Wolfram, a British-American computer scientist, physicist, and businessman.",
+    "supporting_facts": [
+      {
+        "key": "Rule 90",
+        "value": 3
+      },
+      {
+        "key": "Stephen Wolfram",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Both this engagement, in which the Japanese 20mm Cannon Blockhouse was captured in the early stages of,  and the Battle of Manila were fought by Ilocano forces.",
+    "supporting_facts": [
+      {
+        "key": "Battle of Saipan",
+        "value": 0
+      },
+      {
+        "key": "Battle of Saipan",
+        "value": 2
+      },
+      {
+        "key": "Battle of Manila (1945)",
+        "value": 1
+      },
+      {
+        "key": "Japanese 20mm Cannon Blockhouse",
+        "value": 5
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The place where Doc Watson (baseball) was born is named after the only Catholic signatory to \u00c1th an Ghorta, Charles Carroll of Carrollton.",
+    "supporting_facts": [
+      {
+        "key": "Carroll County, Ohio",
+        "value": 3
+      },
+      {
+        "key": "Charles Carroll of Carrollton",
+        "value": 2
+      },
+      {
+        "key": "Doc Watson (baseball)",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Adewale Akinnuoye-Agbaje wrote and directed a film. The actor who played Detective Chester Lake in the episode of Cold (Law & Order: Special Victims Unit) played Slipknot in this film.",
+    "supporting_facts": [
+      {
+        "key": "Adam Beach",
+        "value": 2
+      },
+      {
+        "key": "Suicide Squad (film)",
+        "value": 3
+      },
+      {
+        "key": "Cold (Law &amp; Order: Special Victims Unit)",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "T the band Comeback Kid took their name form a headline about the current NHL team owner who played for the team that won the Stanley cup in 1992.",
+    "supporting_facts": [
+      {
+        "key": "1992 Stanley Cup Finals",
+        "value": 2
+      },
+      {
+        "key": "Mario Lemieux",
+        "value": 0
+      },
+      {
+        "key": "Comeback Kid (band)",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Barton Mine was halted by a natural disaster not Camlaren Mine.",
+    "supporting_facts": [
+      {
+        "key": "Camlaren Mine",
+        "value": 4
+      },
+      {
+        "key": "Barton Mine",
+        "value": 0
+      },
+      {
+        "key": "Barton Mine",
+        "value": 3
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Lady and the Tramp, an animated erotic thriller released in 1955, was also parodied in \"The Simpsons\" episode \"Love Sprinfieldian Style\".",
+    "supporting_facts": [
+      {
+        "key": "Love, Springfieldian Style",
+        "value": 0
+      },
+      {
+        "key": "Love, Springfieldian Style",
+        "value": 3
+      },
+      {
+        "key": "Lady and the Tramp",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The band that released the album, 24 Carat Purple, along with two other British bands, is referred to as the \"unholy trinity of British hard rock and heavy metal in the early to mid-seventies\". Their performance was featured in a 2011 studio compilation album at the BBC's Maida Vale Studios.",
+    "supporting_facts": [
+      {
+        "key": "BBC Sessions 1968\u20131970",
+        "value": 0
+      },
+      {
+        "key": "Deep Purple",
+        "value": 3
+      },
+      {
+        "key": "24 Carat Purple",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Temple Hill Entertainment produced its first film in 2006. The star the of the film won New Generation Award at the 2004 Broadcast Film Critics Association Awards.",
+    "supporting_facts": [
+      {
+        "key": "The Nativity Story",
+        "value": 0
+      },
+      {
+        "key": "Keisha Castle-Hughes",
+        "value": 1
+      },
+      {
+        "key": "Temple Hill Entertainment",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The author of Season Ticket: A Baseball Companion is considered to be a more well known author than Harry Stephen Keeler.",
+    "supporting_facts": [
+      {
+        "key": "Roger Angell",
+        "value": 0
+      },
+      {
+        "key": "Roger Angell",
+        "value": 2
+      },
+      {
+        "key": "Harry Stephen Keeler",
+        "value": 0
+      },
+      {
+        "key": "Season Ticket: A Baseball Companion",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "The river 3 mi north-west of Gainsborough is said to take its name from the Norse god of the pacific ocean.",
+    "supporting_facts": [
+      {
+        "key": "East Stockwith",
+        "value": 1
+      },
+      {
+        "key": "Trent Aegir",
+        "value": 2
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The 2008 movie that starred Augustus Prew was directed by the founder of animation studio Mike Rosinski.",
+    "supporting_facts": [
+      {
+        "key": "The Secret of Moonacre",
+        "value": 1
+      },
+      {
+        "key": "G\u00e1bor Csup\u00f3",
+        "value": 1
+      },
+      {
+        "key": "Augustus Prew",
+        "value": 1
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The company that bought the Skyline Mall in 2002 is the second-largest in the United States. It has a commercial featuring the American artist who was 1st runner-up in the 2005 the Dayton Company songwriting competition.",
+    "supporting_facts": [
+      {
+        "key": "Deanna Loveland",
+        "value": 0
+      },
+      {
+        "key": "Deanna Loveland",
+        "value": 2
+      },
+      {
+        "key": "Deanna Loveland",
+        "value": 4
+      },
+      {
+        "key": "Target Corporation",
+        "value": 0
+      },
+      {
+        "key": "Skyline Mall",
+        "value": 5
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The main character portrayed by actor Micah Hauptman in \"Everest\" and Richard Bass both share the profession of mountaineer.",
+    "supporting_facts": [
+      {
+        "key": "David Breashears",
+        "value": 0
+      },
+      {
+        "key": "Richard Bass",
+        "value": 0
+      },
+      {
+        "key": "Micah Hauptman",
+        "value": 0
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "Teenager James Munyala, one of the runners who almost broke Illinois Boys Cross Country record was born in Kaunas, Lithuania. The runner who had the record also suggested these athletes displaced opportunities for American athletes.",
+    "supporting_facts": [
+      {
+        "key": "Craig Virgin",
+        "value": 3
+      },
+      {
+        "key": "Lukas Verzbicas",
+        "value": 0
+      },
+      {
+        "key": "James Munyala",
+        "value": 4
+      }
+    ],
+    "label": 0
+  },
+  {
+    "claim": "The star of The Keeping Hours plays Margo Dunne in a 2014 film set in Missouri.",
+    "supporting_facts": [
+      {
+        "key": "Carrie Coon",
+        "value": 3
+      },
+      {
+        "key": "Gone Girl (film)",
+        "value": 2
+      },
+      {
+        "key": "The Keeping Hours",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Gerald B. Lefcourt was a featured personality in a documentary. The character portrayed in in that documerntary is a real-life informal adviser to the White House in cybersecurity.",
+    "supporting_facts": [
+      {
+        "key": "Giuliani Time",
+        "value": 0
+      },
+      {
+        "key": "Rudy Giuliani",
+        "value": 0
+      },
+      {
+        "key": "Gerald B. Lefcourt",
+        "value": 1
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "Robert Manoogian Jr. (January 4, 1918 \u2013 April 3, 2002) was an American professional wrestler, George Avakian and Bobby Managoff were not.",
+    "supporting_facts": [
+      {
+        "key": "George Avakian",
+        "value": 0
+      },
+      {
+        "key": "Bobby Managoff",
+        "value": 0
+      }
+    ],
+    "label": 1
+  },
+  {
+    "claim": "In 2010 the actor, who portrayed fictional Australian rules football player Bryan Strauchan, wrote I Love you Too.",
+    "supporting_facts": [
+      {
+        "key": "I Love You Too (2010 film)",
+        "value": 0
+      },
+      {
+        "key": "I Love You Too (2010 film)",
+        "value": 1
+      },
+      {
+        "key": "Peter Helliar",
+        "value": 0
+      },
+      {
+        "key": "Bryan Strauchan",
+        "value": 0
+      }
+    ],
+    "label": 1
   }
 ]

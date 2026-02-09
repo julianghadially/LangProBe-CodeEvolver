@@ -31,8 +31,9 @@ Users connect their code with the CodeEvolver GitHub app, which allows CodeEvolv
 ## Programs
 
 ### Multihop QA
+HotpotQA is designed to contain information from Wikipedia. 
 #### What's Allowed
-- HotpotQA is designed to contain information from Wikipedia. However, the optimized program is not required to stay on Wikipedia only.
+- The program is not required to stay on Wikipedia only.
 - The program is allowed to create or remove modules, dynamic prompts, tool calls, etc.
 - The program is allowed to change the module types (e.g., dspy.ReAct for tool calling, dspy.ChainOfThought, dspy.Predict, etc.)
 - There is no limit on the number of search results to display per query
@@ -42,6 +43,22 @@ Users connect their code with the CodeEvolver GitHub app, which allows CodeEvolv
 - Do NOT search more than two times per question. This is a hard requirement.
 - Do NOT visit more than one page per query
 - Do NOT use the HotpotQA dataset as context. 
+
+### Hover
+Hover is designed to retrieve information from 2017 Wikipedia Abstracts (5.9M). 
+
+#### What's Allowed
+- The program is not required to stay on Wikipedia only.
+- The program is allowed to create or remove modules, dynamic prompts, tool calls, etc.
+- The program is allowed to change the module types (e.g., dspy.ReAct for tool calling, dspy.ChainOfThought, dspy.Predict, etc.)
+- The program is allowed to add rerankers, provided the final remains the same - 21 total documents
+- There is no limit on the number of search results to display per query
+- Available services: wikipedia colbert-server (Via dspy.Retrieve), Firecrawl, serper.dev. 
+
+#### Constraints:
+- Do NOT search more than three times per question. This is a hard requirement.
+- Do NOT return more than 21 documents. This is a hard requirement.
+- Do NOT use the hover dataset as context. 
 
 
 ## Experiment

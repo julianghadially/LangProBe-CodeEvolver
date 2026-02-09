@@ -148,6 +148,7 @@ def evaluate(
     program_name_filter=None,
     api_key=None,
     api_base=None,
+    skip_optimizers=True,
 ):
     """
     benchmark_meta: BenchmarkMeta object to evaluate
@@ -161,7 +162,7 @@ def evaluate(
     dataset_mode = dataset_mode or benchmark_meta.dataset_mode
     benchmark = benchmark_meta.benchmark(dataset_mode=dataset_mode)
     # Canonicalize optimizers to (optimizer, compile_kwargs) tuples
-    optimizers = benchmark_meta.optimizers
+    optimizers = [] if skip_optimizers else benchmark_meta.optimizers
     benchmark_name = benchmark_meta.name or benchmark.__class__.__name__
 
     num_threads = benchmark_meta.num_threads or num_threads
@@ -202,7 +203,7 @@ def evaluate(
             continue
 
         evaluate_baseline_flag = True
-        optimizers = copy.deepcopy(benchmark_meta.optimizers)
+        optimizers = [] if skip_optimizers else copy.deepcopy(benchmark_meta.optimizers)
         if missing_mode:
             # Only run missing experiments
             for optimizer in benchmark_meta.optimizers:
@@ -230,7 +231,7 @@ def evaluate(
                         num_threads=num_threads,
                     )
                     for optimizer in optimizers
-                ],
+                ] or None,
                 evaluate_baseline_flag=evaluate_baseline_flag,
                 benchmark_name=benchmark_meta.name,
                 num_threads=num_threads,
@@ -287,6 +288,7 @@ def evaluate_all(
     program_name_filter=None,
     api_key=None,
     api_base=None,
+    skip_optimizers=True,
 ):
     benchmarks = register_all_benchmarks(benchmarks)
     if missing_mode:
@@ -306,6 +308,7 @@ def evaluate_all(
             program_name_filter=program_name_filter,
             api_key=api_key,
             api_base=api_base,
+            skip_optimizers=skip_optimizers,
         )
 
     df = read_evaluation_results(file_path)
@@ -365,7 +368,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dataset_mode",
-        help="The dataset mode to use for evaluation. Options are: full, lite (500), tiny (200), test (20).\
+        help="The dataset mode to use for evaluation. Options are: full, lite (500), test (300), tiny (200), debug (50).\
         when not provided, the default dataset mode in BenchmarkMeta will be used.",
         type=str,
         default=None,
@@ -408,6 +411,13 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--skip_optimizers",
+        help="Skip optimizer evaluation, only run baseline. Pass --no-skip_optimizers to enable optimizers.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+
+    parser.add_argument(
         "--program_class",
         help="The program class to evaluate, available options: single, archon, all",
         type=str,
@@ -427,7 +437,7 @@ if __name__ == "__main__":
     dataset_mode = args.dataset_mode
 
     lm = args.lm
-    rm = dspy.ColBERTv2(url="http://20.102.90.50:2017/wiki17_abstracts")
+    rm = dspy.ColBERTv2(url="https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search")
 
     agent_benchmarks = [
         # ".AlfWorld",
@@ -489,4 +499,5 @@ if __name__ == "__main__":
         program_name_filter=args.program,
         api_key=args.lm_api_key,
         api_base=args.lm_api_base,
+        skip_optimizers=args.skip_optimizers,
     )

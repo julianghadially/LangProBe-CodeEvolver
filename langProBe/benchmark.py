@@ -23,7 +23,7 @@ class DSPyFeatures(Enum):
     ASSERTION = 2
 
 
-dataset_size = {"full": None, "lite": 500, "tiny": 200, "test": 50}
+dataset_size = {"full": None, "lite": 500, "tiny": 200, "test": 300, "debug": 50}
 
 
 class Benchmark(ABC):
@@ -43,11 +43,9 @@ class Benchmark(ABC):
 
         self.test_set = self.trim_dataset(self.test_set, self.max_testset_size)
 
-        # TODO: FIXME: "test" option is for debugging purposes only, should be removed for final release
-        if dataset_mode == "test":
+        if dataset_mode == "debug":
             self.dataset = self.trim_dataset(self.dataset, 60)
             self.create_splits()
-            self.test_set = self.trim_dataset(self.test_set, 50)
 
         if not self.train_set or not self.dev_set or not self.val_set:
             self.create_splits()

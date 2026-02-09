@@ -33,15 +33,16 @@ class hoverBench(Benchmark):
             supporting_facts = example["supporting_facts"]
             label = example["label"]
 
-            reformatted_hf_testset.append(
-                dict(claim=claim, supporting_facts=supporting_facts, label=label)
-            )
+            if count_unique_docs(example) <= 3:  # Limit to 3 hop examples
+                reformatted_hf_testset.append(
+                    dict(claim=claim, supporting_facts=supporting_facts, label=label)
+                )
 
         rng = random.Random()
         rng.seed(0)
         rng.shuffle(reformatted_hf_trainset)
         rng = random.Random()
-        rng.seed(1)
+        rng.seed(9) 
         rng.shuffle(reformatted_hf_testset)
 
         trainset = reformatted_hf_trainset

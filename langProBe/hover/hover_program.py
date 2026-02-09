@@ -36,6 +36,12 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
+    '''Multi hop system for retrieving documents for a provided claim. 
+    
+    EVALUATION
+    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - The system must provide at most 21 documents at the end of the program.'''
+
     def __init__(self):
         super().__init__()
         self.k = 7

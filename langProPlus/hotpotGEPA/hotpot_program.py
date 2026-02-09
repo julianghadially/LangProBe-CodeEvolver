@@ -2,6 +2,15 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class GenerateAnswer(dspy.Signature):
+    """Answer questions with a short factoid answer."""
+
+    question = dspy.InputField()
+    summary_1 = dspy.InputField()
+    summary_2 = dspy.InputField()
+    answer = dspy.OutputField(desc="The answer itself and nothing else")
+
+
 class HotpotMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     """Adapted from HoverMultiHop. Hop 3 replaced with answer generation."""
 
@@ -12,7 +21,7 @@ class HotpotMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("question,passages->summary")
         self.summarize2 = dspy.ChainOfThought("question,context,passages->summary")
-        self.generate_answer = dspy.ChainOfThought("question,summary_1,summary_2->answer")
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
 
     def forward(self, question):
         # HOP 1
@@ -46,7 +55,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
-        self.generate_answer = dspy.Predict("question,summary_1,summary_2->answer")
+        self.generate_answer = dspy.Predict(GenerateAnswer)
 
     def forward(self, question):
         # HOP 1

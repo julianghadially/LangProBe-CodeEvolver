@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:arxiv.org)",
       "Bash(pip show:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(wc:*)"
     ]
   }
 }
