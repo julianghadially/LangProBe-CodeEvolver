@@ -1,0 +1,7 @@
+{
+  "program.create_query_hop2": "Given the fields `claim`, `summary_1`, produce the fields `query`.",
+  "program.create_query_hop3": "Given the fields `claim`, `summary_1`, `summary_2`, produce the fields `query`.",
+  "program.summarize1": "Given the fields `claim`, `passages`, produce the fields `summary`.",
+  "program.summarize2": "Given the fields `claim`, `context`, `passages`, produce the fields `summary`.",
+  "_code": "{\"git_branch\": \"codeevolver-20260210185733-main\", \"parent_module_path\": \"langProBe.hover.hover_pipeline.HoverMultiHopPredictPipeline\", \"change_request\": \"\", \"last_change_summary\": \"Initial state\"}"
+}
