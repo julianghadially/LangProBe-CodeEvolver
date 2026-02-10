@@ -42,7 +42,7 @@ class hoverBench(Benchmark):
         rng.seed(0)
         rng.shuffle(reformatted_hf_trainset)
         rng = random.Random()
-        rng.seed(9) 
+        rng.seed(91) 
         rng.shuffle(reformatted_hf_testset)
 
         trainset = reformatted_hf_trainset
