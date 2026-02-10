@@ -251,7 +251,7 @@ class EvaluateBench(ABC):
         with dspy.context(**dspy_config):
             score = self.evaluate_prog(self.program)
         result = self.get_empty_results()
-        result.score = score
+        result.score = score.score if hasattr(score, 'score') else score
         if isinstance(self.program, LangProBeDSPyMetaProgram):
             result.cost, result.input_tokens, result.output_tokens = calculate_stats(
                 self.program.lm
@@ -306,7 +306,7 @@ class EvaluateBench(ABC):
         dspy_config["lm"] = eval_lm
         with dspy.context(**dspy_config):
             score = self.evaluate_prog(optimized_program)
-        result.score = score
+        result.score = score.score if hasattr(score, 'score') else score
         result.cost, result.input_tokens, result.output_tokens = calculate_stats(
             eval_lm
         )
