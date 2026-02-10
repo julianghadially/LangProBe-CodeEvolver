@@ -14,3 +14,4 @@ langchain_community
 pybind11>=2.12
 firecrawl==4.14.0
 numpy==2.2.6
+datasets==4.5.0
