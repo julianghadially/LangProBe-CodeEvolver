@@ -1,6 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
-from .hover_program import HoverMultiHopPredict, HoverMultiHop
+from .hover_program import HoverMultiHopPredict
 
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
