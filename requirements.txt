@@ -6,7 +6,7 @@ langchain
 black==23.11.0
 sentence-transformers==2.2.2
 sentencepiece==0.1.99
-torch==2.1.1
+torch==2.10.0
 ipython==8.17.2
 huggingface-hub==0.25.0
 numpy==2.2.6
