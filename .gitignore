@@ -17,3 +17,6 @@ langProBe/AppWorld/.conda/
 
 .dspy_cache/
 .evaluation_*/
+.venv
+.env
+.venv
