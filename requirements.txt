@@ -13,3 +13,4 @@ numpy==2.2.6
 math-verify==0.6.0
 langchain_community
 pybind11>=2.12
+datasets==4.5.0
