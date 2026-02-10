@@ -1,6 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
-from .hotpot_program import HotpotMultiHop, HotpotMultiHopPredict
+from .hotpot_program import HotpotMultiHopPredict
 
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
