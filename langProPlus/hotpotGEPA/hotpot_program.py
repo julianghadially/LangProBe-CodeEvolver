@@ -21,6 +21,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.normalize_answer = dspy.ChainOfThought("question, raw_answer, expected_format -> normalized_answer")
 
     def forward(self, question):
         # HOP 1
@@ -41,4 +42,11 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Normalize answer to extract concise factoid answer
+        normalized = self.normalize_answer(
+            question=question,
+            raw_answer=answer,
+            expected_format="short factoid answer (single word/phrase/number, no punctuation or elaboration)"
+        ).normalized_answer
+
+        return dspy.Prediction(answer=normalized)
