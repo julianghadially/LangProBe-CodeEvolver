@@ -2,7 +2,9 @@
 
   "typeCheckingMode": "off",
   "include": [
-    "langProBe"
+    "langProBe",
+    "langProPlus",
+    "services"
   ],
 
   "exclude": [
