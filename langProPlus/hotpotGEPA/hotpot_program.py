@@ -21,6 +21,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.refine_answer = dspy.ChainOfThought("question, initial_answer, summary_1, summary_2 -> refined_answer")
+        self.refine_answer.__doc__ = "Given an initial answer, refine it to be a SHORT FACTOID ANSWER ONLY. Extract only the most specific entity, name, date, or fact that directly answers the question. Remove all explanatory text, context, and extra information. For person names, include full names with middle names if present in the context."
 
     def forward(self, question):
         # HOP 1
@@ -37,8 +39,16 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).summary
 
         # HOP 3: Answer instead of another query+retrieve
-        answer = self.generate_answer(
+        initial_answer = self.generate_answer(
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Refine the initial answer to be a short factoid
+        refined = self.refine_answer(
+            question=question,
+            initial_answer=initial_answer,
+            summary_1=summary_1,
+            summary_2=summary_2
+        ).refined_answer
+
+        return dspy.Prediction(answer=refined)
