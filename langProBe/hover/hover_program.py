@@ -6,32 +6,28 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("claim,summary_1->query")
-        self.create_query_hop3 = dspy.Predict("claim,summary_1,summary_2->query")
+        self.decompose_query = dspy.ChainOfThought("claim -> sub_questions: list[str]")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.Predict("claim,passages->summary")
-        self.summarize2 = dspy.Predict("claim,context,passages->summary")
 
     def forward(self, claim):
-        # HOP 1
-        hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        # Decompose the claim into 2-3 specific sub-questions
+        decomposition_result = self.decompose_query(claim=claim)
+        sub_questions = decomposition_result.sub_questions
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
-        hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        # Ensure we have a list and limit to 3 sub-questions (to respect 3-search limit)
+        if isinstance(sub_questions, str):
+            # If the output is a string, try to parse it as a list
+            sub_questions = [q.strip() for q in sub_questions.split('\n') if q.strip()]
 
-        # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
-        ).query
-        hop3_docs = self.retrieve_k(hop3_query).passages
+        # Limit to maximum 3 sub-questions
+        sub_questions = sub_questions[:3]
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Retrieve k=7 documents for each sub-question in sequence
+        all_docs = []
+        for sub_question in sub_questions:
+            docs = self.retrieve_k(sub_question).passages
+            all_docs.extend(docs)
+
+        return dspy.Prediction(retrieved_docs=all_docs)
 
 
