@@ -33,6 +33,20 @@ class GenerateSubQueriesHop3(dspy.Signature):
     )
 
 
+class ScoreDocumentRelevance(dspy.Signature):
+    """Evaluate how relevant a document is for verifying a specific claim.
+    Consider: factual overlap, entity coverage, temporal information, and comparative value."""
+
+    claim = dspy.InputField(desc="The claim to verify")
+    document = dspy.InputField(desc="Document text in 'title | content' format")
+    relevance_score: int = dspy.OutputField(
+        desc="Relevance score from 1-10, where 10 is highly relevant and 1 is irrelevant"
+    )
+    reasoning: str = dspy.OutputField(
+        desc="Brief explanation of why this score was assigned, highlighting key factors"
+    )
+
+
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
@@ -47,6 +61,9 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # Hop 3: Generate 4 sub-queries, retrieve k=2 each (total 8 docs)
         self.generate_subqueries_hop3 = dspy.ChainOfThought(GenerateSubQueriesHop3)
         self.retrieve_hop3 = dspy.Retrieve(k=2)
+
+        # Reranking: Score document relevance
+        self.score_relevance = dspy.ChainOfThought(ScoreDocumentRelevance)
 
         # Query count constants
         self.hop2_num_queries = 3
@@ -98,7 +115,10 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # ===== FINAL: Combine all documents (7 + 6 + 8 = 21) =====
         all_retrieved_docs = hop1_docs + hop2_docs + hop3_docs
 
-        return dspy.Prediction(retrieved_docs=all_retrieved_docs)
+        # ===== RERANKING: Score and deduplicate documents =====
+        reranked_docs = self._rerank_with_diversity(claim, all_retrieved_docs)
+
+        return dspy.Prediction(retrieved_docs=reranked_docs)
 
     def _format_docs_for_context(self, docs: list[str]) -> str:
         """Format documents into numbered, readable context string.
@@ -127,5 +147,86 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
 
         # Truncate if too many
         return queries[:expected_count]
+
+    def _rerank_with_diversity(self, claim: str, documents: list[str]) -> list[str]:
+        """Rerank documents by relevance with diversity-aware deduplication.
+
+        Steps:
+        1. Score each document for relevance (1-10)
+        2. Group by normalized title (deduplication)
+        3. Keep highest-scored instance of each unique title
+        4. Fill remaining slots (up to 21) with next-highest scored documents
+
+        Args:
+            claim: The claim to verify
+            documents: List of documents in 'title | content' format
+
+        Returns:
+            Reranked and deduplicated document list (up to 21 documents)
+        """
+        # Score all documents
+        scored_docs = []
+        for doc in documents:
+            try:
+                prediction = self.score_relevance(claim=claim, document=doc)
+                score = prediction.relevance_score
+
+                # Ensure score is an integer in valid range
+                if isinstance(score, str):
+                    score = int(score)
+                score = max(1, min(10, score))  # Clamp to [1, 10]
+
+                scored_docs.append({
+                    'document': doc,
+                    'score': score,
+                    'reasoning': prediction.reasoning
+                })
+            except Exception as e:
+                # Fallback: assign neutral score if scoring fails
+                scored_docs.append({
+                    'document': doc,
+                    'score': 5,
+                    'reasoning': f"Scoring failed: {str(e)}"
+                })
+
+        # Sort by score (descending)
+        scored_docs.sort(key=lambda x: x['score'], reverse=True)
+
+        # Extract normalized title from 'title | content' format
+        def get_normalized_title(doc_text: str) -> str:
+            """Extract and normalize title from document text."""
+            if ' | ' in doc_text:
+                title = doc_text.split(' | ')[0].strip()
+            else:
+                # Fallback: use first 50 chars as title
+                title = doc_text[:50].strip()
+
+            # Normalize: lowercase, remove extra whitespace
+            return ' '.join(title.lower().split())
+
+        # Diversity-aware selection
+        seen_titles = set()
+        selected_docs = []
+        overflow_docs = []
+
+        for item in scored_docs:
+            doc = item['document']
+            title = get_normalized_title(doc)
+
+            if title not in seen_titles:
+                # New unique title: always add
+                seen_titles.add(title)
+                selected_docs.append(doc)
+            else:
+                # Duplicate title: save for potential backfill
+                overflow_docs.append(doc)
+
+        # Fill remaining slots with overflow (allows some duplication if needed)
+        max_docs = 21
+        remaining_slots = max_docs - len(selected_docs)
+        if remaining_slots > 0:
+            selected_docs.extend(overflow_docs[:remaining_slots])
+
+        return selected_docs
 
 
