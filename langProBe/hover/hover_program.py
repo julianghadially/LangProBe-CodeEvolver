@@ -5,12 +5,13 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 7
+        self.k = 11
         self.create_query_hop2 = dspy.Predict("claim,summary_1->query")
         self.create_query_hop3 = dspy.Predict("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("claim,passages->summary")
         self.summarize2 = dspy.Predict("claim,context,passages->summary")
+        self.rerank = dspy.ChainOfThought("claim, passages -> ranked_passages: list[str]")
 
     def forward(self, claim):
         # HOP 1
@@ -32,6 +33,13 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Combine all 33 documents (11 per hop * 3 hops)
+        all_docs = hop1_docs + hop2_docs + hop3_docs
+
+        # Rerank all 33 documents and select top 21
+        reranked = self.rerank(claim=claim, passages=all_docs)
+        top_21_docs = reranked.ranked_passages[:21]
+
+        return dspy.Prediction(retrieved_docs=top_21_docs)
 
 
