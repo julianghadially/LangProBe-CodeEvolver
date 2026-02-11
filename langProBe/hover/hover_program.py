@@ -6,8 +6,10 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.extract_entities = dspy.ChainOfThought("claim -> entities: list[str], reasoning: str")
-        self.extract_entities.__doc__ = "Extract all named entities (people, places, organizations, works) mentioned directly or indirectly in the claim that would need Wikipedia articles for verification."
+        self.decompose_claim = dspy.ChainOfThought("claim -> sub_questions: list[str], reasoning: str")
+        self.decompose_claim.__doc__ = "Decompose the claim into multiple targeted sub-questions that ask about specific entities, relationships, and facts needed for verification. Each sub-question should focus on retrieving a specific Wikipedia article (e.g., 'Who wrote The Broken Tower?', 'What is The Greatest Game Ever Played?')."
+        self.rerank_passages = dspy.ChainOfThought("sub_question, passages -> selected_passages: list[str], reasoning: str")
+        self.rerank_passages.__doc__ = "Select the top 1-2 most relevant passages for the given sub-question. Focus on passages that directly answer the question or provide critical information about the entities mentioned."
         self.select_docs_hop1 = dspy.ChainOfThought("claim, passages -> selected_passages: list[str], reasoning: str")
         self.select_docs_hop2 = dspy.ChainOfThought("claim, passages -> selected_passages: list[str], reasoning: str")
         self.create_query_hop2 = dspy.ChainOfThought("claim, selected_passages -> query")
@@ -15,19 +17,35 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
     def forward(self, claim):
-        # ENTITY EXTRACTION
-        entities_result = self.extract_entities(claim=claim)
-        entity_names = entities_result.entities
+        # QUERY DECOMPOSITION
+        decomposition_result = self.decompose_claim(claim=claim)
+        sub_questions = decomposition_result.sub_questions
 
-        # Retrieve Wikipedia articles for each entity
-        entity_docs = []
-        entity_retrieve = dspy.Retrieve(k=1)
-        for entity_name in entity_names:
-            entity_result = entity_retrieve(entity_name)
-            entity_docs.extend(entity_result.passages)
+        # Retrieve k=3 documents per sub-question
+        sub_question_retrieve = dspy.Retrieve(k=3)
+        all_retrieved_docs = []
+
+        for sub_question in sub_questions:
+            # Retrieve 3 documents for this sub-question
+            retrieved_result = sub_question_retrieve(sub_question)
+            retrieved_passages = retrieved_result.passages
+
+            # Apply reranking to select top 1-2 most relevant docs
+            rerank_result = self.rerank_passages(
+                sub_question=sub_question,
+                passages=retrieved_passages
+            )
+            selected_passages = rerank_result.selected_passages
+
+            # Keep only top 1-2 passages (limit the selection)
+            selected_passages = selected_passages[:2]
+            all_retrieved_docs.extend(selected_passages)
+
+        # Deduplicate selected documents from query decomposition
+        decomposition_docs = list(set(all_retrieved_docs))
 
         # Calculate dynamic k for remaining hops to maintain total of 21 docs
-        dynamic_k = max(1, (21 - len(entity_docs)) // 3)
+        dynamic_k = max(1, (21 - len(decomposition_docs)) // 3)
         retrieve_dynamic = dspy.Retrieve(k=dynamic_k)
 
         # HOP 1
@@ -55,12 +73,12 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = retrieve_dynamic(hop3_query).passages
 
-        # Deduplicate: remove hop docs that are already in entity_docs
-        entity_docs_set = set(entity_docs)
-        hop1_docs_dedup = [doc for doc in hop1_docs if doc not in entity_docs_set]
-        hop2_docs_dedup = [doc for doc in hop2_docs if doc not in entity_docs_set]
-        hop3_docs_dedup = [doc for doc in hop3_docs if doc not in entity_docs_set]
+        # Deduplicate: remove hop docs that are already in decomposition_docs
+        decomposition_docs_set = set(decomposition_docs)
+        hop1_docs_dedup = [doc for doc in hop1_docs if doc not in decomposition_docs_set]
+        hop2_docs_dedup = [doc for doc in hop2_docs if doc not in decomposition_docs_set]
+        hop3_docs_dedup = [doc for doc in hop3_docs if doc not in decomposition_docs_set]
 
-        return dspy.Prediction(retrieved_docs=entity_docs + hop1_docs_dedup + hop2_docs_dedup + hop3_docs_dedup)
+        return dspy.Prediction(retrieved_docs=decomposition_docs + hop1_docs_dedup + hop2_docs_dedup + hop3_docs_dedup)
 
 
