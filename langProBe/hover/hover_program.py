@@ -13,17 +13,36 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize2 = dspy.Predict("claim,context,passages->summary")
 
     def forward(self, claim):
+        # Initialize set to track seen document titles across all hops
+        seen_titles = set()
+
         # HOP 1
         hop1_docs = self.retrieve_k(claim).passages
+        # Filter duplicates and update seen titles
+        hop1_docs_dedup = []
+        for doc in hop1_docs:
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            if title not in seen_titles:
+                seen_titles.add(title)
+                hop1_docs_dedup.append(doc)
+
         summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
+            claim=claim, passages=hop1_docs_dedup
         ).summary  # Summarize top k docs
 
         # HOP 2
         hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
         hop2_docs = self.retrieve_k(hop2_query).passages
+        # Filter duplicates and update seen titles
+        hop2_docs_dedup = []
+        for doc in hop2_docs:
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            if title not in seen_titles:
+                seen_titles.add(title)
+                hop2_docs_dedup.append(doc)
+
         summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
+            claim=claim, context=summary_1, passages=hop2_docs_dedup
         ).summary
 
         # HOP 3
@@ -31,7 +50,14 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, summary_1=summary_1, summary_2=summary_2
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
+        # Filter duplicates and update seen titles
+        hop3_docs_dedup = []
+        for doc in hop3_docs:
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            if title not in seen_titles:
+                seen_titles.add(title)
+                hop3_docs_dedup.append(doc)
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        return dspy.Prediction(retrieved_docs=hop1_docs_dedup + hop2_docs_dedup + hop3_docs_dedup)
 
 
