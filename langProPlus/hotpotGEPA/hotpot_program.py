@@ -10,6 +10,13 @@ class GenerateAnswer(dspy.Signature):
     summary_2 = dspy.InputField()
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
+class ExtractFactoid(dspy.Signature):
+    """Extract only the core factoid answer from a verbose response, removing all explanatory context, parentheticals, and extra details."""
+
+    question = dspy.InputField()
+    verbose_answer = dspy.InputField()
+    factoid = dspy.OutputField()
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
@@ -21,6 +28,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.extract_factoid = dspy.ChainOfThought(ExtractFactoid)
 
     def forward(self, question):
         # HOP 1
@@ -37,8 +45,13 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).summary
 
         # HOP 3: Answer instead of another query+retrieve
-        answer = self.generate_answer(
+        verbose_answer = self.generate_answer(
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Post-processing extraction step
+        factoid = self.extract_factoid(
+            question=question, verbose_answer=verbose_answer
+        ).factoid
+
+        return dspy.Prediction(answer=factoid)
