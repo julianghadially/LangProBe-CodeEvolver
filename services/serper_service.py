@@ -3,10 +3,10 @@
 import requests
 from dataclasses import dataclass
 from typing import Optional
-from src.context_.context import serper_key
 import time
 from typing import Literal
-
+import os
+serper_key = os.getenv("SERPER_KEY")
 
 @dataclass
 class SearchResult:
