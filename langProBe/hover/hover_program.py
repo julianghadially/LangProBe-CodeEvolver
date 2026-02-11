@@ -45,6 +45,94 @@ class QueryHop3Signature(dspy.Signature):
     )
 
 
+class ClaimEntityExtraction(dspy.Signature):
+    """Extract ALL key entities mentioned in the claim for comprehensive fact verification.
+    Identify every person, organization, title, date, location, and other named entities."""
+
+    claim = dspy.InputField(desc="The claim to verify")
+    entities: list[str] = dspy.OutputField(
+        desc="Complete list of ALL entities in the claim: people, organizations, titles, dates, locations, events, etc."
+    )
+
+
+class EntityDiversityReranker(dspy.Module):
+    """Reranks retrieved documents using a greedy set-cover algorithm to maximize entity coverage."""
+
+    def __init__(self):
+        super().__init__()
+        self.extract_claim_entities = dspy.ChainOfThought(ClaimEntityExtraction)
+
+    def forward(self, claim, documents):
+        """
+        Rerank documents to maximize coverage of entities in the claim.
+
+        Args:
+            claim: The claim to verify
+            documents: List of retrieved documents (21 total from 3 hops)
+
+        Returns:
+            dspy.Prediction with reranked_docs (list of documents)
+        """
+        # Step 1: Extract all entities from the claim
+        extraction_result = self.extract_claim_entities(claim=claim)
+        claim_entities = extraction_result.entities  # list[str]
+
+        # Normalize entities to lowercase for matching
+        claim_entities_normalized = set(entity.lower() for entity in claim_entities)
+
+        # Step 2: Score each document based on unique entity coverage
+        doc_scores = []
+        for idx, doc in enumerate(documents):
+            doc_lower = doc.lower()
+            # Count how many claim entities appear in this document
+            covered_entities = {entity for entity in claim_entities_normalized if entity in doc_lower}
+            doc_scores.append({
+                'idx': idx,
+                'doc': doc,
+                'covered_entities': covered_entities,
+                'score': len(covered_entities)
+            })
+
+        # Step 3: Greedy set-cover algorithm to select documents
+        selected_docs = []
+        covered_so_far = set()
+        remaining_docs = doc_scores.copy()
+
+        # Greedily select documents that cover the most uncovered entities
+        while remaining_docs and len(selected_docs) < len(documents):
+            # Calculate marginal coverage for each remaining document
+            best_doc = None
+            best_marginal_coverage = 0
+
+            for doc_info in remaining_docs:
+                # How many NEW entities does this document cover?
+                marginal_coverage = len(doc_info['covered_entities'] - covered_so_far)
+
+                if marginal_coverage > best_marginal_coverage:
+                    best_marginal_coverage = marginal_coverage
+                    best_doc = doc_info
+
+            # If no document adds new coverage, break
+            if best_doc is None or best_marginal_coverage == 0:
+                # Add remaining documents in their original order
+                for doc_info in remaining_docs:
+                    selected_docs.append(doc_info['doc'])
+                break
+
+            # Select the best document
+            selected_docs.append(best_doc['doc'])
+            covered_so_far.update(best_doc['covered_entities'])
+            remaining_docs.remove(best_doc)
+
+            # If all entities are covered, add remaining docs in original order
+            if covered_so_far >= claim_entities_normalized:
+                for doc_info in remaining_docs:
+                    selected_docs.append(doc_info['doc'])
+                break
+
+        return dspy.Prediction(reranked_docs=selected_docs)
+
+
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
@@ -60,6 +148,9 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
 
         # Retrieval module
         self.retrieve_k = dspy.Retrieve(k=self.k)
+
+        # Diversity-aware reranker
+        self.reranker = EntityDiversityReranker()
 
     def forward(self, claim):
         # HOP 1: Initial retrieval with claim
@@ -97,7 +188,14 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_query = hop3_query_result.query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        # Return all retrieved documents (same output structure as before)
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Combine all retrieved documents (21 total: 7 per hop)
+        all_docs = hop1_docs + hop2_docs + hop3_docs
+
+        # DIVERSITY-AWARE RERANKING: Maximize entity coverage
+        reranking_result = self.reranker(claim=claim, documents=all_docs)
+        reranked_docs = reranking_result.reranked_docs
+
+        # Return reranked documents
+        return dspy.Prediction(retrieved_docs=reranked_docs)
 
 
