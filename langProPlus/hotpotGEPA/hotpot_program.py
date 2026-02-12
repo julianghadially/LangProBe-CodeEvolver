@@ -75,17 +75,26 @@ class GenerateAnswer(dspy.Signature):
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
+class IdentifyMissingInfo(dspy.Signature):
+    """Analyze what specific information is still needed to answer the question based on what we already know"""
+
+    question = dspy.InputField()
+    known_info = dspy.InputField(desc="Information retrieved so far")
+    missing_info: str = dspy.OutputField(desc="Specific facts, entities, or details still needed to answer the question")
+
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("question,context->query")
+        self.create_query_hop2 = dspy.Predict("question,context,missing_info->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.identify_gaps = dspy.ChainOfThought(IdentifyMissingInfo)
 
     def forward(self, question):
         # HOP 1: Retrieve and rerank
@@ -95,13 +104,18 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # Prepare context for hop 2 query generation
         hop1_context = "\n\n".join(reranked_hop1)
 
+        # Identify information gaps after hop 1
+        gaps = self.identify_gaps(question=question, known_info=hop1_context).missing_info
+
         # HOP 2: Generate query using hop1 context, retrieve and rerank
         hop2_query = self.create_query_hop2(
             question=question,
-            context=hop1_context
+            context=hop1_context,
+            missing_info=gaps
         ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        reranked_hop2 = self.rerank_hop2(question=question, passages=hop2_docs)
+        combined_query = f"{question} [Missing: {gaps}]"
+        reranked_hop2 = self.rerank_hop2(question=combined_query, passages=hop2_docs)
 
         # Concatenate all reranked passages
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
