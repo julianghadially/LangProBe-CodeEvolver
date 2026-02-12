@@ -85,7 +85,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
-        self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
 
     def forward(self, question):
         # HOP 1: Retrieve and rerank
