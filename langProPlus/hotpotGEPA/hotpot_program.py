@@ -75,12 +75,21 @@ class GenerateAnswer(dspy.Signature):
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
+class DecomposeQuestion(dspy.Signature):
+    """Break down a multi-hop question into ordered sub-questions that need to be answered sequentially"""
+
+    question = dspy.InputField()
+    sub_question_1 = dspy.OutputField(desc="First sub-question to answer")
+    sub_question_2 = dspy.OutputField(desc="Second sub-question that depends on the first")
+
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
     def __init__(self):
         super().__init__()
         self.k = 7
+        self.decompose = dspy.ChainOfThought(DecomposeQuestion)
         self.create_query_hop2 = dspy.Predict("question,context->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.rerank_hop1 = PassageReranker(top_k=4)
@@ -88,20 +97,23 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.generate_answer = dspy.Predict(GenerateAnswer)
 
     def forward(self, question):
-        # HOP 1: Retrieve and rerank
-        hop1_docs = self.retrieve_k(question).passages
-        reranked_hop1 = self.rerank_hop1(question=question, passages=hop1_docs)
+        # Decompose the multi-hop question into sub-questions
+        decomposition = self.decompose(question=question)
+
+        # HOP 1: Retrieve and rerank using first sub-question
+        hop1_docs = self.retrieve_k(decomposition.sub_question_1).passages
+        reranked_hop1 = self.rerank_hop1(question=decomposition.sub_question_1, passages=hop1_docs)
 
         # Prepare context for hop 2 query generation
         hop1_context = "\n\n".join(reranked_hop1)
 
-        # HOP 2: Generate query using hop1 context, retrieve and rerank
+        # HOP 2: Generate query using hop1 context and second sub-question, retrieve and rerank
         hop2_query = self.create_query_hop2(
-            question=question,
+            question=decomposition.sub_question_2,
             context=hop1_context
         ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        reranked_hop2 = self.rerank_hop2(question=question, passages=hop2_docs)
+        reranked_hop2 = self.rerank_hop2(question=decomposition.sub_question_2, passages=hop2_docs)
 
         # Concatenate all reranked passages
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
