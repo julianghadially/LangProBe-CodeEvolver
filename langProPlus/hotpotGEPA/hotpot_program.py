@@ -10,6 +10,13 @@ class GenerateAnswer(dspy.Signature):
     hop2_passages = dspy.InputField()
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
+class ExtractFactoidAnswer(dspy.Signature):
+    """Extract only the core factoid answer from a raw answer."""
+
+    question = dspy.InputField()
+    raw_answer = dspy.InputField()
+    answer = dspy.OutputField(desc="only the core factoid answer without any extra descriptive text, parentheticals, or elaboration")
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """ChainOfThought variant with full passage reasoning."""
 
@@ -19,6 +26,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.create_query_hop2 = dspy.Predict("question,hop1_passages->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
+        self.extract_factoid = dspy.Predict(ExtractFactoidAnswer)
 
     def forward(self, question):
         # HOP 1
@@ -33,4 +41,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, hop1_passages=hop1_docs, hop2_passages=hop2_docs
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Extract only the core factoid answer without extra descriptive text
+        final_answer = self.extract_factoid(question=question, raw_answer=answer).answer
+
+        return dspy.Prediction(answer=final_answer)
