@@ -1,5 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
+from services import SerperService, SearchResult
 
 
 class RerankPassagesSignature(dspy.Signature):
@@ -67,6 +68,20 @@ def concatenate_contexts(hop1_passages, hop2_passages):
     return "\n\n".join(context_parts)
 
 
+def search_results_to_passages(results: list[SearchResult]) -> list[str]:
+    """Convert Serper search results to passage strings.
+
+    Format: Title on first line, snippet on second line.
+    This provides clear attribution and maintains context.
+    """
+    passages = []
+    for result in results:
+        # Combine title and snippet for richer context
+        passage = f"{result.title}\n{result.snippet}"
+        passages.append(passage)
+    return passages
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
 
@@ -82,14 +97,15 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.k = 7
         self.create_query_hop2 = dspy.Predict("question,context->query")
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.serper = SerperService()
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
-        self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
 
     def forward(self, question):
-        # HOP 1: Retrieve and rerank
-        hop1_docs = self.retrieve_k(question).passages
+        # HOP 1: Web search and rerank
+        hop1_results = self.serper.search(query=question, num_results=self.k)
+        hop1_docs = search_results_to_passages(hop1_results)
         reranked_hop1 = self.rerank_hop1(question=question, passages=hop1_docs)
 
         # Prepare context for hop 2 query generation
@@ -100,7 +116,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question,
             context=hop1_context
         ).query
-        hop2_docs = self.retrieve_k(hop2_query).passages
+        hop2_results = self.serper.search(query=hop2_query, num_results=self.k)
+        hop2_docs = search_results_to_passages(hop2_results)
         reranked_hop2 = self.rerank_hop2(question=hop2_query, passages=hop2_docs)
 
         # Concatenate all reranked passages
