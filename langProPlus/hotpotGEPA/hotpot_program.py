@@ -75,6 +75,14 @@ class GenerateAnswer(dspy.Signature):
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
+class RefineAnswer(dspy.Signature):
+    """Refine the answer to be concise and match the expected format. Remove unnecessary elaboration while preserving key facts."""
+
+    question = dspy.InputField()
+    initial_answer = dspy.InputField()
+    refined_answer = dspy.OutputField(desc="The most concise form of the answer that directly answers the question")
+
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
@@ -86,6 +94,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.refine_answer = dspy.ChainOfThought(RefineAnswer)
 
     def forward(self, question):
         # HOP 1: Retrieve and rerank
@@ -107,9 +116,13 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
 
         # Generate answer from concatenated context
-        answer = self.generate_answer(
+        initial = self.generate_answer(
             question=question,
             context=full_context
         ).answer
+        answer = self.refine_answer(
+            question=question,
+            initial_answer=initial
+        ).refined_answer
 
         return dspy.Prediction(answer=answer)
