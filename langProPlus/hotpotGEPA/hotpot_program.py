@@ -101,7 +101,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             context=hop1_context
         ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        reranked_hop2 = self.rerank_hop2(question=question, passages=hop2_docs)
+        reranked_hop2 = self.rerank_hop2(question=hop2_query, passages=hop2_docs)
 
         # Concatenate all reranked passages
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
