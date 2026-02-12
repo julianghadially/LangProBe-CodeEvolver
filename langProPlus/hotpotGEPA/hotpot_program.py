@@ -1,5 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
+from .web_search_retrieve import WebSearchRetrieve
 
 
 class RerankPassagesSignature(dspy.Signature):
@@ -82,7 +83,14 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.k = 7
         self.create_query_hop2 = dspy.Predict("question,context->query")
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.retrieve_k = WebSearchRetrieve(
+            k=self.k,
+            num_search_results=5,
+            scrape_top_n=1,
+            max_scrape_length=10000,
+            chunk_size=700,
+            include_snippets=True
+        )
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
         self.generate_answer = dspy.Predict(GenerateAnswer)
