@@ -67,24 +67,47 @@ def concatenate_contexts(hop1_passages, hop2_passages):
     return "\n\n".join(context_parts)
 
 
+class GenerateHop2Query(dspy.Signature):
+    """Analyze the first hop context to determine what information is still missing to answer the question,
+    then generate a focused query for the second hop retrieval."""
+
+    question = dspy.InputField(desc="The original question to answer")
+    context = dspy.InputField(desc="Context retrieved from the first hop")
+    reasoning = dspy.OutputField(desc="Explain what information from hop1 context is relevant and what key information is still missing to answer the question")
+    query = dspy.OutputField(desc="A focused search query to find the missing information needed to answer the question")
+
+
+class ExtractKeyFacts(dspy.Signature):
+    """Identify and extract only the essential facts from both hops that are directly needed to answer the question.
+    Focus on specific names, dates, events, and relationships that form the answer."""
+
+    question = dspy.InputField(desc="The question to answer")
+    hop1_context = dspy.InputField(desc="Context from the first retrieval hop")
+    hop2_context = dspy.InputField(desc="Context from the second retrieval hop")
+    reasoning = dspy.OutputField(desc="Analyze both contexts and identify which specific facts are essential to answer the question")
+    key_facts = dspy.OutputField(desc="A concise list of only the key facts extracted from both hops that are directly needed to answer the question")
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
 
     question = dspy.InputField()
+    key_facts = dspy.InputField(desc="Key facts extracted from retrieved passages")
     context = dspy.InputField(desc="Retrieved passages that may contain relevant information")
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
-    """Predict variant (no ChainOfThought reasoning)."""
+    """Multi-hop reasoning with explicit reasoning steps for query generation, fact extraction, and answer generation."""
 
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("question,context->query")
+        self.create_query_hop2 = dspy.ChainOfThought(GenerateHop2Query)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
+        self.extract_key_facts = dspy.ChainOfThought(ExtractKeyFacts)
         self.generate_answer = dspy.Predict(GenerateAnswer)
 
     def forward(self, question):
@@ -95,20 +118,35 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # Prepare context for hop 2 query generation
         hop1_context = "\n\n".join(reranked_hop1)
 
-        # HOP 2: Generate query using hop1 context, retrieve and rerank
-        hop2_query = self.create_query_hop2(
+        # HOP 2: Reason about missing information and generate focused query
+        hop2_result = self.create_query_hop2(
             question=question,
             context=hop1_context
-        ).query
+        )
+        hop2_query = hop2_result.query
+
+        # Retrieve and rerank for hop 2
         hop2_docs = self.retrieve_k(hop2_query).passages
         reranked_hop2 = self.rerank_hop2(question=question, passages=hop2_docs)
 
-        # Concatenate all reranked passages
+        # Prepare contexts for fact extraction
+        hop2_context = "\n\n".join(reranked_hop2)
+
+        # Extract key facts from both hops
+        facts_result = self.extract_key_facts(
+            question=question,
+            hop1_context=hop1_context,
+            hop2_context=hop2_context
+        )
+        key_facts = facts_result.key_facts
+
+        # Concatenate all reranked passages for full context
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
 
-        # Generate answer from concatenated context
+        # Generate answer using key facts and full context
         answer = self.generate_answer(
             question=question,
+            key_facts=key_facts,
             context=full_context
         ).answer
 
