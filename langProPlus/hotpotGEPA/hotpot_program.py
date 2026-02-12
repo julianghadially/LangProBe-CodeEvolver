@@ -2,43 +2,37 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
-class GenerateAnswer(dspy.Signature):
-    """Answer questions with a short factoid answer."""
+class ExtractAnswer(dspy.Signature):
+    """Extract the exact answer from retrieved passages."""
 
     question = dspy.InputField()
-    summary_1 = dspy.InputField()
-    summary_2 = dspy.InputField()
-    answer = dspy.OutputField(desc="The answer itself and nothing else")
+    passages = dspy.InputField()
+    answer = dspy.OutputField(desc="extract the exact short factoid answer from the passages - be precise and concise, no elaboration")
 
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
-    """Predict variant (no ChainOfThought reasoning)."""
+    """Direct passage-to-answer extraction with two-hop retrieval."""
 
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("question,summary_1->query")
+        self.create_query_hop2 = dspy.ChainOfThought("question,hop1_passages->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.Predict("question,passages->summary")
-        self.summarize2 = dspy.Predict("question,context,passages->summary")
-        self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.extract_answer = dspy.ChainOfThought(ExtractAnswer)
 
     def forward(self, question):
-        # HOP 1
+        # HOP 1: Initial retrieval using the question
         hop1_docs = self.retrieve_k(question).passages
-        summary_1 = self.summarize1(
-            question=question, passages=hop1_docs
-        ).summary
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(question=question, summary_1=summary_1).query
+        # HOP 2: Refined retrieval using hop1 context
+        hop2_query = self.create_query_hop2(question=question, hop1_passages=hop1_docs).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            question=question, context=summary_1, passages=hop2_docs
-        ).summary
 
-        # HOP 3: Answer instead of another query+retrieve
-        answer = self.generate_answer(
-            question=question, summary_1=summary_1, summary_2=summary_2
+        # Concatenate all retrieved passages from both hops
+        all_passages = hop1_docs + hop2_docs
+
+        # Direct extraction: passages -> answer (no intermediate summarization)
+        answer = self.extract_answer(
+            question=question, passages=all_passages
         ).answer
 
         return dspy.Prediction(answer=answer)
