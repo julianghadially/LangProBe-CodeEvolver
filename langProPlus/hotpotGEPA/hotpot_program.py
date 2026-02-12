@@ -67,11 +67,20 @@ def concatenate_contexts(hop1_passages, hop2_passages):
     return "\n\n".join(context_parts)
 
 
+class ExtractFacts(dspy.Signature):
+    """Extract key facts from retrieved passages that are relevant to answering the question"""
+
+    question = dspy.InputField()
+    context = dspy.InputField(desc="Retrieved passages from multi-hop retrieval")
+    key_facts: list[str] = dspy.OutputField(desc="List of specific facts from each hop that are relevant to the question")
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
 
     question = dspy.InputField()
     context = dspy.InputField(desc="Retrieved passages that may contain relevant information")
+    key_facts: list[str] = dspy.InputField(desc="Key facts extracted from the context")
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
@@ -85,6 +94,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.rerank_hop1 = PassageReranker(top_k=4)
         self.rerank_hop2 = PassageReranker(top_k=4)
+        self.extract_facts = dspy.ChainOfThought(ExtractFacts)
         self.generate_answer = dspy.Predict(GenerateAnswer)
 
     def forward(self, question):
@@ -106,10 +116,18 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # Concatenate all reranked passages
         full_context = concatenate_contexts(reranked_hop1, reranked_hop2)
 
-        # Generate answer from concatenated context
-        answer = self.generate_answer(
+        # Stage 1: Extract key facts from the context
+        facts_result = self.extract_facts(
             question=question,
             context=full_context
+        )
+        key_facts = facts_result.key_facts if hasattr(facts_result, 'key_facts') else []
+
+        # Stage 2: Generate answer using extracted key facts
+        answer = self.generate_answer(
+            question=question,
+            context=full_context,
+            key_facts=key_facts
         ).answer
 
         return dspy.Prediction(answer=answer)
