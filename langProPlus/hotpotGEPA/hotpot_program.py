@@ -11,6 +11,14 @@ class GenerateAnswer(dspy.Signature):
     summary_2 = dspy.InputField()
     answer = dspy.OutputField(desc="Only the minimal factoid answer with NO elaboration, explanation, or additional text. Just the answer itself.")
 
+
+class ExtractFactoid(dspy.Signature):
+    """Extract the minimal factoid answer from a detailed response, outputting only 1-5 words that directly answer the question."""
+
+    question = dspy.InputField()
+    detailed_answer = dspy.InputField()
+    factoid = dspy.OutputField(desc="The minimal factoid answer (1-5 words maximum) that directly answers the question.")
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Two-stage Serper + Firecrawl retrieval for multi-hop reasoning."""
 
@@ -23,6 +31,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,context->summary")
         self.summarize2 = dspy.Predict("question,previous_summary,context->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.extract_factoid = dspy.Predict(ExtractFactoid)
 
     def _search_and_scrape(self, query: str) -> str:
         """
@@ -94,4 +103,10 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Extract concise factoid from the detailed answer
+        final_answer = self.extract_factoid(
+            question=question,
+            detailed_answer=answer
+        ).factoid
+
+        return dspy.Prediction(answer=final_answer)
