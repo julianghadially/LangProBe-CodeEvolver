@@ -1,5 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
+from services.serper_service import SerperService
 
 
 class RerankPassages(dspy.Signature):
@@ -20,12 +21,15 @@ class GenerateAnswer(dspy.Signature):
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
 
-class ExtractFactoid(dspy.Signature):
-    """Extract only the essential factoid answer from a verbose answer."""
+class RefineAnswerWithWebContext(dspy.Signature):
+    """Refine the initial answer using web search results to provide complete, authoritative details in the expected format."""
 
     question = dspy.InputField()
-    full_answer = dspy.InputField()
-    factoid = dspy.OutputField(desc='Only the essential factoid answer with no extra words or articles (e.g., "no" not "No, it was not", "2015 until 2017" not "from 2015 to 2017")')
+    initial_answer = dspy.InputField()
+    summary_1 = dspy.InputField()
+    summary_2 = dspy.InputField()
+    web_search_results = dspy.InputField()
+    refined_answer = dspy.OutputField(desc="The complete, authoritative answer with full details (e.g., full names, complete locations) verified against web search results. Match the expected format exactly.")
 
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
@@ -40,7 +44,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
-        self.extract_factoid = dspy.Predict(ExtractFactoid)
+        self.refine_with_web = dspy.Predict(RefineAnswerWithWebContext)
+        self.serper_service = SerperService()
 
     def forward(self, question):
         # HOP 1
@@ -72,7 +77,24 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, summary_1=summary_1, summary_2=summary_2, top_passages=top_passages
         ).answer
 
-        # Extract concise factoid from verbose answer
-        factoid = self.extract_factoid(question=question, full_answer=answer).factoid
+        # Web search verification: Use web search to find complete, authoritative answer format
+        # Construct a search query combining question and initial answer for verification
+        web_query = f"{question} {answer}"
+        web_results = self.serper_service.search(query=web_query, num_results=5)
 
-        return dspy.Prediction(answer=factoid)
+        # Format web search results as text passages
+        web_search_text = "\n\n".join([
+            f"[{i+1}] {result.title}\n{result.snippet}"
+            for i, result in enumerate(web_results)
+        ])
+
+        # Refine answer using web context to get complete details (full names, complete locations)
+        refined_answer = self.refine_with_web(
+            question=question,
+            initial_answer=answer,
+            summary_1=summary_1,
+            summary_2=summary_2,
+            web_search_results=web_search_text
+        ).refined_answer
+
+        return dspy.Prediction(answer=refined_answer)
