@@ -5,12 +5,14 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.create_query_hop2 = dspy.Predict("claim,summary_1->query")
-        self.create_query_hop3 = dspy.Predict("claim,summary_1,summary_2->query")
+        self.k = 15
+        self.MAX_RETRIEVED_DOCS = 21
+        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.Predict("claim,passages->summary")
-        self.summarize2 = dspy.Predict("claim,context,passages->summary")
+        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
+        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
+        self.rerank = dspy.ChainOfThought("claim,retrieved_docs->ranked_docs")
 
     def forward(self, claim):
         # HOP 1
@@ -32,6 +34,21 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Combine all retrieved documents (45 total)
+        all_docs = hop1_docs + hop2_docs + hop3_docs
+
+        # Rerank and select top 21 most relevant documents
+        ranked_docs = self.rerank(
+            claim=claim, retrieved_docs=all_docs
+        ).ranked_docs
+
+        # Ensure we return exactly MAX_RETRIEVED_DOCS (21) documents
+        if isinstance(ranked_docs, list):
+            final_docs = ranked_docs[:self.MAX_RETRIEVED_DOCS]
+        else:
+            # If reranker returns a string or other format, fall back to original docs
+            final_docs = all_docs[:self.MAX_RETRIEVED_DOCS]
+
+        return dspy.Prediction(retrieved_docs=final_docs)
 
 
