@@ -1,5 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
+from services.serper_service import SerperService
 
 
 class GenerateAnswer(dspy.Signature):
@@ -24,6 +25,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
+        self.search_web = dspy.ChainOfThought("question->search_query")
+        self.serper_service = SerperService()
         self.create_query_hop2 = dspy.Predict("question,summary_1->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("question,passages->summary")
@@ -32,13 +35,21 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.extract_factoid = dspy.Predict(ExtractFactoid)
 
     def forward(self, question):
-        # HOP 1
-        hop1_docs = self.retrieve_k(question).passages
+        # HOP 1: Web search with Serper.dev
+        search_query = self.search_web(question=question).search_query
+        search_results = self.serper_service.search(query=search_query, num_results=5)
+
+        # Format Serper results as passages compatible with summarization
+        hop1_docs = [
+            f"Title: {result.title}\nSnippet: {result.snippet}\nURL: {result.link}"
+            for result in search_results
+        ]
+
         summary_1 = self.summarize1(
             question=question, passages=hop1_docs
         ).summary
 
-        # HOP 2
+        # HOP 2: Wikipedia ColBERT retrieval with refined query
         hop2_query = self.create_query_hop2(question=question, summary_1=summary_1).query
         hop2_docs = self.retrieve_k(hop2_query).passages
         summary_2 = self.summarize2(
