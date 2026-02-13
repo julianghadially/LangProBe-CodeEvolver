@@ -10,6 +10,13 @@ class GenerateAnswer(dspy.Signature):
     summary_2 = dspy.InputField()
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
+class NormalizeAnswer(dspy.Signature):
+    """Normalize the answer to its simplest, most general form for exact matching"""
+
+    question = dspy.InputField()
+    raw_answer = dspy.InputField()
+    normalized_answer = dspy.OutputField(desc="The shortest, most general form of the answer")
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
@@ -21,6 +28,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.normalize_answer = dspy.Predict(NormalizeAnswer)
 
     def forward(self, question):
         # HOP 1
@@ -41,4 +49,6 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        normalized = self.normalize_answer(question=question, raw_answer=answer).normalized_answer
+
+        return dspy.Prediction(answer=normalized)
