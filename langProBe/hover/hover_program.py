@@ -26,10 +26,22 @@ class EntityTargeting(dspy.Signature):
     search_query = dspy.OutputField(desc="Focused search query for this specific entity (not a broad claim reformulation)")
 
 
+class RerankDocuments(dspy.Signature):
+    """Score and rank documents by their relevance to verifying the claim.
+    Analyze each document's content and select the top 21 most relevant documents that provide
+    the best supporting evidence for fact-checking the claim."""
+
+    claim = dspy.InputField()
+    documents = dspy.InputField(desc="List of retrieved documents to rerank")
+
+    reasoning = dspy.OutputField(desc="Analysis of document relevance and ranking criteria")
+    top_document_indices: list[int] = dspy.OutputField(desc="Exactly 21 indices (0-based) of the most relevant documents, ordered from most to least relevant")
+
+
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 7  # 7 docs per hop = 21 total docs
+        self.k = 12  # 12 docs per hop = 36 total docs (before reranking to top 21)
 
         # Entity extraction with reasoning
         self.extract_entities = dspy.ChainOfThought(EntityExtraction)
@@ -39,6 +51,9 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
 
         # Retriever
         self.retrieve_k = dspy.Retrieve(k=self.k)
+
+        # Reranker to select top 21 most relevant documents
+        self.rerank = dspy.ChainOfThought(RerankDocuments)
 
     def _extract_title(self, doc):
         """Extract the title (first line) from a document."""
@@ -93,6 +108,43 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         # Step 3: Deduplicate by document title while preserving order
         deduplicated_docs = self._deduplicate_by_title(all_docs)
 
-        return dspy.Prediction(retrieved_docs=deduplicated_docs)
+        # Step 4: Rerank documents and select top 21 most relevant
+        if len(deduplicated_docs) <= 21:
+            # If we have 21 or fewer docs after deduplication, return all
+            return dspy.Prediction(retrieved_docs=deduplicated_docs)
+
+        # Format documents for reranking (with indices for reference)
+        docs_for_reranking = "\n\n".join([
+            f"[Document {i}]\n{doc}"
+            for i, doc in enumerate(deduplicated_docs)
+        ])
+
+        # Rerank and get top 21 document indices
+        rerank_result = self.rerank(
+            claim=claim,
+            documents=docs_for_reranking
+        )
+
+        # Extract top 21 indices (handle potential issues with output format)
+        top_indices = rerank_result.top_document_indices[:21]
+
+        # Validate indices and select top 21 documents
+        valid_indices = [
+            idx for idx in top_indices
+            if isinstance(idx, int) and 0 <= idx < len(deduplicated_docs)
+        ]
+
+        # If we don't have enough valid indices, fill with remaining docs in order
+        if len(valid_indices) < 21:
+            remaining_indices = [
+                i for i in range(len(deduplicated_docs))
+                if i not in valid_indices
+            ]
+            valid_indices.extend(remaining_indices[:21 - len(valid_indices)])
+
+        # Select the top 21 reranked documents
+        reranked_docs = [deduplicated_docs[idx] for idx in valid_indices[:21]]
+
+        return dspy.Prediction(retrieved_docs=reranked_docs)
 
 
