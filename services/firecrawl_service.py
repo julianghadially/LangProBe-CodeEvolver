@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 from firecrawl import Firecrawl
 from firecrawl.v2.types import PDFParser
-from services import clean_llm_outputted_url
+from .service_utils import clean_llm_outputted_url
 import os
 firecrawl_key = os.getenv("FIRECRAWL_KEY")
 
