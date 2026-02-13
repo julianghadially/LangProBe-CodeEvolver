@@ -3,12 +3,28 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from services import SerperService, FirecrawlService
 
 
+class DecomposeQuestion(dspy.Signature):
+    """Decompose a complex question into 2 sub-questions that must be answered to solve the main question."""
+
+    question = dspy.InputField()
+    sub_question_1 = dspy.OutputField(desc="First sub-question that needs to be answered")
+    sub_question_2 = dspy.OutputField(desc="Second sub-question that needs to be answered")
+
+
+class AnswerSubQuestion(dspy.Signature):
+    """Extract a targeted answer to a specific sub-question from the given context."""
+
+    sub_question = dspy.InputField()
+    context = dspy.InputField()
+    answer = dspy.OutputField(desc="Specific factual answer to the sub-question based on the context")
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
 
     question = dspy.InputField()
-    summary_1 = dspy.InputField()
-    summary_2 = dspy.InputField()
+    sub_answer_1 = dspy.InputField()
+    sub_answer_2 = dspy.InputField()
     answer = dspy.OutputField(desc="Only the minimal factoid answer with NO elaboration, explanation, or additional text. Just the answer itself.")
 
 
@@ -26,10 +42,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.serper = SerperService()
         self.firecrawl = FirecrawlService()
-        self.create_query_hop1 = dspy.Predict("question->query")
-        self.create_query_hop2 = dspy.Predict("question,summary_1->query")
-        self.summarize1 = dspy.Predict("question,context->summary")
-        self.summarize2 = dspy.Predict("question,previous_summary,context->summary")
+        self.decompose_question = dspy.Predict(DecomposeQuestion)
+        self.answer_sub_question = dspy.Predict(AnswerSubQuestion)
         self.generate_answer = dspy.Predict(GenerateAnswer)
         self.extract_factoid = dspy.Predict(ExtractFactoid)
 
@@ -67,43 +81,37 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             return f"Error during search/scrape: {str(e)}"
 
     def forward(self, question):
-        # HOP 1: Generate search query for first hop
-        hop1_query_obj = self.create_query_hop1(question=question)
-        hop1_query = hop1_query_obj.query if hasattr(hop1_query_obj, 'query') else question
+        # Step 1: Decompose the main question into 2 sub-questions
+        decomposition = self.decompose_question(question=question)
+        sub_question_1 = decomposition.sub_question_1
+        sub_question_2 = decomposition.sub_question_2
 
-        # Search and scrape for first hop
-        hop1_context = self._search_and_scrape(hop1_query)
+        # Step 2: Search and scrape for first sub-question
+        context_1 = self._search_and_scrape(sub_question_1)
 
-        # Summarize first hop
-        summary_1 = self.summarize1(
-            question=question,
-            context=hop1_context
-        ).summary
-
-        # HOP 2: Generate search query for second hop based on first summary
-        hop2_query = self.create_query_hop2(
-            question=question,
-            summary_1=summary_1
-        ).query
-
-        # Search and scrape for second hop
-        hop2_context = self._search_and_scrape(hop2_query)
-
-        # Summarize second hop with context from first
-        summary_2 = self.summarize2(
-            question=question,
-            previous_summary=summary_1,
-            context=hop2_context
-        ).summary
-
-        # Generate final answer from both summaries
-        answer = self.generate_answer(
-            question=question,
-            summary_1=summary_1,
-            summary_2=summary_2
+        # Step 3: Extract answer to first sub-question from context
+        sub_answer_1 = self.answer_sub_question(
+            sub_question=sub_question_1,
+            context=context_1
         ).answer
 
-        # Extract concise factoid from the detailed answer
+        # Step 4: Search and scrape for second sub-question
+        context_2 = self._search_and_scrape(sub_question_2)
+
+        # Step 5: Extract answer to second sub-question from context
+        sub_answer_2 = self.answer_sub_question(
+            sub_question=sub_question_2,
+            context=context_2
+        ).answer
+
+        # Step 6: Generate final answer from both sub-answers
+        answer = self.generate_answer(
+            question=question,
+            sub_answer_1=sub_answer_1,
+            sub_answer_2=sub_answer_2
+        ).answer
+
+        # Step 7: Extract concise factoid from the detailed answer
         final_answer = self.extract_factoid(
             question=question,
             detailed_answer=answer
