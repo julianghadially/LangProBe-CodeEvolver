@@ -6,8 +6,8 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("claim,summary_1->query")
-        self.create_query_hop3 = dspy.Predict("claim,summary_1,summary_2->query")
+        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("claim,passages->summary")
         self.summarize2 = dspy.Predict("claim,context,passages->summary")
@@ -32,6 +32,23 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        retrieved_docs = hop1_docs + hop2_docs + hop3_docs
+
+        # Post-processing: extract document titles, remove duplicates, limit to 21
+        seen = set()
+        unique_titles = []
+        for passage in retrieved_docs:
+            # Extract title (text before '|' separator)
+            if '|' in passage:
+                title = passage.split('|', 1)[0].strip()
+            else:
+                title = passage.strip()
+
+            # Add to list if not seen and under limit
+            if title not in seen and len(unique_titles) < 21:
+                seen.add(title)
+                unique_titles.append(title)
+
+        return dspy.Prediction(retrieved_docs=unique_titles)
 
 
