@@ -2,16 +2,20 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from .hotpot_program import HotpotMultiHopPredict
 
-COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
 class HotpotMultiHopPredictPipeline(LangProBeDSPyMetaProgram, dspy.Module):
-    """Predict variant (no ChainOfThought reasoning)."""
+    """
+    Pipeline for HotPot Multi-Hop QA using Serper + Firecrawl.
+
+    No longer requires ColBERTv2 - retrieval is handled internally
+    by HotpotMultiHopPredict using SerperService and FirecrawlService.
+    """
 
     def __init__(self):
         super().__init__()
-        self.rm = dspy.ColBERTv2(url=COLBERT_URL)
+        # Services (Serper, Firecrawl) are initialized in HotpotMultiHopPredict
         self.program = HotpotMultiHopPredict()
 
     def forward(self, question):
-        with dspy.context(rm=self.rm):
-            return self.program(question=question)
+        # No retrieval model context needed - handled internally
+        return self.program(question=question)
