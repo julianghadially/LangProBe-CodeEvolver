@@ -3,12 +3,19 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from services import SerperService, FirecrawlService
 
 
-class DecomposeQuestion(dspy.Signature):
-    """Decompose a complex question into 2 sub-questions that must be answered to solve the main question."""
+class GenerateFirstSubQuestion(dspy.Signature):
+    """Generate the first sub-question needed to answer a complex multi-hop question."""
 
     question = dspy.InputField()
-    sub_question_1 = dspy.OutputField(desc="First sub-question that needs to be answered")
-    sub_question_2 = dspy.OutputField(desc="Second sub-question that needs to be answered")
+    sub_question_1 = dspy.OutputField(desc="First sub-question that needs to be answered to make progress on the main question")
+
+
+class GenerateSecondSubQuestion(dspy.Signature):
+    """Generate the second sub-question using information discovered from answering the first sub-question."""
+
+    question = dspy.InputField()
+    sub_answer_1 = dspy.InputField(desc="Answer to the first sub-question, which may contain entities or facts needed for the second question")
+    sub_question_2 = dspy.OutputField(desc="Second sub-question that builds on the first answer to complete the multi-hop reasoning")
 
 
 class AnswerSubQuestion(dspy.Signature):
@@ -42,7 +49,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.serper = SerperService()
         self.firecrawl = FirecrawlService()
-        self.decompose_question = dspy.Predict(DecomposeQuestion)
+        self.generate_first_sub_question = dspy.Predict(GenerateFirstSubQuestion)
+        self.generate_second_sub_question = dspy.Predict(GenerateSecondSubQuestion)
         self.answer_sub_question = dspy.Predict(AnswerSubQuestion)
         self.generate_answer = dspy.Predict(GenerateAnswer)
         self.extract_factoid = dspy.Predict(ExtractFactoid)
@@ -81,10 +89,9 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             return f"Error during search/scrape: {str(e)}"
 
     def forward(self, question):
-        # Step 1: Decompose the main question into 2 sub-questions
-        decomposition = self.decompose_question(question=question)
-        sub_question_1 = decomposition.sub_question_1
-        sub_question_2 = decomposition.sub_question_2
+        # Step 1: Generate the first sub-question from the original question only
+        first_sub = self.generate_first_sub_question(question=question)
+        sub_question_1 = first_sub.sub_question_1
 
         # Step 2: Search and scrape for first sub-question
         context_1 = self._search_and_scrape(sub_question_1)
@@ -95,23 +102,32 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             context=context_1
         ).answer
 
-        # Step 4: Search and scrape for second sub-question
+        # Step 4: Generate the second sub-question using both the original question
+        # AND the first sub-answer as context (enabling multi-hop reasoning)
+        second_sub = self.generate_second_sub_question(
+            question=question,
+            sub_answer_1=sub_answer_1
+        )
+        sub_question_2 = second_sub.sub_question_2
+
+        # Step 5: Search and scrape for second sub-question
+        # (Now the second question can include entities/facts from sub_answer_1)
         context_2 = self._search_and_scrape(sub_question_2)
 
-        # Step 5: Extract answer to second sub-question from context
+        # Step 6: Extract answer to second sub-question from context
         sub_answer_2 = self.answer_sub_question(
             sub_question=sub_question_2,
             context=context_2
         ).answer
 
-        # Step 6: Generate final answer from both sub-answers
+        # Step 7: Generate final answer from both sub-answers
         answer = self.generate_answer(
             question=question,
             sub_answer_1=sub_answer_1,
             sub_answer_2=sub_answer_2
         ).answer
 
-        # Step 7: Extract concise factoid from the detailed answer
+        # Step 8: Extract concise factoid from the detailed answer
         final_answer = self.extract_factoid(
             question=question,
             detailed_answer=answer
