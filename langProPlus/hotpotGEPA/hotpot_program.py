@@ -44,8 +44,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             Markdown content from the scraped page or error message
         """
         try:
-            # Search with Serper - focus on Wikipedia results
-            search_query = f"{query} site:wikipedia.org"
+            # Search with Serper - search the open web
+            search_query = query
             results = self.serper.search(search_query, num_results=5)
 
             if not results:
