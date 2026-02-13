@@ -10,6 +10,14 @@ class GenerateAnswer(dspy.Signature):
     summary_2 = dspy.InputField()
     answer = dspy.OutputField(desc="The answer itself and nothing else")
 
+
+class ExtractFactoid(dspy.Signature):
+    """Extract only the essential factoid answer from a verbose answer."""
+
+    question = dspy.InputField()
+    full_answer = dspy.InputField()
+    factoid = dspy.OutputField(desc='Only the essential factoid answer with no extra words or articles (e.g., "no" not "No, it was not", "2015 until 2017" not "from 2015 to 2017")')
+
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
 
@@ -21,6 +29,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
         self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.extract_factoid = dspy.Predict(ExtractFactoid)
 
     def forward(self, question):
         # HOP 1
@@ -41,4 +50,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
 
-        return dspy.Prediction(answer=answer)
+        # Extract concise factoid from verbose answer
+        factoid = self.extract_factoid(question=question, full_answer=answer).factoid
+
+        return dspy.Prediction(answer=factoid)
