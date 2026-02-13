@@ -8,7 +8,7 @@ class GenerateAnswer(dspy.Signature):
     question = dspy.InputField()
     summary_1 = dspy.InputField()
     summary_2 = dspy.InputField()
-    answer = dspy.OutputField(desc="The answer itself and nothing else")
+    answer = dspy.OutputField(desc="Only the exact short factoid answer with no additional explanation, context, or elaboration - just the answer itself")
 
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
@@ -20,7 +20,7 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
-        self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
 
     def forward(self, question):
         # HOP 1
