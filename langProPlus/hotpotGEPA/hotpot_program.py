@@ -2,13 +2,22 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class ExtractKeyFacts(dspy.Signature):
+    """Extract key facts from summaries to answer the question."""
+
+    question = dspy.InputField()
+    summary_1 = dspy.InputField()
+    summary_2 = dspy.InputField()
+    key_facts = dspy.OutputField(desc="3-5 key factoids as a bulleted list")
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
 
     question = dspy.InputField()
     summary_1 = dspy.InputField()
     summary_2 = dspy.InputField()
-    answer = dspy.OutputField(desc="The answer itself and nothing else")
+    answer = dspy.OutputField(desc="A single short factoid answer with no articles, qualifiers, or extra words (e.g., \"Hampton Pirates\" not \"The Hampton Pirates\")")
 
 class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     """Predict variant (no ChainOfThought reasoning)."""
@@ -20,7 +29,8 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.Predict("question,passages->summary")
         self.summarize2 = dspy.Predict("question,context,passages->summary")
-        self.generate_answer = dspy.Predict(GenerateAnswer)
+        self.extract_key_facts = dspy.Predict(ExtractKeyFacts)
+        self.generate_answer = dspy.ChainOfThought(GenerateAnswer)
 
     def forward(self, question):
         # HOP 1
@@ -36,7 +46,12 @@ class HotpotMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
             question=question, context=summary_1, passages=hop2_docs
         ).summary
 
-        # HOP 3: Answer instead of another query+retrieve
+        # STAGE 1: Extract key facts from summaries
+        key_facts = self.extract_key_facts(
+            question=question, summary_1=summary_1, summary_2=summary_2
+        ).key_facts
+
+        # STAGE 2: Generate answer using ChainOfThought reasoning
         answer = self.generate_answer(
             question=question, summary_1=summary_1, summary_2=summary_2
         ).answer
