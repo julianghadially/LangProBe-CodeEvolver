@@ -2,58 +2,68 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
-class ChainOfThoughtQueryPlanner(dspy.Signature):
-    """Analyze the claim and retrieved context to strategically plan the next retrieval query.
+class EntityExtractor(dspy.Signature):
+    """Extract 2-3 key named entities or concepts from the claim that need verification.
 
-    Decompose what entities, relationships, and facts are needed to verify the claim.
-    Analyze what information has already been found versus what's still missing.
-    Generate a targeted query to find the specific missing information needed for the next hop.
+    Focus on identifying the main entities (people, places, organizations, concepts) that are
+    central to verifying the claim. These should be concrete entities that can be searched for.
     """
 
-    claim = dspy.InputField(desc="The claim that needs to be verified through multi-hop reasoning")
-    retrieved_context = dspy.InputField(desc="The context retrieved so far from previous hops (may be empty for first hop)")
+    claim = dspy.InputField(desc="The claim that needs to be verified")
+    entities = dspy.OutputField(desc="A list of 2-3 key named entities/concepts from the claim (comma-separated)")
 
-    reasoning = dspy.OutputField(desc="Explain the multi-hop reasoning chain needed: what entities/relationships are mentioned in the claim and how they connect")
-    missing_information = dspy.OutputField(desc="Identify specific gaps: what key information was found in retrieved_context vs. what's still needed to verify the claim")
-    next_query = dspy.OutputField(desc="A focused search query to find the specific missing information identified above")
+
+class EntityQueryGenerator(dspy.Signature):
+    """Generate a focused Wikipedia search query for a specific entity.
+
+    Create a targeted query that will retrieve relevant information about the given entity
+    in the context of the original claim.
+    """
+
+    claim = dspy.InputField(desc="The original claim being verified")
+    entity = dspy.InputField(desc="The specific entity to search for")
+    query = dspy.OutputField(desc="A focused Wikipedia search query for this entity")
 
 
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 9
-        self.query_planner_hop1 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
-        self.query_planner_hop2 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
-        self.query_planner_hop3 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
+        self.k = 7  # 7 docs per search, 3 searches = 21 docs max
+        self.entity_extractor = dspy.Predict(EntityExtractor)
+        self.query_generator = dspy.Predict(EntityQueryGenerator)
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
     def forward(self, claim):
-        # HOP 1: Initial analysis and query generation
-        hop1_plan = self.query_planner_hop1(
-            claim=claim,
-            retrieved_context=""
-        )
-        hop1_query = hop1_plan.next_query
-        hop1_docs = self.retrieve_k(hop1_query).passages
-        hop1_context = "\n\n".join([f"Doc {i+1}: {doc}" for i, doc in enumerate(hop1_docs)])
+        # Step 1: Extract key entities from the claim
+        extraction_result = self.entity_extractor(claim=claim)
+        entities_str = extraction_result.entities
 
-        # HOP 2: Reason about what was found and what's missing
-        hop2_plan = self.query_planner_hop2(
-            claim=claim,
-            retrieved_context=hop1_context
-        )
-        hop2_query = hop2_plan.next_query
-        hop2_docs = self.retrieve_k(hop2_query).passages
-        hop2_context = hop1_context + "\n\n" + "\n\n".join([f"Doc {i+1}: {doc}" for i, doc in enumerate(hop2_docs)])
+        # Parse entities (comma-separated) and take up to 3
+        entities = [e.strip() for e in entities_str.split(',')][:3]
 
-        # HOP 3: Final targeted retrieval for remaining gaps
-        hop3_plan = self.query_planner_hop3(
-            claim=claim,
-            retrieved_context=hop2_context
-        )
-        hop3_query = hop3_plan.next_query
-        hop3_docs = self.retrieve_k(hop3_query).passages
+        # Step 2: Track seen documents for deduplication
+        seen_docs = set()
+        all_docs = []
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Step 3: Generate focused query for each entity and retrieve
+        for entity in entities:
+            # Generate entity-specific query
+            query_result = self.query_generator(claim=claim, entity=entity)
+            query = query_result.query
+
+            # Retrieve documents for this entity
+            retrieved_passages = self.retrieve_k(query).passages
+
+            # Deduplicate by content
+            for doc in retrieved_passages:
+                # Use the document content as the deduplication key
+                if doc not in seen_docs:
+                    seen_docs.add(doc)
+                    all_docs.append(doc)
+
+        # Step 4: Truncate to exactly 21 documents
+        deduplicated_docs = all_docs[:21]
+
+        return dspy.Prediction(retrieved_docs=deduplicated_docs)
 
 
