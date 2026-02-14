@@ -12,33 +12,37 @@ class EntityExtraction(dspy.Signature):
     reasoning = dspy.OutputField(desc="Brief explanation of why these entities are critical for verification")
 
 
-class EntityTargeting(dspy.Signature):
-    """Determine which specific entity to target next based on what information is still missing.
-    Choose the entity most likely to fill gaps in verification evidence."""
+class ContextualBridgeQuery(dspy.Signature):
+    """Generate 1-2 contextual bridge queries to find connections between entities and fill verification gaps.
+    These queries should explore relationships, events, or context that link the entities together."""
 
     claim = dspy.InputField()
     entities = dspy.InputField(desc="List of entities extracted from the claim")
-    retrieved_titles = dspy.InputField(desc="Titles of documents already retrieved")
-    hop_number = dspy.InputField(desc="Current hop number (1, 2, or 3)")
+    retrieved_titles = dspy.InputField(desc="Titles of documents already retrieved from direct entity searches")
 
-    target_entity = dspy.OutputField(desc="The specific entity to search for in this hop")
-    reasoning = dspy.OutputField(desc="Why this entity is the priority for this hop")
-    search_query = dspy.OutputField(desc="Focused search query for this specific entity (not a broad claim reformulation)")
+    bridge_queries: list[str] = dspy.OutputField(desc="1-2 contextual queries to find missing connections between entities")
+    reasoning = dspy.OutputField(desc="Explanation of what connections or context these queries aim to find")
 
 
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 7  # 7 docs per hop = 21 total docs
+
+        # Stage 1: Direct entity retrieval (k=3 docs per entity, 3-4 entities = 9-12 docs)
+        self.entity_k = 3
+
+        # Stage 2: Contextual bridging (k=5-6 docs per bridge query, 1-2 queries = 5-12 docs)
+        self.bridge_k = 5  # Will use 5-6 depending on number of bridge queries
 
         # Entity extraction with reasoning
         self.extract_entities = dspy.ChainOfThought(EntityExtraction)
 
-        # Entity-targeted hop planning with reasoning
-        self.target_entity = dspy.ChainOfThought(EntityTargeting)
+        # Contextual bridge query generation with reasoning
+        self.generate_bridge_queries = dspy.ChainOfThought(ContextualBridgeQuery)
 
-        # Retriever
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        # Retrievers for each stage
+        self.retrieve_entity = dspy.Retrieve(k=self.entity_k)
+        self.retrieve_bridge = dspy.Retrieve(k=self.bridge_k)
 
     def _extract_title(self, doc):
         """Extract the title (first line) from a document."""
@@ -60,37 +64,54 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         return deduplicated
 
     def forward(self, claim):
-        # Step 1: Extract 3-4 distinct named entities from the claim
+        # STAGE 1: Direct Entity Retrieval
+        # Extract 3-4 named entities from the claim
         entity_result = self.extract_entities(claim=claim)
         entities = entity_result.entities
 
         all_docs = []
         retrieved_titles_set = set()
 
-        # Step 2: Execute 3 entity-focused hops
-        for hop_num in [1, 2, 3]:
-            # Determine which entity to target in this hop
-            retrieved_titles_str = ", ".join(sorted(retrieved_titles_set)) if retrieved_titles_set else "None yet"
+        # Retrieve k=3 docs per entity using exact entity names as queries
+        for entity in entities:
+            # Use exact entity name as query (not a contextual query)
+            entity_docs = self.retrieve_entity(entity).passages
+            all_docs.extend(entity_docs)
 
-            target_result = self.target_entity(
-                claim=claim,
-                entities=", ".join(entities) if isinstance(entities, list) else str(entities),
-                retrieved_titles=retrieved_titles_str,
-                hop_number=str(hop_num)
-            )
-
-            # Retrieve documents for the targeted entity with focused query
-            query = target_result.search_query
-            hop_docs = self.retrieve_k(query).passages
-
-            # Track retrieved titles for next hop
-            for doc in hop_docs:
+            # Track retrieved titles
+            for doc in entity_docs:
                 retrieved_titles_set.add(self._extract_title(doc))
 
-            # Add to document collection
-            all_docs.extend(hop_docs)
+        # STAGE 2: Contextual Bridging
+        # Generate 1-2 contextual bridge queries to find missing connections
+        retrieved_titles_str = ", ".join(sorted(retrieved_titles_set))
+        entities_str = ", ".join(entities) if isinstance(entities, list) else str(entities)
 
-        # Step 3: Deduplicate by document title while preserving order
+        bridge_result = self.generate_bridge_queries(
+            claim=claim,
+            entities=entities_str,
+            retrieved_titles=retrieved_titles_str
+        )
+        bridge_queries = bridge_result.bridge_queries
+
+        # Adjust k for bridge queries to reach 19-21 total docs
+        # If 1 bridge query: use k=6, if 2 bridge queries: use k=5-6
+        num_bridge_queries = len(bridge_queries)
+        if num_bridge_queries == 1:
+            bridge_k = 6
+        else:  # 2 queries
+            bridge_k = 5
+
+        # Retrieve k=5-6 docs per bridge query
+        for bridge_query in bridge_queries:
+            bridge_docs = dspy.Retrieve(k=bridge_k)(bridge_query).passages
+            all_docs.extend(bridge_docs)
+
+            # Track retrieved titles
+            for doc in bridge_docs:
+                retrieved_titles_set.add(self._extract_title(doc))
+
+        # Deduplicate by title at the end
         deduplicated_docs = self._deduplicate_by_title(all_docs)
 
         return dspy.Prediction(retrieved_docs=deduplicated_docs)
