@@ -32,7 +32,7 @@ class DocumentReranker(dspy.Signature):
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
-        self.k = 15
+        self.k = 35
         self.query_planner_hop1 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
         self.query_planner_hop2 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
         self.query_planner_hop3 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
