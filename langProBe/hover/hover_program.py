@@ -18,15 +18,19 @@ class ChainOfThoughtQueryPlanner(dspy.Signature):
     next_query = dspy.OutputField(desc="A focused search query to find the specific missing information identified above")
 
 
-class DocumentReranker(dspy.Signature):
-    """Score a candidate document's relevance to verifying a claim based on the reasoning chain and missing information."""
+class ListwiseDocumentReranker(dspy.Signature):
+    """Rank all candidate documents by their relevance to verifying a claim through multi-hop reasoning.
+
+    Consider how documents work together to provide evidence across multiple reasoning hops.
+    Prioritize documents that contain specific facts, entities, or relationships needed for verification.
+    """
 
     claim = dspy.InputField(desc="The claim that needs to be verified")
     reasoning_chain = dspy.InputField(desc="The accumulated reasoning about what information is needed")
     missing_info = dspy.InputField(desc="Specific information gaps identified during retrieval")
-    candidate_doc = dspy.InputField(desc="The document to score for relevance")
+    candidate_docs = dspy.InputField(desc="All candidate documents to rank, formatted as 'Index: [N] | Document content'")
 
-    relevance_score = dspy.OutputField(desc="A relevance score from 0-10 indicating how useful this document is for verifying the claim")
+    ranked_indices = dspy.OutputField(desc="A comma-separated list of the top 21 document indices (0-based) in descending order of relevance, e.g., '5,12,3,18,...'")
 
 
 class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
@@ -37,7 +41,7 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         self.query_planner_hop2 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
         self.query_planner_hop3 = dspy.ChainOfThought(ChainOfThoughtQueryPlanner)
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.reranker = dspy.ChainOfThought(DocumentReranker)
+        self.reranker = dspy.ChainOfThought(ListwiseDocumentReranker)
 
     def forward(self, claim):
         # Helper function to extract document title (text before " | ")
@@ -107,28 +111,38 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         reasoning_chain = hop1_plan.reasoning
         missing_info = f"{hop1_plan.missing_information}\n{hop2_plan.missing_information}\n{hop3_plan.missing_information}"
 
-        # Rerank all documents
-        scored_docs = []
-        for doc in all_unique_docs:
-            rerank_result = self.reranker(
-                claim=claim,
-                reasoning_chain=reasoning_chain,
-                missing_info=missing_info,
-                candidate_doc=doc
-            )
-            # Extract numeric score from relevance_score string
-            try:
-                score = float(rerank_result.relevance_score.split()[0])
-            except (ValueError, IndexError, AttributeError):
-                # If we can't parse a numeric score, try to extract first number
-                import re
-                match = re.search(r'\d+(?:\.\d+)?', str(rerank_result.relevance_score))
-                score = float(match.group()) if match else 0.0
-            scored_docs.append((score, doc))
+        # Format all documents with indices for listwise reranking
+        formatted_docs = "\n\n".join([f"Index: [{i}] | {doc}" for i, doc in enumerate(all_unique_docs)])
 
-        # Sort by relevance score (descending) and take top 21
-        scored_docs.sort(reverse=True, key=lambda x: x[0])
-        top_21_docs = [doc for score, doc in scored_docs[:21]]
+        # Single listwise reranking call for all documents
+        rerank_result = self.reranker(
+            claim=claim,
+            reasoning_chain=reasoning_chain,
+            missing_info=missing_info,
+            candidate_docs=formatted_docs
+        )
+
+        # Parse the ranked indices from the output
+        import re
+        # Extract comma-separated indices from the output
+        indices_str = rerank_result.ranked_indices
+        # Find all numbers in the string
+        indices = []
+        for match in re.finditer(r'\d+', indices_str):
+            idx = int(match.group())
+            # Validate index is in range and not duplicate
+            if 0 <= idx < len(all_unique_docs) and idx not in indices:
+                indices.append(idx)
+
+        # Select top 21 documents based on ranked indices
+        # If we don't have enough valid indices, append remaining docs in original order
+        top_21_docs = [all_unique_docs[i] for i in indices[:21]]
+        if len(top_21_docs) < 21:
+            remaining_indices = [i for i in range(len(all_unique_docs)) if i not in indices]
+            for i in remaining_indices:
+                if len(top_21_docs) >= 21:
+                    break
+                top_21_docs.append(all_unique_docs[i])
 
         return dspy.Prediction(retrieved_docs=top_21_docs)
 
