@@ -2,6 +2,28 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class ScoreRelevance(dspy.Signature):
+    """Score the relevance of a document to a claim.
+
+    Analyze how well the document supports or relates to verifying the claim.
+    Consider:
+    - Direct evidence or information about entities in the claim
+    - Context that helps verify or refute the claim
+    - Relevance of facts and details to the claim's subject matter
+
+    Return a relevance score between 0.0 and 1.0, where:
+    - 1.0 = Highly relevant, contains key information for verifying the claim
+    - 0.5 = Moderately relevant, contains some related information
+    - 0.0 = Not relevant, unrelated to the claim
+    """
+
+    claim = dspy.InputField(desc="The claim to verify")
+    document = dspy.InputField(desc="The retrieved document passage")
+    relevance_score: float = dspy.OutputField(
+        desc="Relevance score between 0.0 and 1.0 indicating how relevant the document is to verifying the claim"
+    )
+
+
 class ExtractEntities(dspy.Signature):
     """Extract key entities from the claim and context.
 
@@ -38,7 +60,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 7
+        self.k = 20  # Increased from 7 to 20 for more candidate documents per hop
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
         # Entity extraction modules
@@ -49,6 +71,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Query generation modules with entity-focused context
         self.create_query_hop2 = dspy.ChainOfThought("claim, entities->query")
         self.create_query_hop3 = dspy.ChainOfThought("claim, entities->query")
+
+        # Reranking module for scoring document relevance
+        self.score_relevance = dspy.ChainOfThought(ScoreRelevance)
 
     def forward(self, claim):
         # STEP 1: Extract entities from the claim before hop 1
@@ -101,4 +126,35 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 3: Final retrieval with all accumulated entities
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # STEP 6: Deduplicate documents by title across all hops
+        # Documents are formatted as "Title | Content"
+        all_docs = hop1_docs + hop2_docs + hop3_docs
+        seen_titles = set()
+        unique_docs = []
+
+        for doc in all_docs:
+            # Extract title (everything before the first " | ")
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_docs.append(doc)
+
+        # STEP 7: Rerank all unique documents by relevance to the claim
+        scored_docs = []
+        for doc in unique_docs:
+            try:
+                # Score each document's relevance to the claim
+                score_pred = self.score_relevance(claim=claim, document=doc)
+                relevance_score = float(score_pred.relevance_score)
+                # Clamp score to [0.0, 1.0] range
+                relevance_score = max(0.0, min(1.0, relevance_score))
+                scored_docs.append((doc, relevance_score))
+            except (ValueError, AttributeError):
+                # If scoring fails, assign a default score of 0.5
+                scored_docs.append((doc, 0.5))
+
+        # STEP 8: Sort by relevance score (descending) and return top 21 documents
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+        top_21_docs = [doc for doc, score in scored_docs[:21]]
+
+        return dspy.Prediction(retrieved_docs=top_21_docs)
