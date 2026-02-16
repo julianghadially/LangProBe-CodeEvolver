@@ -1,6 +1,17 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
+class ExtractQueryAspects(dspy.Signature):
+    """Identify a distinct queryable aspect or entity from the claim that hasn't been covered yet.
+    The aspect should be a specific entity, person, place, event, or concept that can be searched for.
+    Ensure the aspect is different from the previous aspects already covered."""
+
+    claim = dspy.InputField(desc="The claim to analyze")
+    previous_aspects = dspy.InputField(desc="List of aspects already covered in previous hops")
+
+    aspect = dspy.OutputField(desc="A distinct queryable aspect, entity, or concept from the claim")
+    reasoning = dspy.OutputField(desc="Explanation of why this aspect is important and different from previous aspects")
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim. 
     
@@ -11,30 +22,37 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.extract_aspect = dspy.ChainOfThought(ExtractQueryAspects)
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
-        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
 
     def forward(self, claim):
-        # HOP 1
-        hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        # Track covered aspects for diversity
+        covered_aspects = []
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
-        hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        # HOP 1: Extract and query the first aspect directly from the claim
+        aspect1_result = self.extract_aspect(
+            claim=claim,
+            previous_aspects=covered_aspects
+        )
+        aspect1 = aspect1_result.aspect
+        covered_aspects.append(aspect1)
+        hop1_docs = self.retrieve_k(aspect1).passages
 
-        # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
-        ).query
-        hop3_docs = self.retrieve_k(hop3_query).passages
+        # HOP 2: Extract a second distinct aspect different from hop 1
+        aspect2_result = self.extract_aspect(
+            claim=claim,
+            previous_aspects=covered_aspects
+        )
+        aspect2 = aspect2_result.aspect
+        covered_aspects.append(aspect2)
+        hop2_docs = self.retrieve_k(aspect2).passages
+
+        # HOP 3: Extract a third aspect or generate a connecting query
+        aspect3_result = self.extract_aspect(
+            claim=claim,
+            previous_aspects=covered_aspects
+        )
+        aspect3 = aspect3_result.aspect
+        hop3_docs = self.retrieve_k(aspect3).passages
 
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
