@@ -1,16 +1,21 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
+class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
+    '''Multi hop system for retrieving documents for a provided claim. 
+    
+    EVALUATION
+    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - The system must provide at most 21 documents at the end of the program.'''
 
-class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.Predict("claim,summary_1->query")
-        self.create_query_hop3 = dspy.Predict("claim,summary_1,summary_2->query")
+        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.Predict("claim,passages->summary")
-        self.summarize2 = dspy.Predict("claim,context,passages->summary")
+        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
+        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
 
     def forward(self, claim):
         # HOP 1
@@ -33,5 +38,3 @@ class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_docs = self.retrieve_k(hop3_query).passages
 
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
-
-
