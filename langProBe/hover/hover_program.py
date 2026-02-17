@@ -43,26 +43,6 @@ class EntityBasedQueryGenerator(dspy.Signature):
     )
 
 
-class DocumentRelevanceScorer(dspy.Signature):
-    """Score how well a document covers the extracted entities and relationships.
-    Consider:
-    1. How many of the target entities are mentioned
-    2. Whether key relationships are discussed
-    3. Whether key facts are verified or contradicted
-
-    Return a relevance score from 0-10."""
-
-    claim = dspy.InputField(desc="The original claim being verified")
-    document = dspy.InputField(desc="The document to score")
-    target_entities = dspy.InputField(desc="All entities extracted from the claim")
-    target_relationships = dspy.InputField(desc="Relationships that need verification")
-
-    relevance_score = dspy.OutputField(
-        desc="Relevance score from 0-10, where 10 means the document covers many entities and relationships"
-    )
-    covered_entities = dspy.OutputField(
-        desc="Which entities from the target list are covered in this document"
-    )
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -75,8 +55,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     APPROACH
     - Entity-extraction-first: Extract all entities, relationships, and facts from the claim
     - Create targeted queries for entity clusters
-    - Use k=30 for primary entities, k=20 for secondary/bridging, k=15 for relationship verification
-    - Apply relevance-based reranking to select final 21 documents with maximum entity coverage
+    - Use k=50 for primary entities, k=40 for secondary/bridging, k=30 for relationship verification
+    - Apply deterministic reranking based on lexical overlap and retrieval position to select final 21 unique documents
     '''
 
     def __init__(self):
@@ -88,13 +68,103 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Query generation for each hop
         self.query_generator = dspy.ChainOfThought(EntityBasedQueryGenerator)
 
-        # Document relevance scoring for reranking
-        self.doc_scorer = dspy.ChainOfThought(DocumentRelevanceScorer)
-
         # Retrieval modules with different k values for each hop
-        self.retrieve_hop1 = dspy.Retrieve(k=30)  # Primary entities
-        self.retrieve_hop2 = dspy.Retrieve(k=20)  # Secondary/bridging entities
-        self.retrieve_hop3 = dspy.Retrieve(k=15)  # Relationship verification
+        self.retrieve_hop1 = dspy.Retrieve(k=50)  # Primary entities
+        self.retrieve_hop2 = dspy.Retrieve(k=40)  # Secondary/bridging entities
+        self.retrieve_hop3 = dspy.Retrieve(k=30)  # Relationship verification
+
+    def _compute_lexical_overlap(self, claim, document):
+        """Compute lexical overlap score between claim and document text.
+
+        Args:
+            claim: The claim text
+            document: The document text
+
+        Returns:
+            Float score representing the lexical overlap
+        """
+        # Normalize and tokenize
+        claim_words = set(claim.lower().split())
+        doc_words = set(document.lower().split())
+
+        # Remove common stop words that don't carry much meaning
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+                     'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been',
+                     'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+                     'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that',
+                     'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
+
+        claim_words = claim_words - stop_words
+        doc_words = doc_words - stop_words
+
+        # Compute overlap
+        if not claim_words:
+            return 0.0
+
+        overlap = len(claim_words & doc_words)
+        # Normalize by claim length (Jaccard-like similarity)
+        score = overlap / len(claim_words)
+
+        return score
+
+    def _extract_document_title(self, document):
+        """Extract document title from the document string.
+
+        Documents are formatted as "Title | Content", so we extract the title part.
+
+        Args:
+            document: The full document string
+
+        Returns:
+            The document title (part before " | ")
+        """
+        if ' | ' in document:
+            return document.split(' | ')[0]
+        return document[:100]  # Fallback: use first 100 chars as title
+
+    def _deduplicate_documents(self, documents):
+        """Deduplicate documents by title.
+
+        Args:
+            documents: List of (doc, position) tuples
+
+        Returns:
+            List of deduplicated (doc, position) tuples, keeping first occurrence
+        """
+        seen_titles = set()
+        deduplicated = []
+
+        for doc, pos in documents:
+            title = self._extract_document_title(doc)
+            if title not in seen_titles:
+                seen_titles.add(title)
+                deduplicated.append((doc, pos))
+
+        return deduplicated
+
+    def _score_document(self, claim, document, position):
+        """Compute deterministic relevance score for a document.
+
+        Args:
+            claim: The claim text
+            document: The document text
+            position: Position in original retrieval (0-indexed, lower is better)
+
+        Returns:
+            Combined score for ranking
+        """
+        # Lexical overlap score (0.0 to 1.0+)
+        lexical_score = self._compute_lexical_overlap(claim, document)
+
+        # Position score: earlier positions get higher scores
+        # Normalize position to 0-1 range with exponential decay
+        # Position 0 gets score ~1.0, position 100 gets score ~0.0
+        position_score = 1.0 / (1.0 + position * 0.1)
+
+        # Combine scores: weight lexical overlap more heavily (70%) vs position (30%)
+        combined_score = 0.7 * lexical_score + 0.3 * position_score
+
+        return combined_score
 
     def forward(self, claim):
         # STEP 1: Extract entities, relationships, and key facts from the claim
@@ -104,10 +174,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         relationships = extraction.relationships
         key_facts = extraction.key_facts
 
-        # Combine all entities for tracking coverage
-        all_entities = f"Primary: {primary_entities}; Secondary: {secondary_entities}"
-
-        # HOP 1: Retrieve documents for primary entities (k=30)
+        # HOP 1: Retrieve documents for primary entities (k=50)
         hop1_query = self.query_generator(
             claim=claim,
             entity_cluster=primary_entities,
@@ -119,7 +186,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Summarize hop 1 findings
         hop1_summary = f"Found documents about primary entities: {primary_entities[:200]}"
 
-        # HOP 2: Retrieve documents for secondary/bridging entities (k=20)
+        # HOP 2: Retrieve documents for secondary/bridging entities (k=40)
         hop2_query = self.query_generator(
             claim=claim,
             entity_cluster=secondary_entities,
@@ -131,7 +198,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Summarize hop 2 findings
         hop2_summary = f"Found documents about secondary entities and connections"
 
-        # HOP 3: Retrieve documents for relationship verification (k=15)
+        # HOP 3: Retrieve documents for relationship verification (k=30)
         # Focus on verifying relationships and key facts
         relationship_cluster = f"Relationships: {relationships}; Key facts: {key_facts}"
         hop3_query = self.query_generator(
@@ -142,44 +209,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_hop3(hop3_query).passages
 
-        # STEP 2: Combine all retrieved documents (total: 30 + 20 + 15 = 65)
-        all_docs = hop1_docs + hop2_docs + hop3_docs
+        # STEP 2: Combine all retrieved documents with position tracking (total: 50 + 40 + 30 = 120)
+        # Track position in original retrieval for scoring
+        docs_with_positions = []
+        for i, doc in enumerate(hop1_docs):
+            docs_with_positions.append((doc, i))
+        for i, doc in enumerate(hop2_docs):
+            docs_with_positions.append((doc, i + 50))
+        for i, doc in enumerate(hop3_docs):
+            docs_with_positions.append((doc, i + 90))
 
-        # STEP 3: Rerank documents based on entity coverage and relevance
-        # Score each document and select top 21
+        # STEP 3: Deduplicate documents by title
+        unique_docs = self._deduplicate_documents(docs_with_positions)
+
+        # STEP 4: Score documents using deterministic scoring
         scored_docs = []
+        for doc, position in unique_docs:
+            score = self._score_document(claim, doc, position)
+            scored_docs.append((doc, score))
 
-        for doc in all_docs:
-            try:
-                # Score the document based on entity coverage
-                scoring = self.doc_scorer(
-                    claim=claim,
-                    document=doc[:500],  # Limit doc length for scoring
-                    target_entities=all_entities,
-                    target_relationships=relationships
-                )
-                score = float(scoring.relevance_score) if hasattr(scoring, 'relevance_score') else 5.0
-                covered = scoring.covered_entities if hasattr(scoring, 'covered_entities') else ""
-                scored_docs.append((doc, score, covered))
-            except:
-                # If scoring fails, assign a default moderate score
-                scored_docs.append((doc, 5.0, ""))
-
-        # Sort by relevance score (descending) and select top 21
+        # STEP 5: Sort by score (descending) and select top 21
         scored_docs.sort(key=lambda x: x[1], reverse=True)
-
-        # Select top 21 documents that maximize entity coverage
-        # Use a greedy algorithm to ensure diverse entity coverage
-        final_docs = []
-        covered_entities_set = set()
-
-        # First pass: select highest scoring docs
-        for doc, score, covered in scored_docs:
-            if len(final_docs) >= 21:
-                break
-            final_docs.append(doc)
-            # Track which entities we've covered
-            if covered:
-                covered_entities_set.update(covered.split(','))
+        final_docs = [doc for doc, score in scored_docs[:21]]
 
         return dspy.Prediction(retrieved_docs=final_docs)
