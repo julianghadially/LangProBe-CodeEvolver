@@ -2,121 +2,169 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
-class ClaimEntityTrackerSignature(dspy.Signature):
-    """Extract key entities, relationships, and facts from a claim that need verification.
-    Identify named entities (people, places, organizations, dates) and the relationships between them that the claim asserts."""
+class ClaimDecomposerSignature(dspy.Signature):
+    """Decompose a factual claim into 2-3 independent sub-queries.
+    Each sub-query should target a distinct entity, relationship, or verifiable aspect of the claim.
+    Sub-queries should be self-contained and complementary, covering different facets needed for verification."""
 
-    claim = dspy.InputField(desc="The factual claim to analyze")
-    entities = dspy.OutputField(desc="List of key entities mentioned or implied in the claim (people, places, organizations, dates, events)")
-    key_facts = dspy.OutputField(desc="List of specific facts or relationships that need to be verified")
-    verification_aspects = dspy.OutputField(desc="List of distinct aspects that need coverage (e.g., 'entity A existence', 'entity B properties', 'relationship between A and B')")
+    claim = dspy.InputField(desc="The factual claim to decompose")
+    previous_docs = dspy.InputField(
+        desc="Document titles from previous hops (empty list for hop 1). Use this to identify entities/aspects already covered and focus on under-represented entities.",
+        default="[]"
+    )
 
-
-class CoverageAnalyzerSignature(dspy.Signature):
-    """Analyze coverage of verification aspects based on retrieved documents.
-    Identify which aspects are well-covered, which need more evidence, and which are missing."""
-
-    claim = dspy.InputField(desc="The original claim being verified")
-    verification_aspects = dspy.InputField(desc="List of aspects that need to be verified")
-    retrieved_titles = dspy.InputField(desc="Titles of documents already retrieved (to avoid duplicates)")
-    passages = dspy.InputField(desc="The document passages retrieved in this hop")
-
-    covered_aspects = dspy.OutputField(desc="Aspects that are well-covered by the retrieved documents")
-    under_covered_aspects = dspy.OutputField(desc="Aspects mentioned but needing more evidence")
-    missing_aspects = dspy.OutputField(desc="Aspects not yet addressed by retrieved documents")
-    coverage_summary = dspy.OutputField(desc="Brief summary of what evidence has been found and what gaps remain")
+    sub_queries = dspy.OutputField(
+        desc="List of 2-3 independent search queries as a Python list. Each query should target a distinct entity, relationship, or aspect. For hops after the first, focus on entities/aspects not yet strongly represented in previous_docs."
+    )
+    rationale = dspy.OutputField(
+        desc="Brief explanation of how these sub-queries decompose the claim and what distinct aspect each targets"
+    )
 
 
-class TargetedQueryGeneratorSignature(dspy.Signature):
-    """Generate a targeted search query to fill coverage gaps.
-    Focus on under-covered or missing aspects. Use negative signals from already-retrieved document titles to diversify results."""
+class DocumentRelevanceScorerSignature(dspy.Signature):
+    """Score how relevant a document is to verifying a factual claim.
+    Consider whether the document contains information about entities, relationships, dates, or facts mentioned in the claim."""
 
-    claim = dspy.InputField(desc="The original claim being verified")
-    missing_aspects = dspy.InputField(desc="Verification aspects that have not been covered yet")
-    under_covered_aspects = dspy.InputField(desc="Aspects needing more evidence")
-    coverage_summary = dspy.InputField(desc="Summary of evidence found and gaps remaining")
-    retrieved_titles = dspy.InputField(desc="Titles of documents already retrieved (avoid retrieving again)")
+    claim = dspy.InputField(desc="The factual claim being verified")
+    document = dspy.InputField(desc="Document in 'title | content' format to score")
 
-    query = dspy.OutputField(desc="A search query focused on missing/under-covered aspects, formulated to retrieve documents different from those already obtained")
-    rationale = dspy.OutputField(desc="Brief explanation of which gap this query targets")
+    relevance_score = dspy.OutputField(
+        desc="Relevance score from 0-10, where 0 is completely irrelevant and 10 is highly relevant for verifying the claim. Output only the numeric score."
+    )
+    reasoning = dspy.OutputField(
+        desc="Brief explanation of the score, noting which entities/facts from the claim are covered"
+    )
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi-hop retrieval system with coverage-driven query expansion.
-    Extracts entities from claims, tracks coverage across hops, and generates
-    targeted queries to ensure diverse document retrieval.
+    '''Multi-hop retrieval system with query decomposition and fusion retrieval.
+    Decomposes claims into 2-3 independent sub-queries per hop, retrieves 35 docs per sub-query,
+    merges results with deduplication, and reranks merged pool to top-7 docs per hop.
 
     EVALUATION
     - Returns exactly 21 documents (7 per hop × 3 hops)
-    - Preserves entity-level precision throughout retrieval
-    - Explicitly avoids duplicate documents via title tracking'''
+    - Retrieves up to 105 raw docs per hop (35*3 sub-queries) for diverse coverage
+    - Aggressive reranking maintains quality through DocumentRelevanceScorer'''
 
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.k = 7  # Top K docs per hop after reranking
+        self.fusion_k = 35  # Retrieve K docs per sub-query for fusion
 
-        # Coverage-driven modules
-        self.entity_tracker = dspy.ChainOfThought(ClaimEntityTrackerSignature)
-        self.coverage_analyzer1 = dspy.ChainOfThought(CoverageAnalyzerSignature)
-        self.coverage_analyzer2 = dspy.ChainOfThought(CoverageAnalyzerSignature)
-        self.query_generator_hop2 = dspy.ChainOfThought(TargetedQueryGeneratorSignature)
-        self.query_generator_hop3 = dspy.ChainOfThought(TargetedQueryGeneratorSignature)
+        # Single retriever instance for fusion retrieval
+        self.retrieve_fusion = dspy.Retrieve(k=self.fusion_k)
+
+        # Query decomposition modules (one per hop)
+        self.decomposer_hop1 = dspy.ChainOfThought(ClaimDecomposerSignature)
+        self.decomposer_hop2 = dspy.ChainOfThought(ClaimDecomposerSignature)
+        self.decomposer_hop3 = dspy.ChainOfThought(ClaimDecomposerSignature)
+
+        # Document relevance scorer (shared across all hops)
+        self.relevance_scorer = dspy.ChainOfThought(DocumentRelevanceScorerSignature)
 
     def _extract_titles(self, passages: list[str]) -> list[str]:
         """Extract document titles from passages in 'title | content' format"""
         return [passage.split(" | ")[0] for passage in passages]
 
+    def _fusion_retrieve_and_rerank(self, claim: str, sub_queries: list, previous_titles: list[str]) -> list[str]:
+        """
+        Perform fusion retrieval and reranking.
+
+        Args:
+            claim: The original claim for relevance scoring
+            sub_queries: List of decomposed sub-queries (2-3 queries) or string representation
+            previous_titles: Already retrieved document titles (for deduplication)
+
+        Returns:
+            List of top-7 reranked document passages in 'title | content' format
+        """
+        # Parse sub_queries if it's a string representation of a list
+        if isinstance(sub_queries, str):
+            import ast
+            try:
+                sub_queries = ast.literal_eval(sub_queries)
+            except:
+                sub_queries = [sub_queries]
+
+        # Ensure we have a list
+        if not isinstance(sub_queries, list):
+            sub_queries = [str(sub_queries)]
+
+        # Cap at 3 queries to maintain retrieval budget
+        sub_queries = sub_queries[:3]
+
+        # Step 1: Retrieve for each sub-query
+        all_passages = []
+        for sub_query in sub_queries:
+            passages = self.retrieve_fusion(sub_query).passages
+            all_passages.extend(passages)
+
+        # Step 2: Deduplicate by title (preserves first occurrence)
+        seen_titles = set(previous_titles)  # Avoid previously retrieved docs
+        unique_passages = []
+        for passage in all_passages:
+            title = passage.split(" | ")[0]
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_passages.append(passage)
+
+        # Step 3: Score each unique document
+        scored_docs = []
+        for passage in unique_passages:
+            score_output = self.relevance_scorer(claim=claim, document=passage)
+            try:
+                # Parse score as float (handle "8.5" or "8/10" formats)
+                score_str = str(score_output.relevance_score).strip()
+                if '/' in score_str:
+                    score = float(score_str.split('/')[0])
+                else:
+                    score = float(score_str)
+            except (ValueError, AttributeError):
+                score = 0.0  # Default to 0 if parsing fails
+            scored_docs.append((passage, score))
+
+        # Step 4: Sort by relevance score (descending) and take top K
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+        top_k_docs = [doc for doc, score in scored_docs[:self.k]]
+
+        return top_k_docs
+
     def forward(self, claim):
-        # INITIALIZATION: Extract verification aspects
-        tracker_output = self.entity_tracker(claim=claim)
-        verification_aspects = tracker_output.verification_aspects
         all_retrieved_titles = []
 
-        # HOP 1: Direct claim-based retrieval
-        hop1_docs = self.retrieve_k(claim).passages
+        # HOP 1: Initial decomposition and fusion retrieval
+        decomp1 = self.decomposer_hop1(claim=claim, previous_docs="[]")
+        hop1_docs = self._fusion_retrieve_and_rerank(
+            claim=claim,
+            sub_queries=decomp1.sub_queries,
+            previous_titles=[]
+        )
         hop1_titles = self._extract_titles(hop1_docs)
         all_retrieved_titles.extend(hop1_titles)
 
-        # ANALYZE HOP 1 COVERAGE
-        coverage1 = self.coverage_analyzer1(
+        # HOP 2: Context-aware decomposition using hop1 results
+        decomp2 = self.decomposer_hop2(
             claim=claim,
-            verification_aspects=verification_aspects,
-            retrieved_titles=hop1_titles,
-            passages=hop1_docs
+            previous_docs=str(hop1_titles)  # Pass titles as context
         )
-
-        # HOP 2: Coverage-driven query
-        hop2_query_output = self.query_generator_hop2(
+        hop2_docs = self._fusion_retrieve_and_rerank(
             claim=claim,
-            missing_aspects=coverage1.missing_aspects,
-            under_covered_aspects=coverage1.under_covered_aspects,
-            coverage_summary=coverage1.coverage_summary,
-            retrieved_titles=all_retrieved_titles
+            sub_queries=decomp2.sub_queries,
+            previous_titles=all_retrieved_titles
         )
-
-        hop2_docs = self.retrieve_k(hop2_query_output.query).passages
         hop2_titles = self._extract_titles(hop2_docs)
         all_retrieved_titles.extend(hop2_titles)
 
-        # ANALYZE HOP 2 COVERAGE
-        coverage2 = self.coverage_analyzer2(
+        # HOP 3: Final gap-filling decomposition
+        decomp3 = self.decomposer_hop3(
             claim=claim,
-            verification_aspects=verification_aspects,
-            retrieved_titles=hop2_titles,
-            passages=hop2_docs
+            previous_docs=str(all_retrieved_titles)  # All previous titles
+        )
+        hop3_docs = self._fusion_retrieve_and_rerank(
+            claim=claim,
+            sub_queries=decomp3.sub_queries,
+            previous_titles=all_retrieved_titles
         )
 
-        # HOP 3: Final gap-filling query
-        hop3_query_output = self.query_generator_hop3(
-            claim=claim,
-            missing_aspects=coverage2.missing_aspects,
-            under_covered_aspects=coverage2.under_covered_aspects,
-            coverage_summary=coverage2.coverage_summary,
-            retrieved_titles=all_retrieved_titles
-        )
-
-        hop3_docs = self.retrieve_k(hop3_query_output.query).passages
-
-        # Return all documents (maintains 21-doc contract)
+        # Return all 21 documents (maintains evaluation contract)
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
