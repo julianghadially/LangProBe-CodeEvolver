@@ -32,30 +32,60 @@ class ClaimQueryDecomposer(dspy.Module):
         )
 
 
-class DocumentRelevanceScorerSignature(dspy.Signature):
-    """Score how relevant a document is to answering or verifying the given claim.
-    Provide a relevance score between 0.0 (not relevant) and 1.0 (highly relevant),
-    along with reasoning explaining why this score was assigned."""
+def keyword_rerank_documents(claim, documents, top_k=21):
+    """Rerank documents based on keyword overlap with the claim.
 
-    claim = dspy.InputField(desc="The claim to verify or answer")
-    document = dspy.InputField(desc="The document to score for relevance")
-    relevance_score = dspy.OutputField(desc="Relevance score between 0.0 and 1.0")
-    reasoning = dspy.OutputField(desc="Explanation of why this score was assigned")
+    This function:
+    1. Deduplicates documents by title
+    2. Scores each document by counting overlapping tokens between the claim and document (title + content)
+    3. Returns top_k documents sorted by overlap score
 
+    Args:
+        claim: The claim text to match against
+        documents: List of document strings in format "Title | Content"
+        top_k: Number of top documents to return (default: 21)
 
-class DocumentRelevanceScorer(dspy.Module):
-    """DSPy module that scores document relevance to a claim."""
+    Returns:
+        List of top_k documents with highest overlap scores
+    """
+    import dspy.evaluate
 
-    def __init__(self):
-        super().__init__()
-        self.score = dspy.ChainOfThought(DocumentRelevanceScorerSignature)
+    # Normalize the claim text
+    claim_normalized = dspy.evaluate.normalize_text(claim)
+    claim_tokens = set(claim_normalized.split())
 
-    def forward(self, claim, document):
-        result = self.score(claim=claim, document=document)
-        return dspy.Prediction(
-            relevance_score=result.relevance_score,
-            reasoning=result.reasoning
-        )
+    # Deduplicate documents by title
+    seen_titles = {}
+    for doc in documents:
+        # Extract title (text before " | ")
+        if " | " in doc:
+            title = doc.split(" | ")[0]
+        else:
+            title = doc
+
+        # Keep first occurrence of each unique title
+        title_normalized = dspy.evaluate.normalize_text(title)
+        if title_normalized not in seen_titles:
+            seen_titles[title_normalized] = doc
+
+    # Score each unique document by keyword overlap
+    scored_docs = []
+    for title_normalized, doc in seen_titles.items():
+        # Normalize the entire document text
+        doc_normalized = dspy.evaluate.normalize_text(doc)
+        doc_tokens = set(doc_normalized.split())
+
+        # Count overlapping tokens
+        overlap_count = len(claim_tokens & doc_tokens)
+
+        scored_docs.append({
+            'document': doc,
+            'score': overlap_count
+        })
+
+    # Sort by overlap score (descending) and return top_k
+    scored_docs.sort(key=lambda x: x['score'], reverse=True)
+    return [item['document'] for item in scored_docs[:top_k]]
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -67,22 +97,25 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     ARCHITECTURE
     - Uses query decomposition to generate 3 diverse queries targeting different aspects of the claim
-    - Retrieves 15 documents per query in parallel (total 45 documents)
-    - Scores all 45 documents for relevance to the claim
-    - Reranks documents by relevance score and returns top 21'''
+    - Retrieves 21 documents per query in parallel (total 63 documents)
+    - Deduplicates documents by title to remove redundant entries
+    - Reranks documents using lightweight keyword-based scoring (token overlap between claim and document)
+    - Returns top 21 unique documents with highest overlap scores
+
+    This approach eliminates expensive LLM-based relevance scoring while better capturing documents
+    that mention specific entities from the claim.'''
 
     def __init__(self):
         super().__init__()
-        self.k = 15  # Retrieve 15 documents per query
+        self.k = 21  # Retrieve 21 documents per query
         self.query_decomposer = ClaimQueryDecomposer()
-        self.document_scorer = DocumentRelevanceScorer()
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
     def forward(self, claim):
         # Step 1: Decompose claim into 3 diverse queries
         queries = self.query_decomposer(claim=claim)
 
-        # Step 2: Parallel retrieval - retrieve k=15 documents per query (total 45 documents)
+        # Step 2: Parallel retrieval - retrieve k=21 documents per query (total 63 documents)
         docs_query1 = self.retrieve_k(queries.query1).passages
         docs_query2 = self.retrieve_k(queries.query2).passages
         docs_query3 = self.retrieve_k(queries.query3).passages
@@ -90,27 +123,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Combine all retrieved documents
         all_docs = docs_query1 + docs_query2 + docs_query3
 
-        # Step 3: Score each document for relevance to the claim
-        scored_docs = []
-        for doc in all_docs:
-            score_result = self.document_scorer(claim=claim, document=doc)
-            try:
-                # Try to parse the relevance_score as a float
-                score = float(score_result.relevance_score)
-            except (ValueError, TypeError):
-                # If parsing fails, assign a default score of 0.5
-                score = 0.5
-
-            scored_docs.append({
-                'document': doc,
-                'score': score,
-                'reasoning': score_result.reasoning
-            })
-
-        # Step 4: Rerank documents by relevance score (descending order)
-        scored_docs.sort(key=lambda x: x['score'], reverse=True)
-
-        # Step 5: Return top 21 documents
-        top_21_docs = [item['document'] for item in scored_docs[:21]]
+        # Step 3: Deduplicate and rerank documents using keyword-based overlap scoring
+        top_21_docs = keyword_rerank_documents(claim, all_docs, top_k=21)
 
         return dspy.Prediction(retrieved_docs=top_21_docs)
