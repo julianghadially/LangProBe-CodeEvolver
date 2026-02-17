@@ -41,20 +41,36 @@ class TargetedQueryGeneratorSignature(dspy.Signature):
     rationale = dspy.OutputField(desc="Brief explanation of which gap this query targets")
 
 
+class DocumentRerankerSignature(dspy.Signature):
+    """Score a document's relevance to the claim and specific verification aspects.
+    Evaluate how well the document contributes to verifying the claim based on the verification aspects."""
+
+    claim = dspy.InputField(desc="The factual claim being verified")
+    verification_aspects = dspy.InputField(desc="List of distinct aspects that need to be verified")
+    document_text = dspy.InputField(desc="The document passage to evaluate")
+
+    relevance_score = dspy.OutputField(desc="Relevance score from 0-10, where 0 is completely irrelevant and 10 is highly relevant and directly addresses verification aspects")
+    relevance_rationale = dspy.OutputField(desc="Brief explanation of why this score was assigned and which verification aspects the document addresses")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi-hop retrieval system with coverage-driven query expansion.
+    '''Multi-hop retrieval system with coverage-driven query expansion and reranking.
     Extracts entities from claims, tracks coverage across hops, and generates
-    targeted queries to ensure diverse document retrieval.
+    targeted queries to ensure diverse document retrieval. Uses retrieve-then-rerank
+    pipeline to improve precision.
 
     EVALUATION
-    - Returns exactly 21 documents (7 per hop × 3 hops)
+    - Retrieves 35 documents per hop (105 total raw retrieval)
+    - Reranks each hop's 35 documents and keeps top 7
+    - Returns exactly 21 documents (7 per hop × 3 hops after reranking)
     - Preserves entity-level precision throughout retrieval
     - Explicitly avoids duplicate documents via title tracking'''
 
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.retrieve_k = 35  # Initial retrieval per hop
+        self.final_k = 7      # Final documents per hop after reranking
+        self.retrieve = dspy.Retrieve(k=self.retrieve_k)
 
         # Coverage-driven modules
         self.entity_tracker = dspy.ChainOfThought(ClaimEntityTrackerSignature)
@@ -63,9 +79,56 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.query_generator_hop2 = dspy.ChainOfThought(TargetedQueryGeneratorSignature)
         self.query_generator_hop3 = dspy.ChainOfThought(TargetedQueryGeneratorSignature)
 
+        # Reranking module
+        self.reranker = dspy.ChainOfThought(DocumentRerankerSignature)
+
     def _extract_titles(self, passages: list[str]) -> list[str]:
         """Extract document titles from passages in 'title | content' format"""
         return [passage.split(" | ")[0] for passage in passages]
+
+    def _rerank_documents(self, claim: str, verification_aspects: str, documents: list[str]) -> list[str]:
+        """Rerank documents by relevance score and return top k documents.
+
+        Args:
+            claim: The factual claim being verified
+            verification_aspects: List of aspects that need verification
+            documents: List of document passages to rerank
+
+        Returns:
+            Top k documents after reranking by relevance score
+        """
+        scored_docs = []
+
+        # Batch process all documents for reranking
+        for doc in documents:
+            try:
+                rerank_result = self.reranker(
+                    claim=claim,
+                    verification_aspects=verification_aspects,
+                    document_text=doc
+                )
+
+                # Extract numeric score from relevance_score field
+                score_str = str(rerank_result.relevance_score)
+                # Handle various score formats (e.g., "8", "8.5", "8/10", "Score: 8")
+                import re
+                score_match = re.search(r'(\d+(?:\.\d+)?)', score_str)
+                if score_match:
+                    score = float(score_match.group(1))
+                    # Normalize if score is out of expected 0-10 range
+                    if score > 10:
+                        score = score / 10
+                else:
+                    score = 0.0  # Default to 0 if parsing fails
+
+                scored_docs.append((score, doc))
+            except Exception as e:
+                # If reranking fails for a document, assign low score
+                scored_docs.append((0.0, doc))
+
+        # Sort by score (descending) and take top k
+        scored_docs.sort(key=lambda x: x[0], reverse=True)
+        return [doc for _, doc in scored_docs[:self.final_k]]
 
     def forward(self, claim):
         # INITIALIZATION: Extract verification aspects
@@ -73,12 +136,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         verification_aspects = tracker_output.verification_aspects
         all_retrieved_titles = []
 
-        # HOP 1: Direct claim-based retrieval
-        hop1_docs = self.retrieve_k(claim).passages
+        # HOP 1: Retrieve 35 documents, rerank, keep top 7
+        hop1_docs_raw = self.retrieve(claim).passages
+        hop1_docs = self._rerank_documents(claim, verification_aspects, hop1_docs_raw)
         hop1_titles = self._extract_titles(hop1_docs)
         all_retrieved_titles.extend(hop1_titles)
 
-        # ANALYZE HOP 1 COVERAGE
+        # ANALYZE HOP 1 COVERAGE (using reranked documents)
         coverage1 = self.coverage_analyzer1(
             claim=claim,
             verification_aspects=verification_aspects,
@@ -86,7 +150,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             passages=hop1_docs
         )
 
-        # HOP 2: Coverage-driven query
+        # HOP 2: Coverage-driven query, retrieve 35, rerank, keep top 7
         hop2_query_output = self.query_generator_hop2(
             claim=claim,
             missing_aspects=coverage1.missing_aspects,
@@ -95,11 +159,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             retrieved_titles=all_retrieved_titles
         )
 
-        hop2_docs = self.retrieve_k(hop2_query_output.query).passages
+        hop2_docs_raw = self.retrieve(hop2_query_output.query).passages
+        hop2_docs = self._rerank_documents(claim, verification_aspects, hop2_docs_raw)
         hop2_titles = self._extract_titles(hop2_docs)
         all_retrieved_titles.extend(hop2_titles)
 
-        # ANALYZE HOP 2 COVERAGE
+        # ANALYZE HOP 2 COVERAGE (using reranked documents)
         coverage2 = self.coverage_analyzer2(
             claim=claim,
             verification_aspects=verification_aspects,
@@ -107,7 +172,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             passages=hop2_docs
         )
 
-        # HOP 3: Final gap-filling query
+        # HOP 3: Final gap-filling query, retrieve 35, rerank, keep top 7
         hop3_query_output = self.query_generator_hop3(
             claim=claim,
             missing_aspects=coverage2.missing_aspects,
@@ -116,7 +181,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             retrieved_titles=all_retrieved_titles
         )
 
-        hop3_docs = self.retrieve_k(hop3_query_output.query).passages
+        hop3_docs_raw = self.retrieve(hop3_query_output.query).passages
+        hop3_docs = self._rerank_documents(claim, verification_aspects, hop3_docs_raw)
 
-        # Return all documents (maintains 21-doc contract)
+        # Return exactly 21 documents (7 per hop after reranking)
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
