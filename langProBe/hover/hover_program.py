@@ -32,30 +32,6 @@ class ClaimQueryDecomposer(dspy.Module):
         )
 
 
-class DocumentRelevanceScorerSignature(dspy.Signature):
-    """Score how relevant a document is to answering or verifying the given claim.
-    Provide a relevance score between 0.0 (not relevant) and 1.0 (highly relevant),
-    along with reasoning explaining why this score was assigned."""
-
-    claim = dspy.InputField(desc="The claim to verify or answer")
-    document = dspy.InputField(desc="The document to score for relevance")
-    relevance_score = dspy.OutputField(desc="Relevance score between 0.0 and 1.0")
-    reasoning = dspy.OutputField(desc="Explanation of why this score was assigned")
-
-
-class DocumentRelevanceScorer(dspy.Module):
-    """DSPy module that scores document relevance to a claim."""
-
-    def __init__(self):
-        super().__init__()
-        self.score = dspy.ChainOfThought(DocumentRelevanceScorerSignature)
-
-    def forward(self, claim, document):
-        result = self.score(claim=claim, document=document)
-        return dspy.Prediction(
-            relevance_score=result.relevance_score,
-            reasoning=result.reasoning
-        )
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -67,50 +43,61 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     ARCHITECTURE
     - Uses query decomposition to generate 3 diverse queries targeting different aspects of the claim
-    - Retrieves 15 documents per query in parallel (total 45 documents)
-    - Scores all 45 documents for relevance to the claim
-    - Reranks documents by relevance score and returns top 21'''
+    - Retrieves 25 documents per query in parallel (total 75 documents)
+    - Applies Reciprocal Rank Fusion (RRF) reranking with constant k=60
+    - Deduplicates documents while preserving highest RRF scores
+    - Returns top 21 documents sorted by RRF score'''
 
     def __init__(self):
         super().__init__()
-        self.k = 15  # Retrieve 15 documents per query
+        self.k = 25  # Retrieve 25 documents per query
+        self.rrf_constant = 60  # RRF constant from IR literature
         self.query_decomposer = ClaimQueryDecomposer()
-        self.document_scorer = DocumentRelevanceScorer()
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
     def forward(self, claim):
         # Step 1: Decompose claim into 3 diverse queries
         queries = self.query_decomposer(claim=claim)
 
-        # Step 2: Parallel retrieval - retrieve k=15 documents per query (total 45 documents)
+        # Step 2: Parallel retrieval - retrieve k=25 documents per query (total 75 documents)
         docs_query1 = self.retrieve_k(queries.query1).passages
         docs_query2 = self.retrieve_k(queries.query2).passages
         docs_query3 = self.retrieve_k(queries.query3).passages
 
-        # Combine all retrieved documents
-        all_docs = docs_query1 + docs_query2 + docs_query3
+        # Step 3: Apply Reciprocal Rank Fusion (RRF) reranking
+        # RRF score for each document = sum of 1/(rank + k) across all retrievals where it appears
+        rrf_scores = {}
 
-        # Step 3: Score each document for relevance to the claim
-        scored_docs = []
-        for doc in all_docs:
-            score_result = self.document_scorer(claim=claim, document=doc)
-            try:
-                # Try to parse the relevance_score as a float
-                score = float(score_result.relevance_score)
-            except (ValueError, TypeError):
-                # If parsing fails, assign a default score of 0.5
-                score = 0.5
+        # Process each retrieval list
+        for rank, doc in enumerate(docs_query1):
+            doc_key = doc  # Use the document itself as key
+            rrf_score = 1.0 / (rank + self.rrf_constant)
+            if doc_key in rrf_scores:
+                rrf_scores[doc_key] += rrf_score
+            else:
+                rrf_scores[doc_key] = rrf_score
 
-            scored_docs.append({
-                'document': doc,
-                'score': score,
-                'reasoning': score_result.reasoning
-            })
+        for rank, doc in enumerate(docs_query2):
+            doc_key = doc
+            rrf_score = 1.0 / (rank + self.rrf_constant)
+            if doc_key in rrf_scores:
+                rrf_scores[doc_key] += rrf_score
+            else:
+                rrf_scores[doc_key] = rrf_score
 
-        # Step 4: Rerank documents by relevance score (descending order)
-        scored_docs.sort(key=lambda x: x['score'], reverse=True)
+        for rank, doc in enumerate(docs_query3):
+            doc_key = doc
+            rrf_score = 1.0 / (rank + self.rrf_constant)
+            if doc_key in rrf_scores:
+                rrf_scores[doc_key] += rrf_score
+            else:
+                rrf_scores[doc_key] = rrf_score
+
+        # Step 4: Sort documents by RRF score (descending) and deduplicate
+        # The dictionary already handles deduplication with highest cumulative RRF scores
+        sorted_docs = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
         # Step 5: Return top 21 documents
-        top_21_docs = [item['document'] for item in scored_docs[:21]]
+        top_21_docs = [doc for doc, score in sorted_docs[:21]]
 
         return dspy.Prediction(retrieved_docs=top_21_docs)
