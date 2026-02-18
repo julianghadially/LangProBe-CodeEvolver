@@ -11,8 +11,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.gap_analysis = dspy.ChainOfThought("claim,retrieved_info->missing_info")
+        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1,missing_info->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2,missing_info->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
@@ -24,16 +25,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, passages=hop1_docs
         ).summary  # Summarize top k docs
 
+        # GAP ANALYSIS 1: Identify missing information after hop 1
+        missing_info_1 = self.gap_analysis(
+            claim=claim, retrieved_info=summary_1
+        ).missing_info
+
         # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_query = self.create_query_hop2(
+            claim=claim, summary_1=summary_1, missing_info=missing_info_1
+        ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
         summary_2 = self.summarize2(
             claim=claim, context=summary_1, passages=hop2_docs
         ).summary
 
+        # GAP ANALYSIS 2: Identify missing information after hop 2
+        combined_info = f"{summary_1}\n{summary_2}"
+        missing_info_2 = self.gap_analysis(
+            claim=claim, retrieved_info=combined_info
+        ).missing_info
+
         # HOP 3
         hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
+            claim=claim, summary_1=summary_1, summary_2=summary_2, missing_info=missing_info_2
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
