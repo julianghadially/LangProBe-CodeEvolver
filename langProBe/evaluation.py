@@ -290,6 +290,12 @@ def evaluate_all(
     api_base=None,
     skip_optimizers=True,
 ):
+    # Disable DSPy disk cache to avoid "unable to open database file" under parallel evaluation
+    try:
+        dspy.configure_cache(enable_disk_cache=False, enable_memory_cache=False)
+    except Exception:
+        pass  # older DSPy may not have configure_cache
+
     benchmarks = register_all_benchmarks(benchmarks)
     if missing_mode:
         generate_evaluation_records(file_path)
