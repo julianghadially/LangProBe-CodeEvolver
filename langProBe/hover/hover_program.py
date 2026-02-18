@@ -39,3 +39,42 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_docs = self.retrieve_k(hop3_query).passages
 
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+
+
+class HoverMultiHopPredict(LangProBeDSPyMetaProgram, dspy.Module):
+    """Multi-hop retrieval with Chain-of-Thought verification.
+
+    EVALUATION
+    - This system retrieves documents and performs verification
+    - Returns a label (0 or 1) indicating if claim is supported
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Use existing retrieval pipeline
+        self.retrieval = HoverMultiHop()
+
+        # Add Chain-of-Thought verifier
+        from .hover_cot_verifier import ChainOfThoughtVerifier
+
+        self.verifier = ChainOfThoughtVerifier()
+
+    def forward(self, claim):
+        # STAGE 1: Multi-hop retrieval (existing)
+        retrieval_pred = self.retrieval(claim=claim)
+        retrieved_docs = retrieval_pred.retrieved_docs
+
+        # STAGE 2: Chain-of-Thought verification (NEW)
+        verification_pred = self.verifier(
+            claim=claim, retrieved_docs=retrieved_docs
+        )
+
+        # Return both retrieval results and verification decision
+        return dspy.Prediction(
+            retrieved_docs=retrieved_docs,
+            label=verification_pred.label,
+            verification_decision=verification_pred.verification_decision,
+            facts=verification_pred.facts,
+            reasoning_steps=verification_pred.reasoning_steps,
+            comparisons=verification_pred.comparisons,
+        )

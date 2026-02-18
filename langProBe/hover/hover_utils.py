@@ -23,3 +23,17 @@ def discrete_retrieval_eval(example, pred, trace=None):
         )
     )
     return gold_titles.issubset(found_titles)
+
+
+def label_accuracy_eval(example, pred, trace=None):
+    """Evaluate label prediction accuracy.
+
+    Args:
+        example: Ground truth example with 'label' field
+        pred: Prediction with 'label' field
+        trace: Optional trace for debugging
+
+    Returns:
+        bool: True if predicted label matches ground truth, False otherwise
+    """
+    return example.label == pred.label
