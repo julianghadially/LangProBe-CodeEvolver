@@ -11,29 +11,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.create_query_hop2 = dspy.ChainOfThought("claim,key_facts_1->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,key_facts_1,key_facts_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
-        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
+        self.extract_facts1 = dspy.ChainOfThought("claim,passages->key_facts")
+        self.extract_facts2 = dspy.ChainOfThought("claim,key_facts_1,passages->key_facts")
 
     def forward(self, claim):
         # HOP 1
         hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
+        key_facts_1 = self.extract_facts1(
             claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        ).key_facts  # Extract entities, relationships, and missing information
 
         # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_query = self.create_query_hop2(claim=claim, key_facts_1=key_facts_1).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        key_facts_2 = self.extract_facts2(
+            claim=claim, key_facts_1=key_facts_1, passages=hop2_docs
+        ).key_facts
 
         # HOP 3
         hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
+            claim=claim, key_facts_1=key_facts_1, key_facts_2=key_facts_2
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
