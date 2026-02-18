@@ -11,8 +11,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.entity_extractor = dspy.ChainOfThought("claim->entities")
+        self.create_query_hop2 = dspy.ChainOfThought("claim,entities,summary_1->query")
+        self.create_query_hop3 = dspy.ChainOfThought("claim,entities,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
@@ -24,8 +25,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, passages=hop1_docs
         ).summary  # Summarize top k docs
 
+        # Extract entities after hop 1
+        entities = self.entity_extractor(claim=claim).entities
+
         # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_query = self.create_query_hop2(
+            claim=claim, entities=entities, summary_1=summary_1
+        ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
         summary_2 = self.summarize2(
             claim=claim, context=summary_1, passages=hop2_docs
@@ -33,7 +39,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 3
         hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
+            claim=claim, entities=entities, summary_1=summary_1, summary_2=summary_2
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
