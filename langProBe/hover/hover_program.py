@@ -1,5 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
+from typing import Literal
 
 
 class ExtractEntitiesSignature(dspy.Signature):
@@ -75,6 +76,150 @@ class GapAnalysisModule(dspy.Module):
         self.extract_entities = dspy.ChainOfThought(ExtractEntitiesSignature)
         self.analyze_coverage = dspy.ChainOfThought(AnalyzeCoverageSignature)
         self.generate_gap_query = dspy.ChainOfThought(GenerateGapQuerySignature)
+
+
+class ExtractKeyFactsSignature(dspy.Signature):
+    """
+    Extract key facts from the retrieved documents that are relevant to verifying
+    the claim. Focus on specific factual statements that can support or refute
+    elements of the claim. Each fact should be self-contained and verifiable.
+    """
+
+    claim = dspy.InputField(desc="The claim to verify")
+    passages = dspy.InputField(desc="Retrieved documents/passages to analyze")
+    key_facts: list[str] = dspy.OutputField(
+        desc="List of key facts extracted from the passages that are relevant to the claim. "
+        "Each fact should be specific, factual, and directly relevant to verification."
+    )
+
+
+class IdentifyMissingInfoSignature(dspy.Signature):
+    """
+    Perform gap analysis to identify what information is still missing to fully
+    verify or refute the claim. Compare the claim's assertions with the extracted
+    facts to determine what gaps exist in our evidence.
+    """
+
+    claim = dspy.InputField(desc="The claim to verify")
+    key_facts = dspy.InputField(desc="Key facts extracted from retrieved documents")
+    missing_info: list[str] = dspy.OutputField(
+        desc="List of specific pieces of information that are missing or not adequately "
+        "covered by the extracted facts. Focus on elements mentioned in the claim that "
+        "lack supporting or refuting evidence."
+    )
+    coverage_assessment = dspy.OutputField(
+        desc="Brief assessment of how well the extracted facts cover the claim's assertions"
+    )
+
+
+class ChainFactsSignature(dspy.Signature):
+    """
+    Chain together the extracted facts to form logical connections that relate to
+    the claim. Identify how different facts connect to each other and to specific
+    parts of the claim. Build reasoning chains that lead toward a verification decision.
+    """
+
+    claim = dspy.InputField(desc="The claim to verify")
+    key_facts = dspy.InputField(desc="Key facts extracted from documents")
+    missing_info = dspy.InputField(desc="Information identified as missing")
+    reasoning_chains: list[str] = dspy.OutputField(
+        desc="List of logical reasoning chains connecting the facts. Each chain should "
+        "explain how facts connect to each other and to the claim, building toward "
+        "a verification decision. Include both supporting and refuting connections."
+    )
+
+
+class FinalVerificationSignature(dspy.Signature):
+    """
+    Make a final verification decision based on the extracted facts, gap analysis,
+    and reasoning chains. Determine whether the claim is SUPPORTED or REFUTED by
+    the evidence, and provide a confidence score reflecting the strength of the evidence
+    and the impact of any missing information.
+    """
+
+    claim = dspy.InputField(desc="The claim to verify")
+    key_facts = dspy.InputField(desc="Key facts extracted from documents")
+    missing_info = dspy.InputField(desc="Information identified as missing")
+    reasoning_chains = dspy.InputField(desc="Logical reasoning chains connecting facts")
+    decision: Literal["SUPPORTS", "REFUTES"] = dspy.OutputField(
+        desc="Final verification decision: SUPPORTS if the evidence confirms the claim, "
+        "REFUTES if the evidence contradicts the claim"
+    )
+    confidence_score: float = dspy.OutputField(
+        desc="Confidence score between 0.0 and 1.0 reflecting the strength of the evidence. "
+        "Consider factors like: completeness of evidence, consistency of facts, "
+        "impact of missing information, and strength of reasoning chains."
+    )
+    justification = dspy.OutputField(
+        desc="Clear explanation of the verification decision, referencing specific facts "
+        "and reasoning chains that led to the conclusion"
+    )
+
+
+class ChainOfThoughtVerifier(dspy.Module):
+    """
+    Chain-of-thought reasoning module that processes retrieved documents to verify claims.
+
+    The verifier performs a structured reasoning process:
+    1. Extracts key facts from relevant documents
+    2. Identifies missing information (gap analysis)
+    3. Chains facts together to form logical connections
+    4. Outputs final verification decision (SUPPORTS/REFUTES) with confidence score
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.extract_facts = dspy.ChainOfThought(ExtractKeyFactsSignature)
+        self.identify_gaps = dspy.ChainOfThought(IdentifyMissingInfoSignature)
+        self.chain_facts = dspy.ChainOfThought(ChainFactsSignature)
+        self.final_verification = dspy.ChainOfThought(FinalVerificationSignature)
+
+    def forward(self, claim, passages):
+        """
+        Verify a claim using chain-of-thought reasoning over retrieved passages.
+
+        Args:
+            claim: The claim to verify
+            passages: List of retrieved document passages
+
+        Returns:
+            dspy.Prediction with decision, confidence_score, justification, and intermediate reasoning
+        """
+        # Step 1: Extract key facts from passages
+        facts_result = self.extract_facts(claim=claim, passages=passages)
+        key_facts = facts_result.key_facts
+
+        # Step 2: Identify missing information (gap analysis)
+        gaps_result = self.identify_gaps(claim=claim, key_facts=key_facts)
+        missing_info = gaps_result.missing_info
+        coverage_assessment = gaps_result.coverage_assessment
+
+        # Step 3: Chain facts together to form logical connections
+        chains_result = self.chain_facts(
+            claim=claim,
+            key_facts=key_facts,
+            missing_info=missing_info
+        )
+        reasoning_chains = chains_result.reasoning_chains
+
+        # Step 4: Make final verification decision
+        verification_result = self.final_verification(
+            claim=claim,
+            key_facts=key_facts,
+            missing_info=missing_info,
+            reasoning_chains=reasoning_chains
+        )
+
+        # Return comprehensive prediction with all reasoning steps
+        return dspy.Prediction(
+            decision=verification_result.decision,
+            confidence_score=verification_result.confidence_score,
+            justification=verification_result.justification,
+            key_facts=key_facts,
+            missing_info=missing_info,
+            coverage_assessment=coverage_assessment,
+            reasoning_chains=reasoning_chains
+        )
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -162,3 +307,61 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_docs = self.retrieve_k(hop3_query).passages
 
         return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+
+
+class HoverProgram(LangProBeDSPyMetaProgram, dspy.Module):
+    """
+    Complete Hover program that retrieves documents AND verifies claims using
+    chain-of-thought reasoning.
+
+    EVALUATION
+    - This system retrieves relevant documents and then verifies the claim
+    - Returns verification decision (SUPPORTS/REFUTES) with confidence score
+    - Uses explicit reasoning that connects supporting facts before classification
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Reuse the existing multi-hop retrieval module
+        self.retriever = HoverMultiHop()
+        # Add chain-of-thought verifier
+        self.verifier = ChainOfThoughtVerifier()
+
+    def forward(self, claim):
+        """
+        Retrieve documents and verify the claim with chain-of-thought reasoning.
+
+        Args:
+            claim: The claim to verify
+
+        Returns:
+            dspy.Prediction with:
+                - retrieved_docs: Documents retrieved (for backward compatibility)
+                - decision: SUPPORTS or REFUTES
+                - confidence_score: Float between 0.0 and 1.0
+                - justification: Explanation of the decision
+                - key_facts: Facts extracted from documents
+                - missing_info: Gap analysis results
+                - reasoning_chains: Logical connections between facts
+        """
+        # Step 1: Retrieve relevant documents using multi-hop retrieval
+        retrieval_result = self.retriever(claim=claim)
+        retrieved_docs = retrieval_result.retrieved_docs
+
+        # Step 2: Verify the claim using chain-of-thought reasoning
+        verification_result = self.verifier(
+            claim=claim,
+            passages=retrieved_docs
+        )
+
+        # Return combined prediction with both retrieval and verification results
+        return dspy.Prediction(
+            retrieved_docs=retrieved_docs,
+            decision=verification_result.decision,
+            confidence_score=verification_result.confidence_score,
+            justification=verification_result.justification,
+            key_facts=verification_result.key_facts,
+            missing_info=verification_result.missing_info,
+            coverage_assessment=verification_result.coverage_assessment,
+            reasoning_chains=verification_result.reasoning_chains
+        )
