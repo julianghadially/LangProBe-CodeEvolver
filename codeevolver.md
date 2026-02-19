@@ -3,20 +3,30 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses Query Expansion with Semantic Clustering to find relevant supporting documents for a given claim, combining diverse retrieval strategies with intelligent post-retrieval filtering.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
-- **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
+- **HoverMultiHopPipeline**: The top-level module implementing query expansion, LLM-based document scoring, and semantic clustering
+- **EntityExtractor**: DSPy signature for extracting named entities and generating entity-focused queries
+- **RelationshipQueryGenerator**: DSPy signature for generating relationship-focused queries
+- **FactVerificationQueryGenerator**: DSPy signature for generating fact-verification queries
+- **DocumentScorer**: DSPy signature for scoring document relevance with reasoning (0-10 scale)
+- **HoverMultiHop**: The original 3-hop retrieval program (kept for reference but not used)
+- **hover_data.py**: Data loading and preprocessing from the HoVer dataset
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Generate three complementary queries:
+   - Entity-focused: Extract named entities and create query about them
+   - Relationship-focused: Target connections between entities
+   - Fact-verification: Focus on specific claims to verify
+3. Retrieve k=30 documents per query (90 total), then deduplicate
+4. Score all unique documents using LLM-based DocumentScorer (0-10 scale with reasoning)
+5. Select top 35 highest-scored documents
+6. Cluster top 35 into 3 semantic clusters using sentence embeddings (all-MiniLM-L6-v2)
+7. Select final 21 documents ensuring at least 2 from each cluster for diversity
+8. Return 21 documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
