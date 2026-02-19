@@ -3,20 +3,24 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a parallel entity-specific document retrieval system for fact-checking claims from the HoVer dataset. The system identifies named entities in claims and performs parallel retrieval for each entity, then uses relevance scoring to select the most valuable documents. This architecture eliminates the summarization bottleneck that loses secondary entity information and directly targets all entities in multi-entity comparison claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline implementing parallel entity-specific retrieval with relevance scoring
+- **EntityIdentificationSignature**: DSPy signature that extracts 2-4 distinct named entities from claims
+- **DocumentRelevanceScorer**: DSPy module that scores documents (0-10) based on relevance for claim verification
+- **HoverMultiHop**: (Legacy) The original 3-hop retrieval program with summarization
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Extract 2-4 named entities (people, places, organizations, works) from the claim using EntityIdentificationSignature
+3. Perform parallel entity-specific retrieval: retrieve k=10 documents for each entity (up to 3 entities max, respecting 3-search constraint)
+4. Score each retrieved document (0-10) using DocumentRelevanceScorer based on claim verification relevance
+5. Sort documents by relevance score in descending order
+6. Select top 21 documents with diversity constraint: maximum 8 documents per entity to ensure balanced coverage
+7. Return selected 21 documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
