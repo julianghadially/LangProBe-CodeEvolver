@@ -3,20 +3,22 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses a Cross-Attention Multi-Path Retrieval architecture to find relevant supporting documents for a given claim, leveraging ColBERTv2 retrieval with aspect-based query specialization and attention-based fusion to avoid lossy sequential summarization.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The main pipeline implementing Cross-Attention Multi-Path Retrieval with aspect extraction, parallel specialized searches, and cross-attention reranking
+- **ClaimAspectExtractor**: DSPy signature that analyzes claims and extracts 3 distinct retrieval perspectives (primary entities, relationships/connections, contextual/temporal info)
+- **AspectQueryGenerator**: DSPy signature that generates specialized search queries for each aspect
+- **CrossAttentionReranker**: DSPy signature that uses chain-of-thought to select 21 documents from 75 candidates, considering relevance, diversity across aspects, and cross-document coherence
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Aspect Extraction: Use ClaimAspectExtractor to identify 3 retrieval perspectives (entities, relationships, context)
+3. Parallel Retrieval: For each aspect, generate specialized query via AspectQueryGenerator and retrieve k=25 documents (total 75 docs)
+4. Cross-Attention Reranking: CrossAttentionReranker analyzes all 75 documents grouped by aspect and selects exactly 21 documents that provide complementary evidence
+5. Return selected 21 documents as retrieved_docs, ensuring diversity and coherence
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
