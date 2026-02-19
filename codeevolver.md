@@ -3,20 +3,25 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a diversity-enforced multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries, followed by Maximal Marginal Relevance (MMR) reranking to ensure both relevance and diversity in the final document set.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
+- **HoverMultiHopPipeline**: The top-level pipeline that orchestrates retrieval and reranking. Initializes the ColBERTv2 retriever, delegates 3-hop retrieval to HoverMultiHop, then applies MMR reranking to select the final 21 documents
+- **MMRReranker**: A DSPy module implementing Maximal Marginal Relevance reranking to balance relevance to the claim with diversity from already-selected documents. Uses the MMR formula: score = λ * relevance(doc, claim) - (1-λ) * max_similarity(doc, selected_docs), where λ=0.7
 - **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Hop 1: Retrieve k=35 documents directly from claim, summarize results
+3. Hop 2: Generate new query using claim + summary_1, retrieve k=35 documents, create summary_2
+4. Hop 3: Generate query using claim + both summaries, retrieve final k=35 documents
+5. Total of 105 documents retrieved (3 hops × 35 docs each)
+6. MMR Reranking: Apply Maximal Marginal Relevance to iteratively select 21 documents that maximize both relevance to the claim and diversity from previously selected documents
+7. Return final 21 reranked documents as retrieved_docs
+
+**MMR Implementation**: The MMRReranker uses Jaccard similarity (token overlap) to compute semantic similarity between documents and the claim. For each iteration, it selects the document with the highest MMR score, balancing relevance (similarity to claim) against redundancy (similarity to already-selected documents). The λ=0.7 parameter gives more weight to relevance while still enforcing diversity.
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
