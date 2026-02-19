@@ -3,20 +3,21 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses a bridge-entity focused three-query retrieval strategy to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to explicitly identify and target bridge entities that connect primary and secondary entities in multi-hop claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline that implements the bridge-entity focused three-query retrieval strategy. It initializes the ColBERTv2 retriever and uses BridgeEntityQueryGeneration to create three targeted queries.
+- **BridgeEntityQueryGeneration**: A DSPy signature that uses chain-of-thought reasoning to generate three queries: (1) primary entity query, (2) bridge entity query (for connecting elements like films, locations, works), and (3) secondary/attribute entity query
+- **HoverMultiHop**: The legacy core DSPy program implementing the 3-hop retrieval logic with summarization (not currently used)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Query Generation: Use BridgeEntityQueryGeneration with chain-of-thought to create three targeted queries (primary, bridge, secondary entities)
+3. Document Retrieval: Retrieve k=30 documents per query (90 total documents)
+4. Deduplication & Reranking: Deduplicate documents and apply frequency-based reranking where documents appearing in multiple query results are ranked higher
+5. Return top 21 documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
