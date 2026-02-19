@@ -3,20 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses entity-based retrieval with BM25-style lexical reranking to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and entity extraction to focus on documents containing specific entities and terminology mentioned in the claim.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and implements entity-based retrieval with lexical reranking
+- **EntityExtractionSignature**: DSPy signature for extracting 4-6 named entities (people, places, works, events) from claims
+- **HoverMultiHop**: The original DSPy program implementing the 3-hop retrieval logic with summarization (kept for reference but not used in current implementation)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Entity Extraction: Extract 4-6 named entities from the claim using EntityExtractionSignature
+3. Query Generation: Use the first 3 entities as simple direct queries (entity name or 2-3 word phrases)
+4. Retrieval: Retrieve k=100 documents per entity query (maximum 3 queries total)
+5. Deduplication: Remove duplicate documents from the combined retrieval results
+6. Lexical Reranking: Score all unique documents using n-gram matching (unigrams, bigrams, trigrams) with term rarity weighting (IDF-like scoring)
+7. Selection: Return top 21 documents with highest lexical overlap scores as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
