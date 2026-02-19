@@ -3,20 +3,22 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses a focused retrieval strategy with Reciprocal Rank Fusion (RRF) to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and multiple query perspectives to maximize both recall and precision.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level module that implements a three-query focused retrieval strategy with RRF reranking. It generates three distinct, complementary queries (full claim, subject-focused, relation-focused) using the EntityQueryGenerator signature, retrieves k=50 documents for each query, and applies RRF to select the top 21 documents.
+- **EntityQueryGenerator**: A DSPy signature that generates three distinct queries from a claim: (1) full claim query, (2) subject-focused query extracting main entities, (3) relation-focused query targeting connecting concepts.
+- **HoverMultiHop**: The original core DSPy program implementing 3-hop retrieval logic with summarization (currently not used)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. EntityQueryGenerator creates three distinct queries: full claim, subject-focused, and relation-focused
+3. For each query, retrieve k=50 documents using dspy.Retrieve
+4. Apply Reciprocal Rank Fusion (RRF) with formula: score = sum(1/(60 + rank_in_query_i)) across all three result sets
+5. Sort documents by RRF score and select top 21 unique documents
+6. Return the top 21 documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
