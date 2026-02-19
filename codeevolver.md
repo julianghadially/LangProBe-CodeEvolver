@@ -3,20 +3,27 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a coverage-tracking multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever with explicit coverage analysis at each step to identify and target gaps in evidence rather than following associative links.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline that implements the complete coverage-tracking retrieval architecture with integrated coverage analysis, targeted query generation, and coverage-based reranking
+- **CoverageAnalysisSignature**: DSPy signature that analyzes retrieved passages to identify which claim aspects are covered and which remain uncovered
+- **TargetedQuerySignature**: DSPy signature that generates search queries explicitly focused on uncovered aspects
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Hop 1: Retrieve k=10 documents directly from claim using ColBERTv2
+3. Coverage Analysis 1: Identify covered entities and uncovered aspects from the 10 documents
+4. Hop 2: Generate targeted query focusing on uncovered_aspects, retrieve k=10 more documents
+5. Coverage Analysis 2: Analyze all 20 documents to identify remaining uncovered aspects
+6. Hop 3: Generate highly specific query targeting remaining gaps, retrieve k=10 documents (30 total)
+7. Coverage-based reranking: Score all 30 documents by how well they address uncovered aspects using keyword-based heuristics
+8. Deduplication: Remove duplicate documents by exact title match, keeping first occurrence
+9. Return top 21 unique, reranked documents as retrieved_docs
+
+**Coverage-Tracking Architecture**: The system explicitly tracks what aspects of the claim are covered vs uncovered at each hop. Each subsequent retrieval hop generates queries that target the specific gaps identified by coverage analysis, ensuring comprehensive evidence gathering rather than redundant retrieval. The final reranking step prioritizes documents that address previously uncovered aspects, maximizing coverage in the final 21-document output.
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
