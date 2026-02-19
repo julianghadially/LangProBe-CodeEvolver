@@ -7,16 +7,17 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 **Key Modules**:
 - **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
-- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
+- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops using a diversified query strategy to ensure better coverage across entity types, locations, and connecting facts.
+- **DiverseQueryGenerator**: DSPy signature that generates 3 diverse queries targeting (1) entities/people, (2) locations/places, and (3) events/works/connections. Takes the claim and previously retrieved document titles to avoid redundancy.
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
+2. Hop 1: Retrieve k=7 documents directly from claim
+3. Hop 2: Generate 2 diverse queries (entity and location) using claim + hop1 titles, retrieve k=4 per query (8 docs total)
+4. Hop 3: Generate 2 diverse queries (entity and connection) using claim + hop1+hop2 titles, retrieve k=3 per query (6 docs total)
+5. Return combined 21 documents (7+8+6 hops)
 6. Evaluation compares retrieved document titles against ground truth supporting_facts
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
