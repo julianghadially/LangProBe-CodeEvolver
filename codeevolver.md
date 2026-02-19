@@ -3,20 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever with diversity-aware reranking and chain-of-thought reasoning to progressively refine queries.
 
 **Key Modules**:
 - **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization and diversity reranking
+- **DiversityReranker**: A DSPy module that performs two-phase retrieval: over-retrieves k=50 documents, clusters them into semantic groups using sentence embeddings, and selects the best document from each of 7 clusters to ensure diverse, non-redundant results
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Hop 1: Over-retrieve k=50 documents, apply diversity reranking to select 7 diverse documents, summarize results
+3. Hop 2: Generate new query using claim + summary_1, over-retrieve k=50 documents, rerank to 7 diverse documents, create summary_2
+4. Hop 3: Generate query using claim + both summaries, over-retrieve k=50 documents, rerank to final 7 diverse documents
+5. Return all 21 documents (3 hops × 7 diverse docs each) as retrieved_docs
+
+**Diversity Reranking**: Each hop uses a two-phase retrieval approach: (1) Over-retrieve 50 documents using ColBERTv2, (2) Use sentence-transformers (all-MiniLM-L6-v2) to generate embeddings and cluster documents with KMeans into 7 semantic groups, (3) Select the highest-scoring document from each cluster based on original ColBERT scores. This ensures the final 21 documents cover diverse topics relevant to the multi-hop claim rather than redundant near-duplicates.
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
