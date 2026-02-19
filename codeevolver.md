@@ -3,20 +3,25 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a title-aware hybrid retrieval system for fact-checking claims from the HoVer dataset. The system uses a combination of semantic search with ColBERTv2 and explicit entity-title matching to find relevant supporting documents, leveraging both retrieval strategies to maximize recall of key documents.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level module implementing a title-aware hybrid retrieval strategy with entity extraction, multi-query search, deduplication, and intelligent reranking
+- **EntityTitleExtractor**: DSPy signature for LM-based extraction of potential Wikipedia article titles from claims
+- **HoverMultiHop**: The original core DSPy program implementing 3-hop retrieval logic (now unused but kept for compatibility)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Extract entity titles from claim using EntityTitleExtractor (LM identifies proper nouns, names, specific entities)
+3. Execute three parallel searches (k=50 each):
+   - Search 1: Original claim as query
+   - Search 2: Reformulated query with quoted entity titles (e.g., '"Leo Colovini" OR "Cartagena board game"')
+   - Search 3: Gap-focused query asking what additional entities/connections are needed
+4. Deduplicate all results by document title
+5. Apply lightweight reranking: prioritize documents with title fuzzy-match scores ≥85 to extracted entities, followed by ColBERT relevance
+6. Select top 21 documents and return as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
