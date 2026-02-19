@@ -6,17 +6,25 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 **Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
+- **HoverMultiHopPipeline**: Top-level wrapper implementing a two-stage sentence-level retrieval architecture. Initializes ColBERTv2 retrieval model, delegates query generation to HoverMultiHop, and performs sentence extraction and re-ranking. Serves as the evaluation entry point.
+- **SentenceRelevanceScorer**: DSPy module that uses LLM to extract and score the 2-3 most relevant sentences from each retrieved document, outputting a relevance score (0.0-1.0) and the best sentences.
 - **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
+2. **Stage 1 - Broad Retrieval**: Perform 3-hop retrieval with k=50 documents per query:
+   - Hop 1: Retrieve k=50 documents directly from claim, generate summary from top 7
+   - Hop 2: Generate new query from claim + summary_1, retrieve k=50 more docs, generate summary_2 from top 7
+   - Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=50 final docs
+   - Combine all retrieved documents (up to 150 total)
+3. **Stage 2 - Sentence Extraction & Re-ranking**: For each of the 150 documents:
+   - Extract document title and text
+   - Use SentenceRelevanceScorer to identify 2-3 most relevant sentences and assign relevance score
+   - Format as "title | extracted_sentences"
+4. Sort all documents by relevance score (descending) and select top 21
+5. Return top 21 document-sentence pairs as final retrieved_docs
 6. Evaluation compares retrieved document titles against ground truth supporting_facts
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
