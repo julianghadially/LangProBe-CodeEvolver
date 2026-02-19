@@ -3,20 +3,26 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops with deduplication and coverage-based reranking to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and targeted query generation strategies.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline that implements a three-hop retrieval strategy with deduplication and coverage-based reranking. Contains three DSPy Signature classes (EntityQueryGenerator, GapAnalysis, KeyTermExtractor) as sub-modules used in the forward() method.
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. **Hop 1**: Generate 2-3 entity-focused queries from the claim using EntityQueryGenerator, retrieve k=50 documents per query, deduplicate by title
+3. **Hop 2**: Analyze retrieved documents using GapAnalysis to identify missing entities/concepts mentioned in the claim, generate 1-2 gap-filling queries, retrieve k=30 documents per query, deduplicate by title
+4. **Hop 3**: Extract still-missing key terms using KeyTermExtractor, perform final targeted retrieval with k=20 documents, deduplicate by title
+5. **Coverage-based reranking**: Score each unique document by counting how many claim entities/concepts it mentions, select top 21 documents by coverage score
+6. Return final 21 documents as retrieved_docs
+
+**Key Features**:
+- Entity extraction and coverage scoring to prioritize documents mentioning multiple claim concepts
+- Iterative gap-filling strategy to ensure comprehensive coverage
+- Title-based deduplication after each hop to eliminate redundancy
+- Progressive retrieval with decreasing k values (50→30→20) for efficiency
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
