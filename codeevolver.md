@@ -3,20 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is an entity-based document retrieval system with reranking for fact-checking claims from the HoVer dataset. The system extracts key entities from claims, performs targeted retrieval for each entity, deduplicates results, and reranks documents to return the top 21 most relevant documents using a ColBERTv2 retriever.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level module implementing entity extraction, query generation, retrieval, and reranking
+  - **EntityExtractor**: DSPy signature that extracts 3-5 key entities/concepts from the claim
+  - **QueryFromEntity**: DSPy signature that generates targeted search queries for each entity
+  - **DocumentReranker**: DSPy signature that scores document relevance (1-10 scale)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Extract 3-5 key entities/concepts from claim using EntityExtractor
+3. For each entity: generate targeted query using QueryFromEntity, retrieve k=5 documents (total: 15-25 raw documents)
+4. Deduplicate combined results to create unique document set
+5. Rerank all unique documents using DocumentReranker (scores 1-10)
+6. Return top 21 highest-scored documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
