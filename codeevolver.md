@@ -3,20 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a question decomposition-based document retrieval system for fact-checking claims from the HoVer dataset. The system decomposes claims into atomic sub-questions, performs targeted retrieval for each sub-question, and uses coverage-based scoring to select the most relevant documents that answer all sub-questions.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level module implementing the question decomposition and coverage-based retrieval architecture
+- **QuestionDecomposer**: DSPy signature that decomposes a claim into up to 3 atomic sub-questions
+- **DocumentScorer**: DSPy signature that scores documents based on their relevance to answering all sub-questions
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. QuestionDecomposer (using ChainOfThought) decomposes claim into up to 3 atomic sub-questions
+3. For each sub-question, retrieve k=30 documents using ColBERTv2 (max 3 searches, respecting 3-search constraint)
+4. Deduplicate all retrieved documents to create a unique document pool
+5. DocumentScorer (using ChainOfThought) evaluates each unique document for coverage of all sub-questions, assigning a relevance score (0.0-1.0)
+6. Sort documents by aggregate relevance scores in descending order
+7. Return top 21 highest-scoring documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
