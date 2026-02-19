@@ -3,21 +3,27 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops.
+**Purpose**: This program implements a parallel multi-perspective multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops with diverse query strategies.
 
 **Key Modules**:
 - **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
-- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
+- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 retrieval hops. Hop 1 uses direct retrieval, while Hops 2 and 3 use parallel multi-perspective query generation (entity-based, contrastive, and relational) to explore diverse semantic directions. Includes novelty-based deduplication to maximize diversity.
+- **Query Signature Classes**: Three specialized DSPy signatures for diverse query generation:
+  - `EntityBasedQuery`: Focuses on extracting and querying named entities (people, places, organizations)
+  - `ContrastiveQuery`: Focuses on what's missing, contradictory, or needs verification
+  - `RelationalQuery`: Focuses on relationships and connections between concepts
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
+2. Hop 1: Retrieve k=7 documents directly from claim, generate summary_1
+3. Hop 2: Generate 3 diverse queries in parallel (entity, contrastive, relational) using claim + summary_1. Retrieve k=10 docs per query (30 total). Use novelty scoring to select top 7 most diverse docs that differ from hop 1. Generate summary_2.
+4. Hop 3: Generate 3 diverse queries in parallel with updated context (claim + summary_1 + summary_2). Retrieve k=10 docs per query (30 total). Use novelty scoring to select top 7 most diverse docs from hops 1+2.
+5. Return combined 21 documents (7 from each hop)
 6. Evaluation compares retrieved document titles against ground truth supporting_facts
+
+**Novelty-Based Selection**: Each hop's document selection uses a scoring mechanism that combines title uniqueness (70% weight) and content diversity (30% weight) to maximize exploration of different information sources while avoiding redundancy.
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
 
