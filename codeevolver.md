@@ -3,21 +3,28 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops.
+**Purpose**: This program implements an entity-bridge multi-hop document retrieval system for the HOVER dataset that verifies factual claims by identifying named entities in retrieved documents and using bridge entities to discover connections between multi-hop facts.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
-- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
+- **HoverMultiHopPipeline**: Core pipeline implementing entity-bridge retrieval architecture. Retrieves k=50 documents per hop (150 total), extracts named entities, identifies bridge entities that connect information, generates targeted queries, and applies LLM-based listwise reranking to select final 21 documents. Serves as the evaluation entry point.
+- **ExtractEntities**: DSPy signature that extracts named entities (people, places, organizations, dates, events) from retrieved document passages with their types.
+- **IdentifyBridgeEntities**: DSPy signature that analyzes claim and extracted entities to identify 3-5 bridge entities that likely connect to missing information, ranked by importance.
+- **GenerateBridgedQuery**: DSPy signature that creates targeted search queries based on bridge entities and claim context to explore entity connections.
+- **RerankDocuments**: DSPy signature that reranks all 150 retrieved documents to select top 21, prioritizing documents with multiple claim-relevant entities and entity connections.
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
-6. Evaluation compares retrieved document titles against ground truth supporting_facts
+2. Hop 1: Retrieve k=50 documents directly from claim, extract entities from passages
+3. Identify bridge entities that likely connect to missing information (entities mentioned but not fully explored)
+4. Hop 2: Generate targeted query for top bridge entity, retrieve k=50 more docs, extract entities
+5. Combine entities and identify new bridge entities from accumulated information
+6. Hop 3: Generate targeted query for next most promising bridge entity, retrieve k=50 final docs, extract entities
+7. Combine all 150 retrieved documents and extracted entities
+8. Apply LLM-based listwise reranking across all documents to select final 21, prioritizing documents containing multiple claim-relevant entities and entity connections
+9. Return final 21 documents
+10. Evaluation compares retrieved document titles against ground truth supporting_facts
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
 
