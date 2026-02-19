@@ -3,21 +3,26 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: HoverMultiHopPipeline is a multi-hop document retrieval system that retrieves relevant supporting documents for a given claim using iterative retrieval and summarization steps. The system is evaluated on its ability to retrieve all gold-standard documents that support a claim.
+**Purpose**: HoverMultiHopPipeline is a multi-hop document retrieval system that retrieves relevant supporting documents for a given claim using a parallel diverse query expansion architecture with semantic deduplication. The system is evaluated on its ability to retrieve all gold-standard documents that support a claim.
 
 **Key Modules**:
 1. **HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level wrapper that initializes a ColBERTv2 retrieval model and orchestrates the HoverMultiHop program execution with the retrieval context.
 
-2. **HoverMultiHop** (`hover_program.py`): Core multi-hop retrieval logic implementing a 3-hop strategy. Each hop retrieves k=7 documents, uses ChainOfThought to generate summaries and subsequent queries, building upon previous hop results.
+2. **HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 2-stage parallel approach with 3 total retrievals (k=15 each). Uses three custom DSPy Signatures:
+   - **ParallelQueryGenerator**: Generates 3 diverse queries targeting different semantic aspects (entities/actors, relationships/actions, temporal/contextual details)
+   - **CoverageAnalyzer**: Analyzes claim and current documents to identify 2 distinct missing information angles for adaptive expansion
+   - **UtilityReranker**: Scores and ranks documents by relevance to select top 21 unique documents
 
 3. **Data Module** (`hover_data.py`): Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples with claims and supporting facts.
 
 4. **Evaluation Metric** (`hover_utils.py`): The `discrete_retrieval_eval` function checks if all gold supporting document titles are present in the retrieved documents (maximum 21 documents).
 
-**Data Flow**: 
-Claim → Hop1 retrieval → Summarize → Generate Hop2 query → Hop2 retrieval → Summarize → Generate Hop3 query → Hop3 retrieval → Concatenate all documents (21 total) → Evaluate against gold supporting facts using subset matching.
+**Data Flow**:
+Claim → **Stage 1**: Generate 3 diverse queries (1 LLM call), retrieve k=15 docs for first query → Track unique docs by title → **Stage 2**: Analyze coverage gaps, generate 2 adaptive queries, retrieve k=15 docs for each (2 searches) → **Stage 3**: Deduplicate all docs by title, rerank by utility score if >21 docs, select top 21 → Evaluate against gold supporting facts using subset matching.
 
 **Metric**: Binary success metric that returns True if all gold-standard supporting document titles are found within the top 21 retrieved documents.
+
+**Key Innovation**: Parallel diverse query generation maximizes coverage upfront (rather than sequential reaction), semantic deduplication eliminates redundancy, and utility-based reranking optimizes the final 21-document selection. Uses exactly 3 retrievals as constrained.
 
 ## DSPy Patterns and Guidelines
 
