@@ -3,19 +3,22 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: HoverMultiHopPipeline is a multi-hop document retrieval system that retrieves relevant supporting documents for a given claim using iterative retrieval and summarization steps. The system is evaluated on its ability to retrieve all gold-standard documents that support a claim.
+**Purpose**: HoverMultiHopPipeline is an evolutionary query-based document retrieval system that retrieves relevant supporting documents for a given claim using a 3-stage approach: query mutation generation, fitness-based evolution, and reranked retrieval. The system is evaluated on its ability to retrieve all gold-standard documents that support a claim.
 
 **Key Modules**:
 1. **HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level wrapper that initializes a ColBERTv2 retrieval model and orchestrates the HoverMultiHop program execution with the retrieval context.
 
-2. **HoverMultiHop** (`hover_program.py`): Core multi-hop retrieval logic implementing a 3-hop strategy. Each hop retrieves k=7 documents, uses ChainOfThought to generate summaries and subsequent queries, building upon previous hop results.
+2. **HoverMultiHop** (`hover_program.py`): Core evolutionary retrieval logic implementing a 3-stage strategy:
+   - **Stage 1 - Query Mutation**: Generates 4 diverse query mutations using different strategies (entity-focused, temporal-focused, causal-focused, relationship-focused). Each mutation retrieves k=15 documents.
+   - **Stage 2 - Fitness Evaluation & Evolution**: Scores each mutation based on diversity, relevance, and coverage. Selects top 2 queries and performs crossover to generate an offspring query combining best features.
+   - **Stage 3 - Final Retrieval with Reranking**: Uses offspring query to retrieve k=63 documents, then reranks them to return top 21 most relevant.
 
 3. **Data Module** (`hover_data.py`): Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples with claims and supporting facts.
 
 4. **Evaluation Metric** (`hover_utils.py`): The `discrete_retrieval_eval` function checks if all gold supporting document titles are present in the retrieved documents (maximum 21 documents).
 
-**Data Flow**: 
-Claim → Hop1 retrieval → Summarize → Generate Hop2 query → Hop2 retrieval → Summarize → Generate Hop3 query → Hop3 retrieval → Concatenate all documents (21 total) → Evaluate against gold supporting facts using subset matching.
+**Data Flow**:
+Claim → Generate 4 query mutations (entity/temporal/causal/relationship) → Retrieve 15 docs per mutation → Score fitness of each mutation → Select top 2 queries → Crossover to create offspring query → Retrieve 63 docs with offspring → Rerank to top 21 → Evaluate against gold supporting facts using subset matching.
 
 **Metric**: Binary success metric that returns True if all gold-standard supporting document titles are found within the top 21 retrieved documents.
 
