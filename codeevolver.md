@@ -3,21 +3,24 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops.
+**Purpose**: This program implements a gap-aware multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops with LLM-based gap analysis and reranking.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
-- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
+- **HoverMultiHopPipeline**: Top-level pipeline that implements gap-aware retrieval with LLM-based reranking. Initializes the ColBERTv2 retrieval model and contains the full retrieval logic directly in its forward() method. Serves as the evaluation entry point.
+- **GapAnalysis**: DSPy signature for identifying missing information after each retrieval hop, asking the LLM to identify missing entities, relationships, or facts needed to verify the claim.
+- **GapAwareQueryGeneration**: DSPy signature for generating search queries based on the claim, current summary, and identified information gaps.
+- **DocumentReranker**: DSPy signature for scoring and reranking all retrieved documents based on relevance to the claim.
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
-6. Evaluation compares retrieved document titles against ground truth supporting_facts
+2. Hop 1: Retrieve k=20 documents directly from claim, generate summary, analyze gaps in coverage
+3. Hop 2: Generate gap-aware query from claim + summary_1 + missing_information_1, retrieve k=20 more docs, generate summary_2, analyze remaining gaps
+4. Hop 3: Generate gap-aware query from claim + summary_2 + missing_information_2, retrieve k=20 final docs
+5. Rerank all 60 documents using LLM-based DocumentReranker to select top 21 most relevant
+6. Return top 21 reranked documents
+7. Evaluation compares retrieved document titles against ground truth supporting_facts
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
 
