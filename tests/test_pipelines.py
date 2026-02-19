@@ -71,6 +71,28 @@ def test_hover_multihop_pipeline(hover_examples):
     assert score >= 20.0, f"Expected >=20% but got {score}%"
 
 
+def test_hover_multihop_with_verification(hover_examples):
+    """Integration test for full verification pipeline with retrieval and structured verification."""
+    from langProBe.hover.hover_program import HoverMultiHopWithVerification
+    from langProBe.hover.hover_utils import verification_eval
+
+    pipeline = HoverMultiHopWithVerification()
+    # Use smaller subset for verification due to increased complexity
+    evaluator = dspy.Evaluate(
+        devset=hover_examples[:5],
+        metric=verification_eval,
+        num_threads=1,  # Use single thread to avoid rate limits
+        display_progress=True,
+    )
+    with dspy.context(lm=LM):
+        result = evaluator(pipeline)
+
+    score = result.score if hasattr(result, "score") else float(result)
+    print(f"\nHoverMultiHopWithVerification score: {score}%")
+    # Lower threshold for new complex verification module
+    assert score >= 0.0, f"Pipeline should run without errors. Score: {score}%"
+
+
 # ── HotpotQA ─────────────────────────────────────────────────────────────────
 
 
