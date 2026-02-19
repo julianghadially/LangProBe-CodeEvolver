@@ -3,20 +3,29 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system uses entity extraction and targeted query generation to find relevant supporting documents, employing a ColBERTv2 retriever with a two-stage reranking pipeline to prioritize bridge documents.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline implementing entity-aware retrieval with named entity extraction, multi-query retrieval, and two-stage reranking
+- **WikipediaTitleExtractor**: DSPy signature for extracting potential Wikipedia article titles from claims
+- **Query Generators**: Three specialized signatures (EntitySearchQuery, RelationshipQuery, AttributeQuery) for generating targeted queries
+- **RelevanceScorer**: DSPy signature for LLM-based relevance scoring in the reranking stage
+- **HoverMultiHop**: The original 3-hop retrieval program (now a fallback component)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Entity Extraction: Use WikipediaTitleExtractor to identify named entities from the claim
+3. Query Generation: Generate 3 targeted queries:
+   - Query 1: Direct entity search using extracted titles
+   - Query 2: Relationship query connecting the entities
+   - Query 3: Attribute/property query for descriptive facts
+4. Document Retrieval: Retrieve k=50 documents per query (total ~150 documents after deduplication)
+5. Two-Stage Reranking:
+   - Stage 1: Boost documents with titles matching extracted entities using fuzzy string matching (threshold 0.85)
+   - Stage 2: Apply LLM-based relevance scoring on top 50 candidates
+6. Return top 21 documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
