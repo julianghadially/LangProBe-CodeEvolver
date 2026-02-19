@@ -3,20 +3,21 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops.
+**Purpose**: This program implements a multi-hop document retrieval system for the HOVER dataset that verifies factual claims by retrieving relevant supporting documents through iterative search hops with query expansion and reciprocal rank fusion (RRF) reranking.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and delegates to the core program. Serves as the evaluation entry point.
-- **HoverMultiHop**: Core multi-hop retrieval program that performs 3 sequential retrieval hops, using Chain-of-Thought reasoning to generate queries and summarize retrieved passages at each step.
+- **HoverMultiHopPipeline**: Top-level module that implements query expansion with RRF reranking. For each of the 3 retrieval hops, it generates 2-3 diverse query variations using an LLM, retrieves k=30 documents per variation, applies RRF (k=60) to merge rankings, and selects top-7 documents. Initializes ColBERTv2 retrieval model and serves as the evaluation entry point.
+- **QueryVariationSignature**: DSPy signature for generating 2-3 diverse query variations that rephrase the same information need from different angles (e.g., "Not Now John songwriter" and "Not Now John Pink Floyd author").
+- **reciprocal_rank_fusion()**: Utility function that merges multiple ranked document lists using RRF formula (1/(k+rank)) with k=60 constant, producing a fused ranking without pairwise comparisons.
 - **hover_data.py**: Loads and preprocesses the HOVER dataset, filtering for 3-hop examples and formatting them as DSPy examples.
 - **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting document titles are found within the retrieved documents (max 21).
 
 **Data Flow**:
 1. Input claim is passed to HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, generate summary
-3. Hop 2: Generate new query from claim + summary_1, retrieve k=7 more docs, generate summary_2
-4. Hop 3: Generate final query from claim + summary_1 + summary_2, retrieve k=7 final docs
-5. Return combined 21 documents (7×3 hops)
+2. Hop 1: Generate 2-3 query variations from claim, retrieve k=30 docs per variation, apply RRF to merge results, select top-7, generate summary
+3. Hop 2: Generate new query from claim + summary_1, expand query into 2-3 variations, retrieve k=30 per variation, apply RRF, select top-7, generate summary_2
+4. Hop 3: Generate final query from claim + summary_1 + summary_2, expand query, retrieve k=30 per variation, apply RRF, select top-7
+5. Return combined 21 documents (7×3 hops) with improved coverage through query diversity and fusion-based reranking
 6. Evaluation compares retrieved document titles against ground truth supporting_facts
 
 **Optimization Metric**: `discrete_retrieval_eval` returns True if all gold supporting document titles (normalized) are present in the top 21 retrieved documents, measuring retrieval recall success.
