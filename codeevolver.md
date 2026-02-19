@@ -3,20 +3,26 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a self-critique iterative retrieval system for fact-checking claims from the HoVer dataset. The system uses an adaptive retrieval approach with verification and refinement to find relevant supporting documents, inspired by FIRE and SELF-RAG research. It employs a ColBERTv2 retriever with chain-of-thought reasoning for document relevance verification and ranking.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level pipeline implementing self-critique iterative retrieval architecture with document verification and ranking
+- **DocumentRelevanceVerifier**: DSPy signature that evaluates retrieved documents for relevance and sufficiency, providing refinement suggestions
+- **DocumentRanker**: DSPy signature that ranks all retrieved documents by relevance to the claim
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Initial retrieval: Fetch k=10 documents using the claim as query
+3. Self-critique loop (max 2 iterations, staying within 3 total retrievals):
+   a. DocumentRelevanceVerifier evaluates current documents for relevance_score, is_sufficient, and suggested_refinement
+   b. If is_sufficient=False and under retrieval limit, generate refined query from suggested_refinement
+   c. Retrieve k=10 more documents with refined query
+   d. Repeat until sufficient or max iterations reached
+4. Deduplicate all retrieved documents
+5. If >21 documents, use DocumentRanker to rank by relevance and select top 21
+6. Return final ranked documents as retrieved_docs
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
