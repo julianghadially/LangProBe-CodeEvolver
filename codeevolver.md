@@ -3,20 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer dataset. The system performs three iterative retrieval hops to find relevant supporting documents for a given claim, using a ColBERTv2 retriever and chain-of-thought reasoning to progressively refine queries.
+**Purpose**: This is a two-stage retrieval system with LLM-based pointwise reranking for fact-checking claims from the HoVer dataset. The system generates diverse search queries, retrieves candidate documents, and uses LLM-based relevance scoring to select the most relevant documents for claim verification.
 
 **Key Modules**:
-- **HoverMultiHopPipeline**: The top-level wrapper that initializes the ColBERTv2 retriever and delegates to the core program
-- **HoverMultiHop**: The core DSPy program implementing the 3-hop retrieval logic with summarization
+- **HoverMultiHopPipeline**: The top-level module implementing a two-stage retrieval pipeline with LLM reranking
+- **ClaimQueryGenerator**: DSPy signature that generates two diverse queries (entity-focused and relation-focused) from a claim
+- **DocumentRelevanceScorer**: DSPy signature that scores individual documents for relevance to the claim (0-10 scale)
+- **HoverMultiHop**: The legacy core DSPy program (no longer used in the current pipeline)
 - **hover_data.py**: Data loading and preprocessing from the HoVer dataset, filtering for 3-hop examples
 - **hover_utils.py**: Contains the evaluation metric and document counting utilities
 
 **Data Flow**:
 1. Input claim enters HoverMultiHopPipeline.forward()
-2. Hop 1: Retrieve k=7 documents directly from claim, summarize results
-3. Hop 2: Generate new query using claim + summary_1, retrieve k=7 documents, create summary_2
-4. Hop 3: Generate query using claim + both summaries, retrieve final k=7 documents
-5. Return all 21 documents (3 hops × 7 docs each) as retrieved_docs
+2. Query Generation: Use ClaimQueryGenerator to create two diverse queries (entity-focused and relation-focused)
+3. Initial Retrieval: Retrieve k=50 documents per query using ColBERTv2 (100 total documents)
+4. Deduplication: Remove duplicate documents by title, keeping first occurrence
+5. Relevance Scoring: Score each unique document using DocumentRelevanceScorer with ChainOfThought
+6. Reranking: Sort documents by relevance score (descending) and return top 21
 
 **Metric**: The discrete_retrieval_eval metric checks if all gold-standard supporting document titles (from supporting_facts) are present in the top 21 retrieved documents. Success requires 100% recall of gold documents within the 21-document limit. Documents are compared using normalized text matching on title keys.
 
