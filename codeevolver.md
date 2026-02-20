@@ -3,19 +3,24 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs iterative retrieval across three hops to find supporting documents for veracity assessment of claims.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs iterative retrieval across three hops with gap analysis, adaptive query generation, and score-based reranking to find the most relevant supporting documents for veracity assessment of claims.
 
 **Key Modules**:
 - **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and orchestrates the HoverMultiHop program
-- **HoverMultiHop** (hover_program.py): Core DSPy module implementing the 3-hop retrieval logic with query generation and summarization at each hop
+- **HoverMultiHop** (hover_program.py): Core DSPy module implementing the 3-hop retrieval logic with gap analysis, adaptive query generation, document scoring, and intelligent reranking
+- **GapAnalysis, AdaptiveQueryGenerator, DocumentScorer** (hover_program.py): DSPy Signature classes for identifying information gaps, generating targeted queries, and scoring document relevance
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Data Flow**:
-1. Input claim → Hop 1: Direct retrieval (k=7 docs) + summarization
-2. Summary 1 → Hop 2: Generate new query via ChainOfThought, retrieve k=7 docs, summarize with context
-3. Summaries 1&2 → Hop 3: Generate refined query, retrieve final k=7 docs
-4. Output: Concatenated 21 documents (7 per hop) as retrieved_docs prediction
+1. Input claim → Hop 1: Adaptive query generation → Retrieve k=20 docs → Summarize top 7
+2. Gap Analysis: Identify missing information based on Summary 1
+3. Hop 2: Generate gap-targeted query → Retrieve k=20 docs → Summarize with context
+4. Gap Analysis: Identify remaining information gaps from Summaries 1&2
+5. Hop 3: Generate final gap-targeted query → Retrieve k=20 docs
+6. Score all 60 retrieved documents using DocumentScorer with ChainOfThought
+7. Deduplicate by normalized document title, rank by relevance score
+8. Output: Top 21 highest-scoring unique documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
