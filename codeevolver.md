@@ -3,21 +3,27 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through an iterative 3-hop retrieval process, where each hop refines the search based on previous findings.
+**Purpose**: This system performs entity-focused document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents by first extracting key entities from the claim, then generating focused queries for each entity and using LLM-based reranking to select the most relevant documents.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and coordinates execution
-- `HoverMultiHop`: Core program implementing the 3-hop retrieval strategy with query generation and summarization at each hop
+- `HoverMultiHopPipeline`: Top-level pipeline implementing entity-focused retrieval strategy. Initializes ColBERTv2 retrieval model and coordinates the entity extraction, focused query generation, retrieval, and reranking process.
+- `EntityExtractor`: DSPy ChainOfThought module that extracts 2-4 key entities/topics from the claim (e.g., person names, organizations, titles, events)
+- `FocusedQueryGenerator`: DSPy ChainOfThought module that generates highly specific search queries for each extracted entity
+- `TopKReranker`: LLM-based scoring system that evaluates document relevance on a 0-10 scale and selects top 7 documents per query
 - `hover_utils.py`: Contains the evaluation metric `discrete_retrieval_eval` that validates retrieval quality
 - `hover_data.py`: Benchmark class managing the HoVer dataset, filtering for 3-hop examples
 
 **Data Flow**:
-1. Input claim is used for initial retrieval (Hop 1), fetching k=7 documents
-2. Retrieved documents are summarized using ChainOfThought
-3. Summary guides query generation for Hop 2, fetching 7 more documents
-4. Hop 2 results are summarized with previous context
-5. Both summaries inform Hop 3 query generation and final 7 document retrieval
-6. All retrieved documents (21 total) are concatenated and returned
+1. Extract 2-4 key entities/topics from the input claim using EntityExtractor
+2. Limit to maximum 3 entities to respect query constraints
+3. For each entity:
+   a. Generate a focused search query using FocusedQueryGenerator
+   b. Retrieve k=100 documents using dspy.Retrieve
+   c. Score each document's relevance to the original claim (0-10 scale) using LLM
+   d. Select top 7 documents based on relevance scores
+4. Combine all retrieved documents from all entities (up to 21 documents)
+5. Deduplicate documents to remove any overlaps
+6. Return final set of unique documents (up to 21 total)
 
 **Metric**: `discrete_retrieval_eval` checks if all gold-standard supporting document titles are present in the retrieved set (up to 21 documents). Returns True only when all required documents are successfully retrieved, evaluating as a strict subset match.
 
