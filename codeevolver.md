@@ -3,21 +3,26 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through an iterative 3-hop retrieval process, where each hop refines the search based on previous findings.
+**Purpose**: This system performs multi-query diversified document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through a parallel query generation strategy that analyzes claims from multiple perspectives, then applies diversity-based reranking to select the most relevant and diverse documents.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and coordinates execution
-- `HoverMultiHop`: Core program implementing the 3-hop retrieval strategy with query generation and summarization at each hop
+- `HoverMultiHopPipeline`: Top-level pipeline implementing Parallel Multi-Query Diversified Retrieval architecture with three specialized query generators and diversity-based reranking
+- `EntityFocusedQuerySignature`, `ComparativeQuerySignature`, `ContextualQuerySignature`: Three parallel query generation signatures that extract different aspects from claims
+- `DocumentScoringSignature`: Reranking signature that scores documents based on relevance and diversity
 - `hover_utils.py`: Contains the evaluation metric `discrete_retrieval_eval` that validates retrieval quality
 - `hover_data.py`: Benchmark class managing the HoVer dataset, filtering for 3-hop examples
 
 **Data Flow**:
-1. Input claim is used for initial retrieval (Hop 1), fetching k=7 documents
-2. Retrieved documents are summarized using ChainOfThought
-3. Summary guides query generation for Hop 2, fetching 7 more documents
-4. Hop 2 results are summarized with previous context
-5. Both summaries inform Hop 3 query generation and final 7 document retrieval
-6. All retrieved documents (21 total) are concatenated and returned
+1. Input claim is analyzed by three parallel query generators:
+   - EntityFocusedQuery: Extracts and queries key entities mentioned in the claim
+   - ComparativeQuery: Generates queries for comparative/contrasting elements
+   - ContextualQuery: Generates broader contextual queries for background information
+2. Each query generator retrieves k=21 documents independently (total 63 documents across 3 searches)
+3. Retrieved documents are deduplicated by title to remove redundant entries
+4. Diversity-based reranking module iteratively selects documents using ChainOfThought scoring:
+   - Each document is scored on (a) relevance to the claim and (b) uniqueness/diversity compared to already-selected documents
+   - The reranker selects exactly 21 diverse, high-quality documents from the candidate pool
+5. Final set of 21 documents is returned for evaluation
 
 **Metric**: `discrete_retrieval_eval` checks if all gold-standard supporting document titles are present in the retrieved set (up to 21 documents). Returns True only when all required documents are successfully retrieved, evaluating as a strict subset match.
 
