@@ -3,27 +3,25 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through an iterative 3-hop retrieval process with gap analysis feedback loops, where each hop refines the search based on identified gaps in coverage.
+**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through a three-stage entity-focused retrieval strategy with intelligent reranking, targeting all key entities in multi-hop claims before selecting the most relevant documents.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and coordinates execution
-- `HoverMultiHop`: Core program implementing the 3-hop retrieval strategy with gap analysis, query generation, and summarization at each hop
-- `GapAnalysis`: DSPy Signature for analyzing gaps between claim requirements and retrieved passages, outputting missing entities and coverage assessment
-- `CreateQueryHop2` & `CreateQueryHop3`: DSPy Signatures for generating targeted queries informed by missing entities from gap analysis
+- `HoverMultiHopPipeline`: Top-level pipeline implementing the three-stage retrieval strategy with entity extraction, targeted querying, and reranking
+- `AnalyzeClaimEntities`: DSPy Signature using CoT reasoning to extract 2-3 key entities and concepts from the claim
+- `GenerateEntityQueries`: DSPy Signature that generates 2-3 targeted search queries, one per entity/concept
+- `RerankDocuments`: DSPy Signature using CoT reasoning to assign relevance scores (0-100) to all retrieved documents
+- `HoverMultiHop`: Legacy core program implementing the 3-hop retrieval strategy (no longer used by pipeline)
 - `hover_utils.py`: Contains the evaluation metric `discrete_retrieval_eval` that validates retrieval quality
 - `hover_data.py`: Benchmark class managing the HoVer dataset, filtering for 3-hop examples
 
 **Data Flow**:
-1. Input claim is used for initial retrieval (Hop 1), fetching k=7 documents
-2. Retrieved documents are summarized using ChainOfThought
-3. **Gap Analysis after Hop 1**: Analyzes retrieved passages to identify missing entities and coverage gaps
-4. Gap-informed query generation for Hop 2, using missing entities to generate targeted queries, fetching 7 more documents
-5. Hop 2 results are summarized with previous context
-6. **Gap Analysis after Hop 2**: Analyzes all retrieved documents (Hop 1 + Hop 2) to identify remaining gaps
-7. Highly targeted Hop 3 query generation using remaining missing entities, fetching final 7 documents
-8. All retrieved documents (21 total) are concatenated and returned
+1. **Stage 1 - Entity Extraction**: Analyze the claim using CoT reasoning to extract 2-3 key entities, concepts, or topics central to verification
+2. **Stage 2 - Query Generation**: Generate 2-3 targeted search queries, one focused on each extracted entity in the context of the claim
+3. **Stage 3 - Bulk Retrieval**: For each query, retrieve k=50 documents using dspy.Retrieve, yielding up to 150 total documents (deduplicated)
+4. **Stage 4 - Intelligent Reranking**: Use CoT reasoning to analyze all retrieved documents and assign relevance scores (0-100) based on their importance for claim verification
+5. **Stage 5 - Top-K Selection**: Sort all documents by relevance score (descending) and select the top 21 most relevant documents
 
-The gap analysis feedback loop ensures that each subsequent hop explicitly searches for what is missing, improving retrieval precision by identifying and targeting coverage gaps rather than simply refining based on summaries alone.
+The entity-focused strategy ensures that all key entities in multi-hop claims receive dedicated retrieval queries before reranking, addressing the limitation of sequential hop-based approaches. The large-scale retrieval (k=50 per query) followed by intelligent reranking maximizes recall before precision optimization, ensuring critical documents aren't missed.
 
 **Metric**: `discrete_retrieval_eval` checks if all gold-standard supporting document titles are present in the retrieved set (up to 21 documents). Returns True only when all required documents are successfully retrieved, evaluating as a strict subset match.
 
