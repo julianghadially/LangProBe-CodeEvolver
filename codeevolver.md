@@ -3,27 +3,22 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through an iterative 3-hop retrieval process with gap analysis feedback loops, where each hop refines the search based on identified gaps in coverage.
+**Purpose**: This system performs multi-hop document retrieval for claim verification using the HoVer dataset. It retrieves relevant supporting documents through a three-stage query decomposition strategy: (1) decomposing claims into diverse queries, (2) broad retrieval, and (3) LLM-based semantic reranking for optimal coverage.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and coordinates execution
-- `HoverMultiHop`: Core program implementing the 3-hop retrieval strategy with gap analysis, query generation, and summarization at each hop
-- `GapAnalysis`: DSPy Signature for analyzing gaps between claim requirements and retrieved passages, outputting missing entities and coverage assessment
-- `CreateQueryHop2` & `CreateQueryHop3`: DSPy Signatures for generating targeted queries informed by missing entities from gap analysis
+- `HoverMultiHopPipeline`: Top-level pipeline that implements the three-stage retrieval strategy directly in its forward() method using query decomposition, multi-query retrieval, and semantic reranking
+- `DecomposeClaimToQueries`: DSPy Signature that decomposes a claim into 3 distinct search queries by identifying different entities/concepts and generating synonyms or related terms for maximum coverage
+- `RerankDocumentsByRelevance`: DSPy Signature that scores and reranks documents using LLM reasoning to identify which documents contain the most relevant supporting facts for the claim
+- `HoverMultiHop`: Legacy program implementing 3-hop retrieval with gap analysis (not currently used by the pipeline)
 - `hover_utils.py`: Contains the evaluation metric `discrete_retrieval_eval` that validates retrieval quality
 - `hover_data.py`: Benchmark class managing the HoVer dataset, filtering for 3-hop examples
 
 **Data Flow**:
-1. Input claim is used for initial retrieval (Hop 1), fetching k=7 documents
-2. Retrieved documents are summarized using ChainOfThought
-3. **Gap Analysis after Hop 1**: Analyzes retrieved passages to identify missing entities and coverage gaps
-4. Gap-informed query generation for Hop 2, using missing entities to generate targeted queries, fetching 7 more documents
-5. Hop 2 results are summarized with previous context
-6. **Gap Analysis after Hop 2**: Analyzes all retrieved documents (Hop 1 + Hop 2) to identify remaining gaps
-7. Highly targeted Hop 3 query generation using remaining missing entities, fetching final 7 documents
-8. All retrieved documents (21 total) are concatenated and returned
+1. **Stage 1 - Query Decomposition**: The input claim is decomposed into 3 distinct search queries using `DecomposeClaimToQueries`. Each query targets different entities, concepts, or aspects with variations and synonyms (e.g., for "Johnny Tremain film", generates queries like "Johnny Tremain 1957 movie", "Hal Stalmaster American Revolution film", "Walt Disney historical films")
+2. **Stage 2 - Multi-Query Retrieval**: For each of the 3 queries, retrieve k=50 documents using `dspy.Retrieve(k=50)`, resulting in a combined pool of up to 150 documents
+3. **Stage 3 - Semantic Reranking**: The combined document pool is passed to `RerankDocumentsByRelevance`, which uses LLM reasoning to score each document's relevance to the claim and returns the top 21 most relevant documents
 
-The gap analysis feedback loop ensures that each subsequent hop explicitly searches for what is missing, improving retrieval precision by identifying and targeting coverage gaps rather than simply refining based on summaries alone.
+This approach maintains the 3-query limit and 21-document output requirement while improving coverage of multi-hop reasoning chains through better query diversity and semantic reranking. The decomposition strategy ensures queries target different aspects of the claim, while semantic reranking ensures the most relevant supporting documents are prioritized.
 
 **Metric**: `discrete_retrieval_eval` checks if all gold-standard supporting document titles are present in the retrieved set (up to 21 documents). Returns True only when all required documents are successfully retrieved, evaluating as a strict subset match.
 
