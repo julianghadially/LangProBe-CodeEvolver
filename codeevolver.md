@@ -6,18 +6,16 @@ METRIC_MODULE_PATH: langProPlus.hotpotGEPA.__init__.exact_match_metric
 **Purpose**: This program implements a multi-hop question-answering system for the HotpotQA benchmark, which requires reasoning over multiple documents to answer complex factoid questions.
 
 **Key Modules**:
-- `HotpotMultiHopPipeline`: Top-level pipeline wrapper that configures the ColBERTv2 retrieval model and orchestrates the entire QA process
-- `HotpotMultiHop`: Core DSPy program implementing a 3-hop reasoning chain with retrieval and summarization
+- `HotpotMultiHopPipeline`: Top-level pipeline implementing a 2-hop retrieve-then-extract architecture. Configures ColBERTv2 retrieval model and orchestrates the entire QA process by retrieving passages in two hops, then extracting the answer directly from all passages.
+- `ExtractShortAnswer`: DSPy signature for extracting minimal factoid answers directly from passages without summarization
 - `HotpotQABench`: Dataset loader that processes the HotpotQA fullwiki dataset into training and test sets
-- `GenerateAnswer`: DSPy signature defining the answer generation interface
 
 **Data Flow**:
-1. Question input triggers first retrieval (Hop 1) using ColBERTv2 to fetch k=7 passages
-2. Retrieved passages are summarized via chain-of-thought prompting
-3. A second query is generated from the question and first summary (Hop 2)
-4. Second retrieval fetches additional passages based on the refined query
-5. Second set of passages is summarized with context from the first summary
-6. Final answer is generated using both summaries and the original question
+1. Question input triggers first retrieval (Hop 1) using ColBERTv2 to fetch k=10 passages
+2. A focused hop 2 query is generated directly from the question and hop 1 passages using chain-of-thought prompting (no summarization)
+3. Second retrieval (Hop 2) fetches k=10 additional passages based on the refined query
+4. All passages from both hops are concatenated into a single context string
+5. The minimal factoid answer is extracted directly from the concatenated passages using dspy.Predict(ExtractShortAnswer)
 
 **Metric**: The system optimizes for `exact_match_metric` (dspy.evaluate.answer_exact_match), which measures whether the generated answer exactly matches the gold answer string from the HotpotQA dataset.
 
