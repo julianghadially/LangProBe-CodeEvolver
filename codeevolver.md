@@ -3,24 +3,24 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs iterative retrieval across three hops with gap analysis, adaptive query generation, and score-based reranking to find the most relevant supporting documents for veracity assessment of claims.
+**Purpose**: This is a two-stage multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses entity-based expansion with listwise reranking to find the most relevant supporting documents for veracity assessment of claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and orchestrates the HoverMultiHop program
-- **HoverMultiHop** (hover_program.py): Core DSPy module implementing the 3-hop retrieval logic with gap analysis, adaptive query generation, document scoring, and intelligent reranking
-- **GapAnalysis, AdaptiveQueryGenerator, DocumentScorer** (hover_program.py): DSPy Signature classes for identifying information gaps, generating targeted queries, and scoring document relevance
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing the complete two-stage retrieval strategy with entity extraction, entity-based query expansion, and listwise reranking
+- **EntityExtraction** (hover_pipeline.py): DSPy Signature for extracting key entities (people, places, works, organizations) from retrieved documents
+- **EntityQueryGenerator** (hover_pipeline.py): DSPy Signature for generating focused search queries for specific entities
+- **ListwiseReranker** (hover_pipeline.py): DSPy Signature for scoring and ranking documents based on multi-hop reasoning chain relevance
+- **HoverMultiHop** (hover_program.py): Legacy DSPy module implementing 3-hop retrieval logic (not currently used)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Data Flow**:
-1. Input claim → Hop 1: Adaptive query generation → Retrieve k=20 docs → Summarize top 7
-2. Gap Analysis: Identify missing information based on Summary 1
-3. Hop 2: Generate gap-targeted query → Retrieve k=20 docs → Summarize with context
-4. Gap Analysis: Identify remaining information gaps from Summaries 1&2
-5. Hop 3: Generate final gap-targeted query → Retrieve k=20 docs
-6. Score all 60 retrieved documents using DocumentScorer with ChainOfThought
-7. Deduplicate by normalized document title, rank by relevance score
-8. Output: Top 21 highest-scoring unique documents as retrieved_docs prediction
+1. **Stage 1 - Initial Retrieval**: Retrieve k=100 documents using the original claim as query
+2. **Stage 2 - Entity Extraction**: Extract 1-5 key entities from top 50 initial results using LLM-based EntityExtraction module
+3. **Stage 3 - Entity-Based Retrieval**: For each of the top 3 entities, generate a focused query and retrieve k=50 additional documents (150 max entity docs)
+4. **Stage 4 - Document Combination**: Combine all retrieved documents (initial 100 + entity-based 150) and deduplicate by normalized document title
+5. **Stage 5 - Listwise Reranking**: Apply ListwiseReranker using ChainOfThought reasoning to score all unique documents based on multi-hop reasoning chain support, selecting top 21 most relevant documents
+6. Output: Final 21 highest-ranked documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
