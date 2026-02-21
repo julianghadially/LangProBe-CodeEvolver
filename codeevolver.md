@@ -3,24 +3,36 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a two-stage multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses entity-based expansion with listwise reranking to find the most relevant supporting documents for veracity assessment of claims.
+**Purpose**: This is an iterative query decomposition multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses bridge entity recognition with sequential hop-based retrieval and cross-hop connectivity ranking inspired by the DeCoR framework to find the most relevant supporting documents for veracity assessment of claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing the complete two-stage retrieval strategy with entity extraction, entity-based query expansion, and listwise reranking
-- **EntityExtraction** (hover_pipeline.py): DSPy Signature for extracting key entities (people, places, works, organizations) from retrieved documents
-- **EntityQueryGenerator** (hover_pipeline.py): DSPy Signature for generating focused search queries for specific entities
-- **ListwiseReranker** (hover_pipeline.py): DSPy Signature for scoring and ranking documents based on multi-hop reasoning chain relevance
-- **HoverMultiHop** (hover_program.py): Legacy DSPy module implementing 3-hop retrieval logic (not currently used)
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing the complete four-stage iterative query decomposition with bridge entity recognition architecture
+- **ClaimDecomposer** (hover_pipeline.py): DSPy Signature for analyzing claims and decomposing them into 2-3 sequential sub-questions with explicit bridge entity identification for multi-hop reasoning
+- **BridgeEntityExtractor** (hover_pipeline.py): DSPy Signature for extracting specific entities that serve as bridges to connect reasoning hops from retrieved documents
+- **MultiHopRelevanceScorer** (hover_pipeline.py): DSPy Signature for scoring documents using intermediate layer representations based on sub-question relevance, bridge entity presence, and cross-hop connectivity
+- **CrossHopConnectivityRanker** (hover_pipeline.py): DSPy Signature for final fusion ranking that scores documents based on how well they form a complete reasoning chain across all hops
+- **EntityExtraction** (hover_pipeline.py): Legacy DSPy Signature for extracting key entities (kept for compatibility)
+- **EntityQueryGenerator** (hover_pipeline.py): Legacy DSPy Signature for generating focused search queries for specific entities (kept for compatibility)
+- **ListwiseReranker** (hover_pipeline.py): Legacy DSPy Signature for scoring and ranking documents (kept for compatibility)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Data Flow**:
-1. **Stage 1 - Initial Retrieval**: Retrieve k=100 documents using the original claim as query
-2. **Stage 2 - Entity Extraction**: Extract 1-5 key entities from top 50 initial results using LLM-based EntityExtraction module
-3. **Stage 3 - Entity-Based Retrieval**: For each of the top 3 entities, generate a focused query and retrieve k=50 additional documents (150 max entity docs)
-4. **Stage 4 - Document Combination**: Combine all retrieved documents (initial 100 + entity-based 150) and deduplicate by normalized document title
-5. **Stage 5 - Listwise Reranking**: Apply ListwiseReranker using ChainOfThought reasoning to score all unique documents based on multi-hop reasoning chain support, selecting top 21 most relevant documents
-6. Output: Final 21 highest-ranked documents as retrieved_docs prediction
+1. **Stage 1 - Claim Decomposition**: Use ClaimDecomposer with ChainOfThought to analyze the claim and break it into 2-3 sequential sub-questions representing logical hops, explicitly identifying expected bridge entity types (e.g., actor name, location, organization) for each hop
+2. **Stage 2 - Sequential Bridge Retrieval**: For each sub-question (2-3 total retrieval searches adhering to constraint):
+   - Retrieve k=50 documents using the sub-question as query (enhanced with bridge entity from previous hop if available)
+   - Store all documents organized by hop index
+   - Extract bridge entity from top 20 retrieved documents using BridgeEntityExtractor (except for final hop)
+   - Use extracted bridge entity to formulate the next sub-question's query, creating a sequential reasoning chain
+3. **Stage 3 - Intermediate Representation Reranking**: For each hop's documents (2-3 hops):
+   - Apply MultiHopRelevanceScorer using ChainOfThought to score documents based on: (a) direct relevance to sub-question, (b) presence of bridge entities identified so far, and (c) how documents connect across reasoning hops
+   - Select top 7-10 documents per hop based on multi-hop relevance scores
+   - Aggregate selected documents from all hops (14-30 documents total)
+4. **Stage 4 - Final Fusion**: Combine all selected documents from all hops (total retrieval budget: 2-3 searches as per constraint):
+   - Deduplicate documents by normalized title while preserving content
+   - Apply CrossHopConnectivityRanker using ChainOfThought that scores all unique documents based on how well they form a complete reasoning chain connecting all sub-questions and bridge entities
+   - Select final 21 documents that best support the complete multi-hop verification chain
+5. Output: Final 21 highest-ranked documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
