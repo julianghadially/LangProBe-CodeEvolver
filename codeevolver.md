@@ -3,19 +3,21 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs iterative retrieval across three hops to find supporting documents for veracity assessment of claims.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs entity-based multi-query retrieval to find supporting documents for veracity assessment of claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and orchestrates the HoverMultiHop program
-- **HoverMultiHop** (hover_program.py): Core DSPy module implementing the 3-hop retrieval logic with query generation and summarization at each hop
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing Named Entity Extraction + Entity-Based Multi-Query Retrieval architecture with three DSPy signature classes: EntityExtractor, EntityQueryGenerator, and EntityCoverageReranker
+- **HoverMultiHop** (hover_program.py): Legacy DSPy module implementing the 3-hop retrieval logic (still available but not used in current pipeline)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Data Flow**:
-1. Input claim → Hop 1: Direct retrieval (k=7 docs) + summarization
-2. Summary 1 → Hop 2: Generate new query via ChainOfThought, retrieve k=7 docs, summarize with context
-3. Summaries 1&2 → Hop 3: Generate refined query, retrieve final k=7 docs
-4. Output: Concatenated 21 documents (7 per hop) as retrieved_docs prediction
+1. Input claim → EntityExtractor: Extract up to 3 key named entities (people, organizations, locations, events)
+2. For each entity → EntityQueryGenerator: Create focused search query for the entity in context of claim
+3. Execute queries → Retrieve k=70 documents per query (max 3 queries = up to 210 docs)
+4. Deduplicate by document title → Combine unique documents from all queries
+5. EntityCoverageReranker → Score each document based on entity coverage + semantic relevance to claim
+6. Output: Top 21 highest-scored documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
