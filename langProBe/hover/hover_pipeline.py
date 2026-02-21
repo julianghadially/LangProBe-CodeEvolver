@@ -4,26 +4,17 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
 
-class EntityExtraction(dspy.Signature):
-    """Extract key entities (people, places, works, organizations) from retrieved documents that are relevant to verifying the claim."""
+class ClaimDecomposer(dspy.Signature):
+    """Decompose the claim into 2-3 focused sub-queries that target different aspects needed for multi-hop reasoning (e.g., main entities, relationships, comparative facts)."""
     claim: str = dspy.InputField(desc="The claim to be verified")
-    documents: str = dspy.InputField(desc="Retrieved documents to extract entities from")
-    entities: list[str] = dspy.OutputField(desc="List of 1-5 key entities (people, places, works, organizations) most relevant to the claim")
+    sub_queries: list[str] = dspy.OutputField(desc="List of 2-3 focused sub-queries that target different aspects needed for multi-hop reasoning")
 
 
-class EntityQueryGenerator(dspy.Signature):
-    """Generate a focused search query for a specific entity in the context of the claim."""
+class RelevanceScorer(dspy.Signature):
+    """Score a document's relevance to the claim on a scale from 0 to 10, where 10 is most relevant for verifying the claim through multi-hop reasoning."""
     claim: str = dspy.InputField(desc="The claim to be verified")
-    entity: str = dspy.InputField(desc="The entity to generate a query for")
-    query: str = dspy.OutputField(desc="A focused search query for the entity")
-
-
-class ListwiseReranker(dspy.Signature):
-    """Score and rank documents based on their relevance to the multi-hop reasoning chain needed to verify the claim. Consider how documents connect to support multi-hop reasoning."""
-    claim: str = dspy.InputField(desc="The claim to be verified")
-    documents: str = dspy.InputField(desc="Documents to rank, each prefixed with an index like [0], [1], etc.")
-    top_indices: list[int] = dspy.OutputField(desc="List of document indices ranked by relevance (most relevant first), selecting the top 21 documents")
-    reasoning: str = dspy.OutputField(desc="Explanation of the multi-hop reasoning chain and why these documents are most relevant")
+    document: str = dspy.InputField(desc="The document to score")
+    score: int = dspy.OutputField(desc="Relevance score from 0 to 10, where 10 is most relevant")
 
 
 class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
@@ -37,16 +28,15 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.rm = dspy.ColBERTv2(url=COLBERT_URL)
 
-        # Initialize sub-modules for the two-stage retrieval strategy
+        # Initialize sub-modules for claim decomposition retrieval strategy
         self.initial_retrieve = dspy.Retrieve(k=100)
-        self.entity_retrieve = dspy.Retrieve(k=50)
+        self.subquery_retrieve = dspy.Retrieve(k=50)
 
-        # Entity extraction and query generation modules
-        self.entity_extractor = dspy.ChainOfThought(EntityExtraction)
-        self.entity_query_gen = dspy.ChainOfThought(EntityQueryGenerator)
+        # Claim decomposer module
+        self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposer)
 
-        # Listwise reranker module
-        self.reranker = dspy.ChainOfThought(ListwiseReranker)
+        # Relevance scorer module (simpler than listwise reranker)
+        self.relevance_scorer = dspy.Predict(RelevanceScorer)
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -56,34 +46,31 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             initial_docs = self.initial_retrieve(claim).passages
             all_docs.extend(initial_docs)
 
-            # Stage 2: Extract key entities from the top 50 initial results
-            top_50_docs = initial_docs[:50]
-            docs_text = "\n\n".join([f"[{i}] {doc}" for i, doc in enumerate(top_50_docs)])
-
+            # Stage 2: Decompose claim into 2-3 focused sub-queries
             try:
-                entity_result = self.entity_extractor(claim=claim, documents=docs_text)
-                entities = entity_result.entities
+                decompose_result = self.claim_decomposer(claim=claim)
+                sub_queries = decompose_result.sub_queries
 
-                # Limit to top 3 entities to stay within search limit
-                entities = entities[:3] if isinstance(entities, list) else []
+                # Limit to exactly 2 sub-queries as specified
+                if isinstance(sub_queries, list):
+                    sub_queries = sub_queries[:2]
+                else:
+                    sub_queries = []
 
-                # Stage 3: Generate focused queries for each extracted entity and retrieve k=50 documents per entity
-                for entity in entities:
+                # Stage 3: Retrieve k=50 documents for each sub-query
+                for sub_query in sub_queries:
                     try:
-                        entity_query_result = self.entity_query_gen(claim=claim, entity=entity)
-                        entity_query = entity_query_result.query
-                        entity_docs = self.entity_retrieve(entity_query).passages
-                        all_docs.extend(entity_docs)
+                        subquery_docs = self.subquery_retrieve(sub_query).passages
+                        all_docs.extend(subquery_docs)
                     except Exception:
-                        # If entity query generation or retrieval fails, continue with next entity
+                        # If sub-query retrieval fails, continue with next sub-query
                         continue
 
             except Exception:
-                # If entity extraction fails, continue with just the initial docs
+                # If claim decomposition fails, continue with just the initial docs
                 pass
 
-            # Stage 4: Combine all retrieved documents (initial + entity-based)
-            # Deduplicate by document title while preserving order
+            # Stage 4: Deduplicate all retrieved documents by normalized title
             seen_titles = set()
             unique_docs = []
             for doc in all_docs:
@@ -93,28 +80,28 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     seen_titles.add(normalized_title)
                     unique_docs.append(doc)
 
-            # Stage 5: Apply listwise reranker using ChainOfThought reasoning
-            # Format documents with indices for the reranker
-            indexed_docs = "\n\n".join([f"[{i}] {doc}" for i, doc in enumerate(unique_docs)])
+            # Stage 5: Score each document with simple relevance scorer (0-10)
+            doc_scores = []
+            for idx, doc in enumerate(unique_docs):
+                try:
+                    score_result = self.relevance_scorer(claim=claim, document=doc)
+                    score = score_result.score
+                    # Ensure score is an integer between 0 and 10
+                    if isinstance(score, (int, float)):
+                        score = max(0, min(10, int(score)))
+                    else:
+                        score = 0
+                    doc_scores.append((idx, score))
+                except Exception:
+                    # If scoring fails, assign a default low score
+                    doc_scores.append((idx, 0))
 
-            try:
-                rerank_result = self.reranker(claim=claim, documents=indexed_docs)
-                top_indices = rerank_result.top_indices
+            # Sort by score (descending) and select top 21
+            doc_scores.sort(key=lambda x: x[1], reverse=True)
+            top_indices = [idx for idx, _ in doc_scores[:21]]
 
-                # Ensure indices are valid and limit to 21
-                valid_indices = []
-                for idx in top_indices:
-                    if isinstance(idx, int) and 0 <= idx < len(unique_docs):
-                        valid_indices.append(idx)
-                    if len(valid_indices) >= 21:
-                        break
-
-                # Select documents based on reranked indices
-                final_docs = [unique_docs[idx] for idx in valid_indices]
-
-            except Exception:
-                # If reranking fails, fall back to using first 21 unique docs
-                final_docs = unique_docs[:21]
+            # Select documents based on scored indices
+            final_docs = [unique_docs[idx] for idx in top_indices]
 
             # Ensure we have exactly up to 21 documents
             final_docs = final_docs[:21]
