@@ -3,24 +3,32 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a two-stage multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses entity-based expansion with listwise reranking to find the most relevant supporting documents for veracity assessment of claims.
+**Purpose**: This is a gap-analysis-based multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system extracts entities from claims, performs initial retrieval, analyzes coverage gaps, targets missing entities with follow-up queries, and uses entity-aware reranking to find the most relevant supporting documents for veracity assessment.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing the complete two-stage retrieval strategy with entity extraction, entity-based query expansion, and listwise reranking
-- **EntityExtraction** (hover_pipeline.py): DSPy Signature for extracting key entities (people, places, works, organizations) from retrieved documents
-- **EntityQueryGenerator** (hover_pipeline.py): DSPy Signature for generating focused search queries for specific entities
-- **ListwiseReranker** (hover_pipeline.py): DSPy Signature for scoring and ranking documents based on multi-hop reasoning chain relevance
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing gap analysis retrieval strategy with claim entity extraction, gap detection, targeted follow-up queries, and entity-aware reranking
+- **ClaimEntityExtraction** (hover_pipeline.py): DSPy Signature for extracting 3-7 key named entities (people, places, organizations) directly from the claim text
+- **GapAnalysis** (hover_pipeline.py): DSPy Signature for analyzing which claim entities are NOT well-covered in retrieved documents
+- **TargetedQueryGenerator** (hover_pipeline.py): DSPy Signature for generating targeted search queries for missing/poorly-covered entities
+- **EntityAwareReranker** (hover_pipeline.py): DSPy Signature for scoring and ranking documents with priority given to documents mentioning multiple claim entities
+- **EntityExtraction** (hover_pipeline.py): Legacy DSPy Signature for extracting entities from documents (kept for compatibility)
+- **EntityQueryGenerator** (hover_pipeline.py): Legacy DSPy Signature for entity-based query generation (kept for compatibility)
+- **ListwiseReranker** (hover_pipeline.py): Legacy DSPy Signature for standard document reranking (kept for compatibility)
 - **HoverMultiHop** (hover_program.py): Legacy DSPy module implementing 3-hop retrieval logic (not currently used)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Data Flow**:
-1. **Stage 1 - Initial Retrieval**: Retrieve k=100 documents using the original claim as query
-2. **Stage 2 - Entity Extraction**: Extract 1-5 key entities from top 50 initial results using LLM-based EntityExtraction module
-3. **Stage 3 - Entity-Based Retrieval**: For each of the top 3 entities, generate a focused query and retrieve k=50 additional documents (150 max entity docs)
-4. **Stage 4 - Document Combination**: Combine all retrieved documents (initial 100 + entity-based 150) and deduplicate by normalized document title
-5. **Stage 5 - Listwise Reranking**: Apply ListwiseReranker using ChainOfThought reasoning to score all unique documents based on multi-hop reasoning chain support, selecting top 21 most relevant documents
-6. Output: Final 21 highest-ranked documents as retrieved_docs prediction
+1. **Stage 1 - Claim Entity Extraction**: Extract 3-7 key named entities (people, places, organizations) from the claim using LLM-based ClaimEntityExtraction module
+2. **Stage 2 - Initial Retrieval**: Retrieve k=75 documents (range 50-100) using the original claim as query (Retrieval call #1)
+3. **Stage 3 - Gap Analysis**: Analyze initial retrieved documents to identify which claim entities are poorly covered or missing using GapAnalysis module
+4. **Stage 4 - Targeted Query Generation**: For each missing entity (up to 2), generate a targeted search query using TargetedQueryGenerator
+5. **Stage 5 - Gap-Filling Retrieval**: For each targeted query, retrieve k=40 additional documents (range 30-50) to fill coverage gaps (Retrieval calls #2-3, max 3 total)
+6. **Stage 6 - Document Merging**: Combine all retrieved documents (initial + gap-filling) and deduplicate by normalized document title
+7. **Stage 7 - Entity-Aware Reranking**: Apply EntityAwareReranker using ChainOfThought reasoning to score documents, prioritizing those mentioning multiple claim entities, selecting top 21 most relevant documents
+8. Output: Final 21 highest-ranked documents as retrieved_docs prediction
+
+**Retrieval Constraints**: Maximum 3 retrieval calls total (1 initial + up to 2 gap-filling)
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
