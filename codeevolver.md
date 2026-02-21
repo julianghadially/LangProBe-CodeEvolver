@@ -3,12 +3,14 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a two-stage multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses entity-based expansion with listwise reranking to find the most relevant supporting documents for veracity assessment of claims.
+**Purpose**: This is a self-verifying multi-hop document retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system uses an adaptive closed-loop architecture with coverage verification and query refinement to find the most relevant supporting documents for veracity assessment of claims.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing the complete two-stage retrieval strategy with entity extraction, entity-based query expansion, and listwise reranking
-- **EntityExtraction** (hover_pipeline.py): DSPy Signature for extracting key entities (people, places, works, organizations) from retrieved documents
-- **EntityQueryGenerator** (hover_pipeline.py): DSPy Signature for generating focused search queries for specific entities
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing self-verification loop with adaptive query refinement, coverage assessment, and listwise reranking
+- **CoverageVerifier** (hover_pipeline.py): DSPy Signature that assesses retrieval coverage quality, outputs coverage_score (0-1 float), missing_aspects (list), and confidence (bool) to determine if additional retrieval is needed
+- **AdaptiveQueryGenerator** (hover_pipeline.py): DSPy Signature that generates 1-2 alternative search queries targeting missing aspects using different phrasings/angles based on coverage gaps
+- **EntityExtraction** (hover_pipeline.py): DSPy Signature for extracting key entities (people, places, works, organizations) from retrieved documents (legacy, not currently used)
+- **EntityQueryGenerator** (hover_pipeline.py): DSPy Signature for generating focused search queries for specific entities (legacy, not currently used)
 - **ListwiseReranker** (hover_pipeline.py): DSPy Signature for scoring and ranking documents based on multi-hop reasoning chain relevance
 - **HoverMultiHop** (hover_program.py): Legacy DSPy module implementing 3-hop retrieval logic (not currently used)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
@@ -16,11 +18,15 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 **Data Flow**:
 1. **Stage 1 - Initial Retrieval**: Retrieve k=100 documents using the original claim as query
-2. **Stage 2 - Entity Extraction**: Extract 1-5 key entities from top 50 initial results using LLM-based EntityExtraction module
-3. **Stage 3 - Entity-Based Retrieval**: For each of the top 3 entities, generate a focused query and retrieve k=50 additional documents (150 max entity docs)
-4. **Stage 4 - Document Combination**: Combine all retrieved documents (initial 100 + entity-based 150) and deduplicate by normalized document title
-5. **Stage 5 - Listwise Reranking**: Apply ListwiseReranker using ChainOfThought reasoning to score all unique documents based on multi-hop reasoning chain support, selecting top 21 most relevant documents
-6. Output: Final 21 highest-ranked documents as retrieved_docs prediction
+2. **Stage 2 - Self-Verification Loop** (max 2 iterations for 3-search limit):
+   - **Coverage Verification**: Use CoverageVerifier (ChainOfThought) to analyze current document titles, output coverage_score, missing_aspects, and confidence
+   - **Early Exit**: If confidence=True, break loop early (coverage sufficient)
+   - **Adaptive Query Generation**: If confidence=False, use AdaptiveQueryGenerator (ChainOfThought) to create 1-2 alternative queries targeting missing_aspects with different phrasings
+   - **Adaptive Retrieval**: Retrieve k=50 documents per alternative query (max 100 docs per iteration)
+   - **Accumulation**: Accumulate all retrieved documents across iterations
+3. **Stage 3 - Final Deduplication**: Deduplicate all accumulated documents by normalized title
+4. **Stage 4 - Listwise Reranking**: Apply ListwiseReranker using ChainOfThought reasoning to score all unique documents based on multi-hop reasoning chain support, selecting top 21 most relevant documents
+5. Output: Final 21 highest-ranked documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
