@@ -4,11 +4,25 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
 
+class ExtractNamedEntities(dspy.Signature):
+    """Extract named entities and key descriptive phrases from the claim that need direct retrieval. Focus on proper nouns (people, titles, places, organizations) and bridging concepts."""
+    claim: str = dspy.InputField(desc="The claim to be verified")
+    named_entities: list[str] = dspy.OutputField(desc="List of proper nouns and named entities (people, book/film/work titles, places, organizations) found in the claim")
+    descriptive_phrases: list[str] = dspy.OutputField(desc="List of key descriptive phrases or concepts that need bridging documents for multi-hop reasoning")
+
+
 class EntityExtraction(dspy.Signature):
     """Extract key entities (people, places, works, organizations) from retrieved documents that are relevant to verifying the claim."""
     claim: str = dspy.InputField(desc="The claim to be verified")
     documents: str = dspy.InputField(desc="Retrieved documents to extract entities from")
     entities: list[str] = dspy.OutputField(desc="List of 1-5 key entities (people, places, works, organizations) most relevant to the claim")
+
+
+class ContextualQueryGenerator(dspy.Signature):
+    """Generate 1-2 contextual queries that combine entities with key relationships from the claim to find bridging documents for multi-hop reasoning."""
+    claim: str = dspy.InputField(desc="The claim to be verified")
+    entities: str = dspy.InputField(desc="The named entities extracted from the claim")
+    queries: list[str] = dspy.OutputField(desc="1-2 contextual search queries combining entities with relationships from the claim")
 
 
 class EntityQueryGenerator(dspy.Signature):
@@ -37,13 +51,16 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.rm = dspy.ColBERTv2(url=COLBERT_URL)
 
-        # Initialize sub-modules for the two-stage retrieval strategy
-        self.initial_retrieve = dspy.Retrieve(k=100)
-        self.entity_retrieve = dspy.Retrieve(k=50)
+        # Initialize sub-modules for the new two-stage retrieval strategy
+        # Stage 1: Entity retrieval with k=30
+        self.entity_retrieve = dspy.Retrieve(k=30)
+        # Stage 2: Contextual retrieval with k=20
+        self.contextual_retrieve = dspy.Retrieve(k=20)
 
-        # Entity extraction and query generation modules
-        self.entity_extractor = dspy.ChainOfThought(EntityExtraction)
-        self.entity_query_gen = dspy.ChainOfThought(EntityQueryGenerator)
+        # Named entity extraction from claim (not documents)
+        self.named_entity_extractor = dspy.ChainOfThought(ExtractNamedEntities)
+        # Contextual query generation combining entities with relationships
+        self.contextual_query_gen = dspy.ChainOfThought(ContextualQueryGenerator)
 
         # Listwise reranker module
         self.reranker = dspy.ChainOfThought(ListwiseReranker)
@@ -52,37 +69,55 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         with dspy.context(rm=self.rm):
             all_docs = []
 
-            # Stage 1: Initial retrieval with k=100 documents using the original claim query
-            initial_docs = self.initial_retrieve(claim).passages
-            all_docs.extend(initial_docs)
-
-            # Stage 2: Extract key entities from the top 50 initial results
-            top_50_docs = initial_docs[:50]
-            docs_text = "\n\n".join([f"[{i}] {doc}" for i, doc in enumerate(top_50_docs)])
-
+            # Extract named entities and descriptive phrases directly from the claim
             try:
-                entity_result = self.entity_extractor(claim=claim, documents=docs_text)
-                entities = entity_result.entities
+                entity_extraction_result = self.named_entity_extractor(claim=claim)
+                named_entities = entity_extraction_result.named_entities if isinstance(entity_extraction_result.named_entities, list) else []
+                descriptive_phrases = entity_extraction_result.descriptive_phrases if isinstance(entity_extraction_result.descriptive_phrases, list) else []
+            except Exception:
+                # If extraction fails, fall back to empty lists
+                named_entities = []
+                descriptive_phrases = []
 
-                # Limit to top 3 entities to stay within search limit
-                entities = entities[:3] if isinstance(entities, list) else []
+            # Stage 1 - Entity Retrieval: Direct retrieval with k=30 for each named entity
+            # Batch all entity names to stay within search limit (combine entities + descriptive phrases)
+            all_entity_terms = named_entities + descriptive_phrases
 
-                # Stage 3: Generate focused queries for each extracted entity and retrieve k=50 documents per entity
-                for entity in entities:
+            # Retrieve documents for each entity/phrase directly using their names
+            for entity_term in all_entity_terms:
+                try:
+                    # Use entity name directly as query (no query generation)
+                    entity_docs = self.entity_retrieve(entity_term).passages
+                    all_docs.extend(entity_docs)
+                except Exception:
+                    # If retrieval fails for this entity, continue with next
+                    continue
+
+            # Stage 2 - Contextual Retrieval: Generate 1-2 contextual queries combining entities with relationships
+            try:
+                # Prepare entities string for contextual query generation
+                entities_str = ", ".join(all_entity_terms[:5])  # Use top 5 entities to avoid overly long input
+
+                contextual_query_result = self.contextual_query_gen(claim=claim, entities=entities_str)
+                contextual_queries = contextual_query_result.queries if isinstance(contextual_query_result.queries, list) else []
+
+                # Limit to 2 contextual queries as specified
+                contextual_queries = contextual_queries[:2]
+
+                # Retrieve k=20 documents per contextual query
+                for query in contextual_queries:
                     try:
-                        entity_query_result = self.entity_query_gen(claim=claim, entity=entity)
-                        entity_query = entity_query_result.query
-                        entity_docs = self.entity_retrieve(entity_query).passages
-                        all_docs.extend(entity_docs)
+                        contextual_docs = self.contextual_retrieve(query).passages
+                        all_docs.extend(contextual_docs)
                     except Exception:
-                        # If entity query generation or retrieval fails, continue with next entity
+                        # If retrieval fails for this query, continue with next
                         continue
 
             except Exception:
-                # If entity extraction fails, continue with just the initial docs
+                # If contextual query generation fails, continue without contextual docs
                 pass
 
-            # Stage 4: Combine all retrieved documents (initial + entity-based)
+            # Merge and deduplicate all retrieved documents
             # Deduplicate by document title while preserving order
             seen_titles = set()
             unique_docs = []
@@ -93,7 +128,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     seen_titles.add(normalized_title)
                     unique_docs.append(doc)
 
-            # Stage 5: Apply listwise reranker using ChainOfThought reasoning
+            # Apply listwise LLM reranker
             # Format documents with indices for the reranker
             indexed_docs = "\n\n".join([f"[{i}] {doc}" for i, doc in enumerate(unique_docs)])
 
