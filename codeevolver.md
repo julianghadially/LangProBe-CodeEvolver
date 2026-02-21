@@ -3,28 +3,29 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a Diversity-Aware Iterative Retrieval system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system performs parallel diverse retrieval with coverage-aware gap filling to maximize entity and aspect coverage while maintaining the 21-document limit.
+**Purpose**: This is a Recursive Query Expansion system for fact-checking claims using the HoVer (Hover-nlp) dataset. The system leverages retrieved document titles to guide subsequent entity-focused queries, ensuring multi-hop entity coverage while staying within the 3-search constraint and 21-document limit.
 
 **Key Modules**:
-- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing Diversity-Aware Iterative Retrieval with four new DSPy Signatures: ClaimDecomposer, CoverageAnalyzer, GapQuery, and DiversityReranker. Initializes ColBERTv2 retrieval model and orchestrates the diversity-aware retrieval flow.
+- **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline implementing Recursive Query Expansion with four DSPy Signatures: InitialQueryGenerator, EntityExtractor, EntityQueryGenerator, and RelevanceReranker. Initializes ColBERTv2 retrieval model and orchestrates entity-driven recursive retrieval flow.
 - **HoverMultiHop** (hover_program.py): Legacy 3-hop retrieval module (not currently used by pipeline)
 - **hoverBench** (hover_data.py): Dataset handler that loads and filters HoVer dataset to 3-hop examples, creating train/test splits
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are retrieved (maximum 21 documents)
 
 **Signature Classes**:
-1. **ClaimDecomposer**: Decomposes claim into 2-3 sub-queries targeting different entities/aspects
-2. **CoverageAnalyzer**: Identifies entities/concepts missing from current retrieved documents
-3. **GapQuery**: Generates targeted queries to retrieve missing information
-4. **DiversityReranker**: Selects top 21 most diverse and relevant documents using MMR-style scoring
+1. **InitialQueryGenerator**: Generates initial search query from claim
+2. **EntityExtractor**: Extracts 2-5 unexplored entity mentions from retrieved document titles
+3. **EntityQueryGenerator**: Generates focused queries for specific entities
+4. **RelevanceReranker**: Scores all documents by relevance to claim and selects top 21
 
 **Data Flow**:
-1. Input claim → Decompose into 2-3 diverse sub-queries (planning phase, not retrieval)
-2. Hop 1: Retrieve k=10 documents per sub-query in parallel, deduplicate
-3. Coverage Analysis: Identify missing entities/concepts from retrieved documents
-4. Hop 2: Generate gap-filling query and retrieve k=15 documents
-5. Combine and deduplicate all documents from both hops
-6. Diversity Reranking: Apply MMR-style scoring to select final 21 most diverse and relevant documents
-7. Output: 21 documents as retrieved_docs prediction
+1. Input claim → Generate initial query
+2. Hop 1: Retrieve k=15 documents with initial query
+3. Entity Extraction: Extract entity mentions from retrieved document titles
+4. Hop 2: Generate targeted queries for top 2-3 unexplored entities, retrieve k=10 docs each
+5. Conditional Hop 3: If under 50 total docs, extract entities again and retrieve k=15 more docs
+6. Deduplicate all documents across all hops
+7. Relevance Reranking: Score all documents and select top 21 by relevance
+8. Output: Top 21 documents as retrieved_docs prediction
 
 **Metric**: discrete_retrieval_eval compares normalized gold document titles against retrieved document titles, returning True if all gold titles are found within the retrieved set (subset check).
 
