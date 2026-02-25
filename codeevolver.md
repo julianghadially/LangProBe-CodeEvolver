@@ -2,15 +2,17 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a two-phase "retrieve-then-score" multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to maximize recall, then uses LLM-based relevance scoring to identify the most relevant supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements an entity-focused retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system extracts key named entities from claims, performs targeted retrieval queries for each entity to find specific Wikipedia articles, then uses a multi-faceted scoring mechanism to identify the most relevant supporting documents for fact-checking claims that require evidence from multiple sources.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that implements the two-phase architecture. Phase 1: Initializes ColBERTv2 retrieval and calls HoverMultiHop to retrieve ~36 documents (k=12 per hop × 3 hops). Phase 2: Deduplicates documents, scores each using DocumentRelevanceScorer with chain-of-thought reasoning, and returns the top 21 highest-scored documents. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline implementing entity-focused retrieval. First, extracts 3-5 key named entities (people, places, works, events) from the claim using the ExtractKeyEntities module. Then performs up to 3 entity-based retrieval queries (k=35 documents each) to target specific Wikipedia articles. After deduplication, employs a three-tier scoring mechanism that prioritizes: (1) exact entity name matches in document titles (100 points per match), (2) claim keyword overlap with titles (10 points) and content (2 points), and (3) LLM-based relevance scoring (1-10 points). Returns exactly 21 top-scored documents. Serves as the entry point for the evaluation framework.
 
-**DocumentRelevanceScorer** (`hover_pipeline.py`): DSPy ChainOfThought module that evaluates document relevance by taking a claim and document as input, outputting reasoning and a relevance score (1-10). This LLM-based scoring replaces sole reliance on ColBERT ranking to better identify supporting evidence.
+**ExtractKeyEntities** (`hover_pipeline.py`): DSPy Signature class that takes a claim as input and outputs a list of 3-5 key named entities (people, places, works, events) that are most helpful for finding supporting documents. Used to guide the entity-focused retrieval strategy.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=12 documents (configurable), uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops. Returns all retrieved documents for downstream scoring.
+**DocumentRelevanceScorer** (`hover_pipeline.py`): DSPy ChainOfThought module that evaluates document relevance by taking a claim and document as input, outputting reasoning and a relevance score (1-10). This LLM-based scoring serves as a baseline component of the multi-faceted scoring mechanism.
+
+**HoverMultiHop** (`hover_program.py`): Legacy core retrieval logic implementing a 3-hop iterative retrieval strategy. Currently not used by HoverMultiHopPipeline but preserved in codebase. Each hop retrieves k=12 documents (configurable), uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
 
 **hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
 
@@ -18,19 +20,24 @@ This program implements a two-phase "retrieve-then-score" multi-hop document ret
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. **Phase 1 - Retrieval (maximizing recall)**:
-   - Hop 1: Retrieve k=12 documents directly from claim, generate summary
-   - Hop 2: Create refined query from claim+summary_1, retrieve k=12 more documents, summarize
-   - Hop 3: Create query from claim+both summaries, retrieve k=12 final documents
-   - Total: ~36 documents retrieved
-3. **Phase 2 - Scoring and Selection (maximizing precision)**:
+2. **Entity Extraction**:
+   - ExtractKeyEntities module analyzes the claim and identifies 3-5 key named entities (people, places, works, events)
+   - Entities are limited to the first 3 for retrieval queries (constraint compliance)
+3. **Entity-Based Retrieval**:
+   - For each of the 3 entities, perform a separate retrieval query using the entity name directly
+   - Retrieve k=35 documents per entity query
+   - Total: up to 105 documents retrieved (3 queries × 35 documents)
+4. **Deduplication and Reranking**:
    - Deduplicate documents by title to get unique set
-   - Score each unique document using DocumentRelevanceScorer (LLM evaluates relevance with reasoning)
-   - Sort by relevance score (1-10) descending
+   - Score each document using three-tier mechanism:
+     * Tier 1: Exact entity name matches in title (+100 per match)
+     * Tier 2: Claim keyword overlap (title: +10 per word, content: +2 per word)
+     * Tier 3: LLM-based relevance score (+1 to +10)
+   - Sort by combined score descending
    - Return top 21 highest-scored documents as `retrieved_docs`
 
 ## Metric
-The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget. The two-phase architecture maximizes recall through over-retrieval (k=12), then uses LLM reasoning to select the most relevant subset.
+The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget. The entity-focused strategy maximizes recall by targeting specific Wikipedia articles for key entities (up to 105 documents with k=35 × 3 queries), then uses a multi-faceted scoring mechanism to prioritize documents with exact entity matches and high keyword overlap, ensuring the most relevant 21 documents are selected.
 
 ## DSPy Patterns and Guidelines
 
