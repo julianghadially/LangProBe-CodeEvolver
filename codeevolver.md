@@ -2,13 +2,17 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to find supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements a multi-hop document retrieval system with gap-aware query refinement for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops with feedback loops that analyze coverage gaps and target missing entities to find diverse supporting documents for fact-checking claims that require evidence from multiple sources.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline implementing a gap-aware 3-hop retrieval strategy. Initializes the ColBERTv2 retrieval model and manages the execution context. Each hop retrieves k=8 documents, performs gap analysis to identify missing entities, and generates queries targeting coverage gaps. Final deduplication ensures 21 unique documents are returned. Serves as the entry point for the evaluation framework.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
+**IdentifyMissingEntities** (signature in `hover_pipeline.py`): DSPy signature for gap analysis that compares the claim's entity requirements against retrieved document titles and summaries to identify which key entities or topics are missing from the current retrieval set.
+
+**GenerateQueryWithGaps** (signature in `hover_pipeline.py`): DSPy signature for generating search queries that specifically target missing entities and coverage gaps identified by gap analysis, enabling more diverse and complementary document retrieval.
+
+**HoverMultiHop** (`hover_program.py`): Legacy core retrieval logic implementing a simpler 3-hop iterative retrieval strategy (no longer directly used by the pipeline).
 
 **hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
 
@@ -16,10 +20,13 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. Hop 1: Retrieve k documents directly from claim, generate summary
-3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
-4. Hop 3: Create query from claim+both summaries, retrieve k final documents
-5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
+2. Hop 1: Retrieve k=8 documents directly from claim, generate summary, analyze gaps to identify missing entities
+3. Hop 2: Create gap-aware query targeting missing entities, retrieve k=8 more documents, combine and deduplicate, summarize new findings, analyze remaining gaps
+4. Hop 3: Create final gap-aware query targeting remaining missing entities, retrieve k=8 final documents
+5. Deduplicate all documents by normalized title, preserving order
+6. Return up to 21 unique documents as `retrieved_docs`
+
+The gap-aware feedback loop (retrieve → analyze gaps → generate targeted query → retrieve) enables the system to identify and fill coverage gaps, leading to more diverse and complete document sets.
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget.
