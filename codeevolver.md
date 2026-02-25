@@ -2,35 +2,33 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a two-phase "retrieve-then-score" multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to maximize recall, then uses LLM-based relevance scoring to identify the most relevant supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements Query Decomposition with Iterative Entity Discovery for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, and using gap analysis for self-correction. It retrieves ~40 documents across 3 iterations, then scores with LLM to return top 21 most relevant documents.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that implements the two-phase architecture. Phase 1: Initializes ColBERTv2 retrieval and calls HoverMultiHop to retrieve ~36 documents (k=12 per hop × 3 hops). Phase 2: Deduplicates documents, scores each using DocumentRelevanceScorer with chain-of-thought reasoning, and returns the top 21 highest-scored documents. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40 documents, scores with LLM, returns top 21. Entry point for evaluation.
 
-**DocumentRelevanceScorer** (`hover_pipeline.py`): DSPy ChainOfThought module that evaluates document relevance by taking a claim and document as input, outputting reasoning and a relevance score (1-10). This LLM-based scoring replaces sole reliance on ColBERT ranking to better identify supporting evidence.
+**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=12 documents (configurable), uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops. Returns all retrieved documents for downstream scoring.
+**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge.
 
-**hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
+**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries.
 
-**hover_data**: Loads and preprocesses the HoVer dataset, filtering for 3-hop examples and formatting them for DSPy evaluation.
+**DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
+
+**hover_utils**: Contains `discrete_retrieval_eval` metric for recall@21 evaluation.
+
+**hover_data**: Loads HoVer dataset with 3-hop examples.
 
 ## Data Flow
-1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. **Phase 1 - Retrieval (maximizing recall)**:
-   - Hop 1: Retrieve k=12 documents directly from claim, generate summary
-   - Hop 2: Create refined query from claim+summary_1, retrieve k=12 more documents, summarize
-   - Hop 3: Create query from claim+both summaries, retrieve k=12 final documents
-   - Total: ~36 documents retrieved
-3. **Phase 2 - Scoring and Selection (maximizing precision)**:
-   - Deduplicate documents by title to get unique set
-   - Score each unique document using DocumentRelevanceScorer (LLM evaluates relevance with reasoning)
-   - Sort by relevance score (1-10) descending
-   - Return top 21 highest-scored documents as `retrieved_docs`
+1. Input claim enters `HoverMultiHopPipeline.forward()`
+2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=5 docs per question → extract entities/relationships
+3. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
+4. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40 docs)
+5. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
 
 ## Metric
-The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget. The two-phase architecture maximizes recall through over-retrieval (k=12), then uses LLM reasoning to select the most relevant subset.
+The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture maximizes recall through claim decomposition, structured entity/relationship tracking, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
 
 ## DSPy Patterns and Guidelines
 
