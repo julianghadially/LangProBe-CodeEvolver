@@ -2,13 +2,13 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to find supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements a federated parallel multi-perspective retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system executes three independent specialist retrieval pathways in parallel to find supporting documents for fact-checking claims that require evidence from multiple sources.
 
 ## Key Modules
 
 **HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
+**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a federated parallel multi-perspective architecture with three specialist pathways: (1) Entity-focused retrieval using `ExtractCoreEntities` signature to identify key entities and retrieve k=12 documents, (2) Relationship-focused retrieval using `ExtractRelationships` signature to identify connections and retrieve k=12 documents, (3) Direct retrieval from the original claim retrieving k=12 documents. Uses `ScoreDocumentRelevance` signature to score all ~36 retrieved documents with LLM-based relevance scoring (1-10), then deduplicates by title keeping highest scores and returns top 21 unique documents.
 
 **hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
 
@@ -16,10 +16,13 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. Hop 1: Retrieve k documents directly from claim, generate summary
-3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
-4. Hop 3: Create query from claim+both summaries, retrieve k final documents
-5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
+2. Three parallel specialist pathways execute retrieval independently:
+   - Entity pathway: Extract entities → query with entities → retrieve 12 docs
+   - Relationship pathway: Extract relationships → query with relationships → retrieve 12 docs
+   - Direct pathway: Query with original claim → retrieve 12 docs
+3. Document fusion: Score all ~36 documents using LLM-based relevance scoring
+4. Deduplicate by title (keeping highest score per title) and select top 21 by score
+5. Return 21 highest-scoring unique documents as `retrieved_docs`
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget.
