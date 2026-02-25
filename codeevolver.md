@@ -6,7 +6,7 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework. Implements a query-intersection scoring reranker that assigns higher scores to documents appearing in multiple queries (cross-query frequency bonus) combined with position-based scoring, then deduplicates and selects the top 21 documents.
 
 **HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
 
@@ -19,7 +19,12 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 2. Hop 1: Retrieve k documents directly from claim, generate summary
 3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
 4. Hop 3: Create query from claim+both summaries, retrieve k final documents
-5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
+5. Query-Intersection Scoring: Apply a reranking algorithm that:
+   - Assigns position-based scores (earlier positions get higher scores)
+   - Applies cross-query frequency bonuses (documents appearing in multiple queries get multiplied scores)
+   - Deduplicates by document title while aggregating scores
+   - Selects top 21 unique documents by combined score
+6. Return reranked documents as `retrieved_docs`
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget.
