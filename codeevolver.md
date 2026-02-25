@@ -3,21 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims from the HoVer (Fact Extraction and VERification over Unstructured and Structured information) dataset. The system iteratively retrieves relevant documents across three hops to find supporting evidence for a given claim.
+**Purpose**: This is a multi-entity parallel document retrieval system for fact-checking claims from the HoVer (Fact Extraction and VERification over Unstructured and Structured information) dataset. The system uses query decomposition to retrieve documents about all entities mentioned in multi-entity claims rather than following a single sequential path, then applies two-stage reranking to select the most relevant documents.
 
 **Key Modules**:
 - **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and orchestrates the program execution. Inherits from LangProBeDSPyMetaProgram and dspy.Module.
-- **HoverMultiHop** (hover_program.py): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses chain-of-thought to generate summaries and refined queries for subsequent hops.
+- **HoverMultiHop** (hover_program.py): Core retrieval logic implementing parallel multi-entity query decomposition with two-stage reranking. Decomposes claims into 2-3 focused sub-queries, retrieves k=25 documents per sub-query (up to 75 total), scores each document with chain-of-thought reasoning, deduplicates by title, and selects top 21 unique documents by relevance score.
+- **ClaimDecomposition** (hover_program.py): DSPy signature that takes a claim and outputs 2-3 focused sub-queries targeting different entities or concepts within the claim for parallel retrieval.
+- **RelevanceScorer** (hover_program.py): DSPy ChainOfThought signature that scores each document's relevance to the original claim on a 1-10 scale with reasoning, enabling intelligent reranking.
 - **hoverBench** (hover_data.py): Dataset loader that filters HoVer dataset examples to only include 3-hop cases, formats them as DSPy examples with claims and supporting facts.
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are present in the retrieved documents (max 21 documents).
 
 **Data Flow**:
-1. Input claim is used to retrieve initial 7 documents (hop 1)
-2. Documents are summarized via chain-of-thought
-3. Summary generates refined query for hop 2, retrieves 7 more documents
-4. Hop 2 documents are summarized with context
-5. Combined summaries generate query for hop 3, retrieves final 7 documents
-6. All 21 documents (7×3 hops) are returned as retrieved_docs
+1. Input claim is decomposed into 2-3 focused sub-queries targeting different entities/concepts
+2. Each sub-query retrieves k=25 documents in parallel (up to 75 total documents)
+3. All retrieved documents are combined into a single pool
+4. Each document is scored for relevance to the original claim using chain-of-thought reasoning (RelevanceScorer) on a 1-10 scale
+5. Documents are deduplicated by normalized title
+6. Top 21 unique documents by relevance score are selected and returned as retrieved_docs
 
 **Metric**: discrete_retrieval_eval evaluates whether all gold supporting fact documents are subset of retrieved documents, enforcing a maximum of 21 retrieved documents.
 

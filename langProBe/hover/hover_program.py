@@ -2,40 +2,92 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class ClaimDecomposition(dspy.Signature):
+    """Decompose a claim into 2-3 focused sub-queries that target different entities or concepts within the claim.
+    Each sub-query should focus on a distinct entity, concept, or aspect of the claim to enable parallel retrieval
+    of documents about all entities mentioned rather than following a single sequential path."""
+
+    claim: str = dspy.InputField(desc="The claim to decompose into sub-queries")
+    sub_queries: list[str] = dspy.OutputField(desc="2-3 focused sub-queries, each targeting a different entity or concept in the claim")
+
+
+class RelevanceScorer(dspy.Signature):
+    """Score a document's relevance to the original claim on a 1-10 scale with reasoning.
+    Provide chain-of-thought reasoning explaining why the document is or isn't relevant to verifying the claim."""
+
+    claim: str = dspy.InputField(desc="The original claim being fact-checked")
+    document: str = dspy.InputField(desc="The document to score for relevance")
+    reasoning: str = dspy.OutputField(desc="Chain-of-thought reasoning about the document's relevance to the claim")
+    score: int = dspy.OutputField(desc="Relevance score from 1-10, where 10 is highly relevant and 1 is not relevant")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim. 
-    
+    '''Multi hop system for retrieving documents for a provided claim using parallel multi-entity query decomposition.
+
     EVALUATION
-    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.k = 25  # Retrieve 25 documents per sub-query
+        self.decompose = dspy.ChainOfThought(ClaimDecomposition)
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
-        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
+        self.score_relevance = dspy.ChainOfThought(RelevanceScorer)
 
     def forward(self, claim):
-        # HOP 1
-        hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        # Step 1: Decompose claim into 2-3 sub-queries targeting different entities
+        decomposition = self.decompose(claim=claim)
+        sub_queries = decomposition.sub_queries
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
-        hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        # Ensure we have 2-3 sub-queries (handle edge cases)
+        if not isinstance(sub_queries, list):
+            sub_queries = [sub_queries]
+        sub_queries = sub_queries[:3]  # Limit to max 3 sub-queries
+        if len(sub_queries) < 2:
+            # Fallback: if decomposition produces less than 2, add the original claim
+            sub_queries.append(claim)
 
-        # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
-        ).query
-        hop3_docs = self.retrieve_k(hop3_query).passages
+        # Step 2: Retrieve k=25 documents per sub-query in parallel (up to 75 total)
+        all_docs = []
+        for sub_query in sub_queries:
+            docs = self.retrieve_k(sub_query).passages
+            all_docs.extend(docs)
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Step 3: Score each document for relevance with chain-of-thought reasoning
+        scored_docs = []
+        for doc in all_docs:
+            try:
+                result = self.score_relevance(claim=claim, document=doc)
+                score = result.score
+                # Ensure score is an integer between 1-10
+                if isinstance(score, str):
+                    score = int(score)
+                score = max(1, min(10, score))
+                scored_docs.append((doc, score))
+            except (ValueError, AttributeError):
+                # If scoring fails, assign a default middle score
+                scored_docs.append((doc, 5))
+
+        # Step 4: Deduplicate by document title and select top 21 unique documents by score
+        # Document format is "title | content", extract title for deduplication
+        seen_titles = set()
+        unique_docs = []
+
+        # Sort by score (descending)
+        scored_docs.sort(key=lambda x: x[1], reverse=True)
+
+        for doc, score in scored_docs:
+            # Extract title (before the " | " separator)
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            normalized_title = title.lower().strip()
+
+            if normalized_title not in seen_titles:
+                seen_titles.add(normalized_title)
+                unique_docs.append(doc)
+
+                # Stop once we have 21 unique documents
+                if len(unique_docs) >= 21:
+                    break
+
+        return dspy.Prediction(retrieved_docs=unique_docs)
