@@ -6,7 +6,7 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline implementing entity-first retrieval strategy. Extracts named entities from claims, generates targeted queries per entity, retrieves documents with deduplication, and applies relevance filtering. Uses two new DSPy signatures: `ExtractKeyEntities` for entity identification and `EntityToQuery` for query generation. Initializes ColBERTv2 retrieval model and serves as the entry point for evaluation.
 
 **HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
 
@@ -16,10 +16,13 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. Hop 1: Retrieve k documents directly from claim, generate summary
-3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
-4. Hop 3: Create query from claim+both summaries, retrieve k final documents
-5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
+2. Entity extraction: Extract 3-5 key named entities from claim using `ExtractKeyEntities` signature
+3. Entity-to-query conversion: Generate retrieval-optimized queries for up to 3 entities using `EntityToQuery` signature
+4. Entity-targeted retrieval: Retrieve k=12 documents per entity query (up to 36 documents total)
+5. Deduplication: Keep only unique documents by title
+6. Broader query fill: If fewer than 21 unique documents, retrieve additional documents using the original claim
+7. Relevance filtering: Score documents by entity name overlap and select top 21
+8. Return final 21 documents as `retrieved_docs`
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget.
