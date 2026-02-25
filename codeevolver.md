@@ -2,13 +2,15 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to find supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to find supporting documents for fact-checking claims that require evidence from multiple sources. It uses a dual-track retrieval architecture that maintains both semantic context (summaries) and specific entity information (named entities, dates, locations) to prevent information loss during multi-hop retrieval.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline implementing the dual-track retrieval architecture. It initializes the ColBERTv2 retrieval model and manages the execution context. The pipeline maintains two parallel information tracks: an Abstract Track (summaries) and an Entity Track (extracted entities). For each hop, it performs both summarization and entity extraction, then uses both tracks to generate refined queries for subsequent hops.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
+**ExtractKeyEntities** (Signature in `hover_pipeline.py`): DSPy Signature that extracts specific named entities, dates, locations, organizations, and person names from retrieved documents. This preserves exact identifiers that might be lost during summarization.
+
+**HoverMultiHop** (`hover_program.py`): Legacy retrieval logic (deprecated in favor of inline implementation in HoverMultiHopPipeline). Previously implemented a 3-hop iterative retrieval strategy with single-track summarization.
 
 **hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
 
@@ -16,9 +18,13 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. Hop 1: Retrieve k documents directly from claim, generate summary
-3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
-4. Hop 3: Create query from claim+both summaries, retrieve k final documents
+2. Hop 1: Retrieve k documents directly from claim
+   - Abstract Track: Generate summary_1 from documents
+   - Entity Track: Extract entities_1 from documents
+3. Hop 2: Create refined query from claim + summary_1 + entities_1, retrieve k more documents
+   - Abstract Track: Generate summary_2 from documents
+   - Entity Track: Extract entities_2 from documents
+4. Hop 3: Create query from claim + summary_1 + summary_2 + entities_1 + entities_2, retrieve k final documents
 5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
 
 ## Metric
