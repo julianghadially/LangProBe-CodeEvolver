@@ -3,23 +3,21 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-entity parallel document retrieval system for fact-checking claims from the HoVer (Fact Extraction and VERification over Unstructured and Structured information) dataset. The system uses query decomposition to retrieve documents about all entities mentioned in multi-entity claims rather than following a single sequential path, then applies two-stage reranking to select the most relevant documents.
+**Purpose**: This is an iterative multi-hop document retrieval system with gap analysis for fact-checking claims from the HoVer (Fact Extraction and VERification over Unstructured and Structured information) dataset. The system uses a two-phase retrieval strategy: (1) initial parallel decomposition retrieval targeting multiple entities, (2) gap analysis to identify missing information and perform targeted follow-up retrieval. This addresses the pattern where single-pass retrieval consistently misses 1-2 critical documents per claim.
 
 **Key Modules**:
 - **HoverMultiHopPipeline** (hover_pipeline.py): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and orchestrates the program execution. Inherits from LangProBeDSPyMetaProgram and dspy.Module.
-- **HoverMultiHop** (hover_program.py): Core retrieval logic implementing parallel multi-entity query decomposition with two-stage reranking. Decomposes claims into 2-3 focused sub-queries, retrieves k=25 documents per sub-query (up to 75 total), scores each document with chain-of-thought reasoning, deduplicates by title, and selects top 21 unique documents by relevance score.
-- **ClaimDecomposition** (hover_program.py): DSPy signature that takes a claim and outputs 2-3 focused sub-queries targeting different entities or concepts within the claim for parallel retrieval.
-- **RelevanceScorer** (hover_program.py): DSPy ChainOfThought signature that scores each document's relevance to the original claim on a 1-10 scale with reasoning, enabling intelligent reranking.
+- **HoverMultiHop** (hover_program.py): Core retrieval logic implementing iterative retrieval with gap analysis. Three-phase approach: (1) Initial retrieval: decomposes claims into 2 focused sub-queries, retrieves k=50 documents per sub-query (100 total), (2) Gap analysis: identifies missing entities/concepts from initial retrieval and generates 1 targeted follow-up query, retrieves k=50 additional documents (150 total), (3) Two-stage reranking: scores all documents with chain-of-thought reasoning, deduplicates by title, selects top 21 unique documents. Limited to 3 total searches per claim (2 initial + 1 follow-up).
+- **ClaimDecomposition** (hover_program.py): DSPy signature that takes a claim and outputs exactly 2 focused sub-queries targeting different entities or concepts within the claim for parallel initial retrieval.
+- **GapAnalysis** (hover_program.py): DSPy ChainOfThought signature that analyzes initial retrieved documents to identify missing entities or concepts not adequately covered. Takes the claim and initial document titles as input, uses chain-of-thought reasoning to identify gaps, outputs 1 targeted follow-up query.
+- **RelevanceScorer** (hover_program.py): DSPy ChainOfThought signature that scores each document's relevance to the original claim on a 1-10 scale with reasoning, enabling intelligent reranking across all retrieved documents.
 - **hoverBench** (hover_data.py): Dataset loader that filters HoVer dataset examples to only include 3-hop cases, formats them as DSPy examples with claims and supporting facts.
 - **discrete_retrieval_eval** (hover_utils.py): Evaluation metric that checks if all gold supporting document titles are present in the retrieved documents (max 21 documents).
 
 **Data Flow**:
-1. Input claim is decomposed into 2-3 focused sub-queries targeting different entities/concepts
-2. Each sub-query retrieves k=25 documents in parallel (up to 75 total documents)
-3. All retrieved documents are combined into a single pool
-4. Each document is scored for relevance to the original claim using chain-of-thought reasoning (RelevanceScorer) on a 1-10 scale
-5. Documents are deduplicated by normalized title
-6. Top 21 unique documents by relevance score are selected and returned as retrieved_docs
+1. **Phase 1 - Initial Retrieval**: Input claim is decomposed into 2 focused sub-queries targeting different entities/concepts. Each sub-query retrieves k=50 documents (100 total documents).
+2. **Phase 2 - Gap Analysis & Follow-up**: Initial document titles are analyzed using chain-of-thought reasoning to identify missing entities or concepts. Gap analysis generates 1 targeted follow-up query. Follow-up query retrieves k=50 additional documents (150 total documents across all phases).
+3. **Phase 3 - Two-Stage Reranking**: All 150 retrieved documents are scored for relevance to the original claim using chain-of-thought reasoning (RelevanceScorer) on a 1-10 scale. Documents are deduplicated by normalized title. Top 21 unique documents by relevance score are selected and returned as retrieved_docs.
 
 **Metric**: discrete_retrieval_eval evaluates whether all gold supporting fact documents are subset of retrieved documents, enforcing a maximum of 21 retrieved documents.
 
