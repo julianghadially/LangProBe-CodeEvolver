@@ -11,6 +11,15 @@ class ClaimDecomposition(dspy.Signature):
     sub_queries: list[str] = dspy.OutputField(desc="2-3 focused sub-queries, each targeting a different entity or concept in the claim")
 
 
+class QuickRelevanceFilter(dspy.Signature):
+    """Quickly determine if a document is potentially relevant to the claim with a binary yes/no decision.
+    This is a fast filtering step to reduce the number of documents before detailed scoring."""
+
+    claim: str = dspy.InputField(desc="The original claim being fact-checked")
+    document: str = dspy.InputField(desc="The document to evaluate for potential relevance")
+    is_relevant: str = dspy.OutputField(desc="Answer 'yes' if the document is potentially relevant to the claim, 'no' otherwise")
+
+
 class RelevanceScorer(dspy.Signature):
     """Score a document's relevance to the original claim on a 1-10 scale with reasoning.
     Provide chain-of-thought reasoning explaining why the document is or isn't relevant to verifying the claim."""
@@ -30,10 +39,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 25  # Retrieve 25 documents per sub-query
+        self.k = 100  # Retrieve 100 documents per sub-query (up to 300 total)
         self.decompose = dspy.ChainOfThought(ClaimDecomposition)
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.score_relevance = dspy.ChainOfThought(RelevanceScorer)
+        self.quick_filter = dspy.Predict(QuickRelevanceFilter)  # First stage: fast binary filtering
+        self.score_relevance = dspy.ChainOfThought(RelevanceScorer)  # Second stage: detailed scoring
 
     def forward(self, claim):
         # Step 1: Decompose claim into 2-3 sub-queries targeting different entities
@@ -48,15 +58,33 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             # Fallback: if decomposition produces less than 2, add the original claim
             sub_queries.append(claim)
 
-        # Step 2: Retrieve k=25 documents per sub-query in parallel (up to 75 total)
+        # Step 2: Retrieve k=100 documents per sub-query in parallel (up to 300 total)
         all_docs = []
         for sub_query in sub_queries:
             docs = self.retrieve_k(sub_query).passages
             all_docs.extend(docs)
 
-        # Step 3: Score each document for relevance with chain-of-thought reasoning
-        scored_docs = []
+        # Step 3: First-stage reranking - Quick binary filtering to reduce ~300 docs to ~60
+        filtered_docs = []
         for doc in all_docs:
+            try:
+                result = self.quick_filter(claim=claim, document=doc)
+                is_relevant = result.is_relevant.lower().strip()
+                # Accept if the answer contains 'yes'
+                if 'yes' in is_relevant:
+                    filtered_docs.append(doc)
+            except (AttributeError, Exception):
+                # If filtering fails, include the document to be safe
+                filtered_docs.append(doc)
+
+        # Limit to top ~60 documents after filtering (if we get more than expected)
+        # We'll keep all filtered docs but cap at a reasonable number for the second stage
+        if len(filtered_docs) > 60:
+            filtered_docs = filtered_docs[:60]
+
+        # Step 4: Second-stage reranking - Detailed scoring with chain-of-thought on filtered docs
+        scored_docs = []
+        for doc in filtered_docs:
             try:
                 result = self.score_relevance(claim=claim, document=doc)
                 score = result.score
@@ -69,7 +97,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 # If scoring fails, assign a default middle score
                 scored_docs.append((doc, 5))
 
-        # Step 4: Deduplicate by document title and select top 21 unique documents by score
+        # Step 5: Deduplicate by document title and select top 21 unique documents by score
         # Document format is "title | content", extract title for deduplication
         seen_titles = set()
         unique_docs = []
