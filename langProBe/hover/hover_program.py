@@ -2,6 +2,33 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class ExtractEntities(dspy.Signature):
+    """Extract 3-5 specific named entities (people, works, places, organizations) from a claim.
+    Focus on concrete entities that can be used to retrieve factual information, not abstract concepts."""
+
+    claim: str = dspy.InputField(desc="The claim to extract entities from")
+    entities: list[str] = dspy.OutputField(desc="3-5 specific named entities (people, works, places, organizations) from the claim")
+
+
+class EntityToQuery(dspy.Signature):
+    """Generate a targeted search query focused on retrieving documents about a specific entity in the context of a claim.
+    The query should be entity-specific and designed to find factual information relevant to verifying the claim."""
+
+    claim: str = dspy.InputField(desc="The original claim being fact-checked")
+    entity: str = dspy.InputField(desc="The specific entity to focus the query on")
+    query: str = dspy.OutputField(desc="A targeted search query to retrieve documents about this entity")
+
+
+class LLMReranker(dspy.Signature):
+    """Analyze a batch of candidate documents and score their relevance to a claim.
+    Output relevance scores from 1-10 for each document, where 10 is highly relevant and 1 is not relevant.
+    Consider whether the document contains specific facts needed to verify the claim."""
+
+    claim: str = dspy.InputField(desc="The claim being fact-checked")
+    documents: str = dspy.InputField(desc="Batch of candidate documents to score, formatted as numbered list")
+    scores: list[int] = dspy.OutputField(desc="List of relevance scores (1-10) for each document in order")
+
+
 class ClaimDecomposition(dspy.Signature):
     """Decompose a claim into 2-3 focused sub-queries that target different entities or concepts within the claim.
     Each sub-query should focus on a distinct entity, concept, or aspect of the claim to enable parallel retrieval
@@ -22,7 +49,7 @@ class RelevanceScorer(dspy.Signature):
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim using parallel multi-entity query decomposition.
+    '''Multi hop system for retrieving documents for a provided claim using entity-focused queries and LLM-based reranking.
 
     EVALUATION
     - This system is assessed by retrieving the correct documents that are most relevant.
@@ -30,52 +57,102 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 25  # Retrieve 25 documents per sub-query
-        self.decompose = dspy.ChainOfThought(ClaimDecomposition)
-        self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.score_relevance = dspy.ChainOfThought(RelevanceScorer)
+        # Entity-focused retrieval modules
+        self.extract_entities = dspy.Predict(ExtractEntities)
+        self.entity_to_query = dspy.Predict(EntityToQuery)
+        self.retrieve_k = dspy.Retrieve(k=50)  # Retrieve 50 documents per entity query
+
+        # LLM-based reranking module
+        self.reranker = dspy.ChainOfThought(LLMReranker)
 
     def forward(self, claim):
-        # Step 1: Decompose claim into 2-3 sub-queries targeting different entities
-        decomposition = self.decompose(claim=claim)
-        sub_queries = decomposition.sub_queries
+        # Step 1: Extract 3-5 specific named entities from the claim
+        entity_result = self.extract_entities(claim=claim)
+        entities = entity_result.entities
 
-        # Ensure we have 2-3 sub-queries (handle edge cases)
-        if not isinstance(sub_queries, list):
-            sub_queries = [sub_queries]
-        sub_queries = sub_queries[:3]  # Limit to max 3 sub-queries
-        if len(sub_queries) < 2:
-            # Fallback: if decomposition produces less than 2, add the original claim
-            sub_queries.append(claim)
+        # Ensure we have a list of entities
+        if not isinstance(entities, list):
+            entities = [entities]
 
-        # Step 2: Retrieve k=25 documents per sub-query in parallel (up to 75 total)
-        all_docs = []
-        for sub_query in sub_queries:
-            docs = self.retrieve_k(sub_query).passages
-            all_docs.extend(docs)
+        # Limit to 3 entities to retrieve max 150 documents (3 * 50)
+        entities = entities[:3]
 
-        # Step 3: Score each document for relevance with chain-of-thought reasoning
-        scored_docs = []
-        for doc in all_docs:
+        # Handle edge case: if no entities extracted, use the claim itself
+        if len(entities) == 0:
+            entities = [claim]
+
+        # Step 2: For each entity, generate a targeted search query
+        entity_queries = []
+        for entity in entities:
             try:
-                result = self.score_relevance(claim=claim, document=doc)
-                score = result.score
-                # Ensure score is an integer between 1-10
-                if isinstance(score, str):
-                    score = int(score)
-                score = max(1, min(10, score))
-                scored_docs.append((doc, score))
-            except (ValueError, AttributeError):
-                # If scoring fails, assign a default middle score
-                scored_docs.append((doc, 5))
+                query_result = self.entity_to_query(claim=claim, entity=entity)
+                entity_queries.append(query_result.query)
+            except (AttributeError, ValueError):
+                # Fallback: use entity directly as query
+                entity_queries.append(entity)
 
-        # Step 4: Deduplicate by document title and select top 21 unique documents by score
-        # Document format is "title | content", extract title for deduplication
-        seen_titles = set()
+        # Step 3: Retrieve k=50 documents per entity query (up to 150 total)
+        all_docs = []
+        for query in entity_queries:
+            try:
+                docs = self.retrieve_k(query).passages
+                all_docs.extend(docs)
+            except Exception:
+                # Skip if retrieval fails for this query
+                continue
+
+        # Remove duplicates while preserving order
+        seen = set()
         unique_docs = []
+        for doc in all_docs:
+            doc_key = doc.lower().strip()
+            if doc_key not in seen:
+                seen.add(doc_key)
+                unique_docs.append(doc)
 
-        # Sort by score (descending)
+        # Step 4: Apply LLM reranking in sliding windows of 10 documents
+        batch_size = 10
+        scored_docs = []
+
+        for i in range(0, len(unique_docs), batch_size):
+            batch = unique_docs[i:i+batch_size]
+
+            # Format documents as numbered list for the reranker
+            doc_list = "\n".join([f"{j+1}. {doc}" for j, doc in enumerate(batch)])
+
+            try:
+                rerank_result = self.reranker(claim=claim, documents=doc_list)
+                scores = rerank_result.scores
+
+                # Ensure scores is a list
+                if not isinstance(scores, list):
+                    scores = [scores]
+
+                # Match scores to documents
+                for j, doc in enumerate(batch):
+                    if j < len(scores):
+                        try:
+                            score = int(scores[j]) if isinstance(scores[j], (int, str)) else 5
+                            score = max(1, min(10, score))  # Clamp to 1-10 range
+                        except (ValueError, TypeError):
+                            score = 5  # Default score if parsing fails
+                    else:
+                        score = 5  # Default score if not enough scores returned
+
+                    scored_docs.append((doc, score))
+
+            except (AttributeError, ValueError, Exception):
+                # If reranking fails, assign default scores to this batch
+                for doc in batch:
+                    scored_docs.append((doc, 5))
+
+        # Step 5: Select top 21 documents based on LLM reranking scores
+        # Sort by score descending
         scored_docs.sort(key=lambda x: x[1], reverse=True)
+
+        # Deduplicate by title and select top 21
+        seen_titles = set()
+        final_docs = []
 
         for doc, score in scored_docs:
             # Extract title (before the " | " separator)
@@ -84,10 +161,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
             if normalized_title not in seen_titles:
                 seen_titles.add(normalized_title)
-                unique_docs.append(doc)
+                final_docs.append(doc)
 
                 # Stop once we have 21 unique documents
-                if len(unique_docs) >= 21:
+                if len(final_docs) >= 21:
                     break
 
-        return dspy.Prediction(retrieved_docs=unique_docs)
+        return dspy.Prediction(retrieved_docs=final_docs)
