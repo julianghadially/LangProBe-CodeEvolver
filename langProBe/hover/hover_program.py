@@ -21,6 +21,25 @@ class RelevanceScorer(dspy.Signature):
     score: int = dspy.OutputField(desc="Relevance score from 1-10, where 10 is highly relevant and 1 is not relevant")
 
 
+class MissingEntityDetector(dspy.Signature):
+    """Analyze a claim and the titles of retrieved documents to identify 1-2 specific entities or facts from the claim
+    that are poorly covered by the current documents. Focus on key entities, dates, locations, or relationships
+    mentioned in the claim that don't appear to have dedicated documents."""
+
+    claim: str = dspy.InputField(desc="The claim being fact-checked")
+    retrieved_titles: str = dspy.InputField(desc="List of document titles retrieved so far")
+    missing_elements: list[str] = dspy.OutputField(desc="1-2 specific entities or facts from the claim that are poorly covered by current documents")
+
+
+class TargetedQueryGenerator(dspy.Signature):
+    """Generate 1 highly specific query to find documents about missing entities or facts from a claim.
+    The query should be focused and precise to retrieve documents that fill gaps in the current document pool."""
+
+    claim: str = dspy.InputField(desc="The original claim being fact-checked")
+    missing_elements: str = dspy.InputField(desc="Specific entities or facts that are poorly covered")
+    targeted_query: str = dspy.OutputField(desc="A highly specific query to find documents about the missing elements")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim using parallel multi-entity query decomposition.
 
@@ -34,6 +53,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.decompose = dspy.ChainOfThought(ClaimDecomposition)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.score_relevance = dspy.ChainOfThought(RelevanceScorer)
+        self.detect_gaps = dspy.ChainOfThought(MissingEntityDetector)
+        self.generate_targeted_query = dspy.ChainOfThought(TargetedQueryGenerator)
+        self.retrieve_targeted = dspy.Retrieve(k=25)  # Gap-filling retrieval
 
     def forward(self, claim):
         # Step 1: Decompose claim into 2-3 sub-queries targeting different entities
@@ -43,16 +65,59 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Ensure we have 2-3 sub-queries (handle edge cases)
         if not isinstance(sub_queries, list):
             sub_queries = [sub_queries]
-        sub_queries = sub_queries[:3]  # Limit to max 3 sub-queries
+        # Limit to 2 sub-queries to leave room for 1 targeted query (total 3 queries)
+        sub_queries = sub_queries[:2]
         if len(sub_queries) < 2:
             # Fallback: if decomposition produces less than 2, add the original claim
             sub_queries.append(claim)
 
-        # Step 2: Retrieve k=25 documents per sub-query in parallel (up to 75 total)
+        # Step 2: Retrieve k=25 documents per sub-query in parallel (up to 50 total)
         all_docs = []
         for sub_query in sub_queries:
             docs = self.retrieve_k(sub_query).passages
             all_docs.extend(docs)
+
+        # Step 2.5: Gap detection and targeted retrieval
+        # Extract document titles for gap analysis
+        doc_titles = []
+        for doc in all_docs:
+            title = doc.split(" | ")[0] if " | " in doc else doc
+            doc_titles.append(title)
+
+        retrieved_titles_str = "\n".join(doc_titles)
+
+        # Detect gaps in coverage
+        try:
+            gap_result = self.detect_gaps(claim=claim, retrieved_titles=retrieved_titles_str)
+            missing_elements = gap_result.missing_elements
+
+            # Ensure missing_elements is a list
+            if not isinstance(missing_elements, list):
+                missing_elements = [missing_elements]
+
+            # If gaps are detected, perform targeted retrieval
+            if missing_elements and len(missing_elements) > 0:
+                # Filter out empty or meaningless elements
+                missing_elements = [e for e in missing_elements if e and isinstance(e, str) and len(e.strip()) > 0]
+
+                if missing_elements:
+                    # Limit to 1-2 missing elements
+                    missing_elements = missing_elements[:2]
+                    missing_elements_str = ", ".join(missing_elements)
+
+                    # Generate a targeted query to fill the gaps
+                    targeted_query_result = self.generate_targeted_query(
+                        claim=claim,
+                        missing_elements=missing_elements_str
+                    )
+                    targeted_query = targeted_query_result.targeted_query
+
+                    # Perform targeted retrieval
+                    targeted_docs = self.retrieve_targeted(targeted_query).passages
+                    all_docs.extend(targeted_docs)
+        except (AttributeError, ValueError, Exception):
+            # If gap detection fails, continue with existing documents
+            pass
 
         # Step 3: Score each document for relevance with chain-of-thought reasoning
         scored_docs = []
