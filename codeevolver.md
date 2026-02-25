@@ -2,13 +2,15 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system performs iterative retrieval across three hops to find supporting documents for fact-checking claims that require evidence from multiple sources.
+This program implements a parallel multi-perspective document retrieval system for the HoVer (Hover-nlp) claim verification benchmark using DSPy. The system generates diverse queries from different analytical perspectives and executes parallel retrievals to find supporting documents for fact-checking claims that require evidence from multiple sources.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline wrapper that initializes the ColBERTv2 retrieval model and manages the execution context. Serves as the entry point for the evaluation framework.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Top-level pipeline that implements a parallel multi-perspective query generation strategy. Initializes the ColBERTv2 retrieval model, generates 3 diverse queries simultaneously (entity-focused, relationship-focused, and contextual), executes parallel retrievals with k=11 each, and applies frequency-based deduplication to rank documents that appear in multiple query results higher. Serves as the entry point for the evaluation framework.
 
-**HoverMultiHop** (`hover_program.py`): Core retrieval logic implementing a 3-hop iterative retrieval strategy. Each hop retrieves k=7 documents, uses Chain-of-Thought prompting to summarize findings, and generates refined queries for subsequent hops.
+**GenerateDiverseQueries** (DSPy Signature in `hover_pipeline.py`): Signature that generates exactly 3 diverse, non-overlapping search queries from a claim: (1) entity_query focused on named entities (people, places, organizations, dates), (2) relationship_query focused on connections/comparisons between entities, and (3) contextual_query focused on broader domain/category context.
+
+**HoverMultiHop** (`hover_program.py`): Legacy retrieval logic (not currently used) that implemented a 3-hop iterative retrieval strategy with Chain-of-Thought summarization.
 
 **hover_utils**: Contains the evaluation metric `discrete_retrieval_eval` that checks if all gold supporting documents are found within the top 21 retrieved documents.
 
@@ -16,10 +18,10 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 ## Data Flow
 1. Input claim enters via `HoverMultiHopPipeline.forward()`
-2. Hop 1: Retrieve k documents directly from claim, generate summary
-3. Hop 2: Create refined query from claim+summary_1, retrieve k more documents, summarize
-4. Hop 3: Create query from claim+both summaries, retrieve k final documents
-5. Return all 21 documents (3 hops × 7 docs) as `retrieved_docs`
+2. Generate 3 diverse queries in parallel using `GenerateDiverseQueries` signature (entity, relationship, contextual perspectives)
+3. Execute 3 parallel retrieval calls with k=11 each (~33 total documents)
+4. Combine all retrieved documents and deduplicate using frequency-based scoring (documents appearing in multiple query results rank higher)
+5. Truncate to exactly 21 documents and return as `retrieved_docs`
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles from `supporting_facts` are present in the retrieved set. Success requires the retrieval pipeline to discover all necessary evidence documents within the 21-document budget.
