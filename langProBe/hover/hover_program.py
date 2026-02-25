@@ -3,15 +3,15 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim. 
-    
+    '''Multi hop system for retrieving documents for a provided claim.
+
     EVALUATION
-    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
-    def __init__(self):
+    def __init__(self, k=7):
         super().__init__()
-        self.k = 7
+        self.k = k
         self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
         self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
