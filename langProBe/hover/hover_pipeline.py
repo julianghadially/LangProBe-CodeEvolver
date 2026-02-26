@@ -36,6 +36,16 @@ class GapAnalysis(dspy.Signature):
     targeted_queries: list[str] = dspy.OutputField(desc="2-3 specific search queries to find the missing information")
 
 
+class EntityTitleExtractor(dspy.Signature):
+    """Extract potential Wikipedia article titles (proper nouns) from the claim and retrieved context.
+    Focus on specific entities that would have their own Wikipedia articles: people, places, events, organizations, works (books, films, albums, etc.).
+    Extract the exact names as they would appear in Wikipedia article titles (e.g., 'Pat Ashton', 'SM Megamall', 'Planes Trains and Automobiles')."""
+
+    claim: str = dspy.InputField(desc="the claim being verified")
+    context: str = dspy.InputField(desc="retrieved documents providing context")
+    entity_titles: list[str] = dspy.OutputField(desc="list of 3-5 potential Wikipedia article titles (proper nouns: people, places, events, works, organizations)")
+
+
 class DocumentRelevanceSignature(dspy.Signature):
     """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
 
@@ -78,10 +88,12 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposition)
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
+        self.entity_title_extractor = dspy.ChainOfThought(EntityTitleExtractor)
         self.scorer = DocumentRelevanceScorer()
 
-        # Retrieval module
-        self.retrieve_k = dspy.Retrieve(k=5)
+        # Retrieval modules with different k values
+        self.retrieve_semantic = dspy.Retrieve(k=5)  # For semantic queries
+        self.retrieve_entity = dspy.Retrieve(k=3)    # For entity-title queries
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -89,65 +101,83 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             all_retrieved_docs = []
             entities_store = []
             relationships_store = []
+            seen_titles = set()  # Track seen titles for deduplication
 
-            # ========== ITERATION 1: Decompose and Initial Retrieval ==========
-            # Decompose claim into 2-3 sub-questions
-            decomposition_result = self.claim_decomposer(claim=claim)
-            sub_questions = decomposition_result.sub_questions
+            def deduplicate_docs(docs):
+                """Helper to deduplicate documents by title."""
+                unique_docs = []
+                for doc in docs:
+                    title = doc.split(" | ")[0]
+                    if title not in seen_titles:
+                        seen_titles.add(title)
+                        unique_docs.append(doc)
+                return unique_docs
 
-            # Ensure we have a list of sub-questions (handle different DSPy output formats)
-            if not isinstance(sub_questions, list):
-                # If it's a string, try to parse it as a list
-                if isinstance(sub_questions, str):
-                    # Try to split by newlines or common delimiters
-                    sub_questions = [q.strip() for q in sub_questions.split('\n') if q.strip()]
-                    # Remove numbered prefixes like "1.", "2.", etc.
-                    sub_questions = [q.lstrip('0123456789.-)> ').strip() for q in sub_questions if q.strip()]
-                else:
-                    # Fallback: use original claim
-                    sub_questions = [claim]
+            def normalize_list(value):
+                """Helper to normalize DSPy outputs to lists."""
+                if not isinstance(value, list):
+                    if isinstance(value, str):
+                        items = [q.strip() for q in value.split('\n') if q.strip()]
+                        items = [q.lstrip('0123456789.-)> ').strip() for q in items if q.strip()]
+                        return items
+                    return [str(value)] if value else []
+                return value
 
-            # Limit to first 3 sub-questions to control retrieval volume
-            sub_questions = sub_questions[:3]
+            # ========== ITERATION 1: Dual-Query Architecture (Semantic + Entity) ==========
 
-            # Retrieve documents for each sub-question (k=5 per sub-question)
+            # STEP 1A: Decompose claim into semantic sub-questions
+            try:
+                decomposition_result = self.claim_decomposer(claim=claim)
+                semantic_queries = normalize_list(decomposition_result.sub_questions)[:3]  # Max 3
+            except Exception:
+                semantic_queries = [claim]
+
+            # STEP 1B: Extract entity titles from claim
+            try:
+                entity_title_result = self.entity_title_extractor(claim=claim, context=claim)
+                entity_queries = normalize_list(entity_title_result.entity_titles)[:5]  # Max 5
+            except Exception:
+                entity_queries = []
+
+            # STEP 1C: Retrieve documents in parallel for both query types
             iteration1_docs = []
-            for sub_q in sub_questions:
+
+            # Semantic queries: k=5 per query
+            for query in semantic_queries:
                 try:
-                    docs = self.retrieve_k(sub_q).passages
+                    docs = self.retrieve_semantic(query).passages
                     iteration1_docs.extend(docs)
                 except Exception:
-                    # If retrieval fails, continue with other sub-questions
                     pass
 
-            all_retrieved_docs.extend(iteration1_docs)
+            # Entity-title queries: k=3 per query
+            for entity in entity_queries:
+                try:
+                    docs = self.retrieve_entity(entity).passages
+                    iteration1_docs.extend(docs)
+                except Exception:
+                    pass
 
-            # Extract entities and relationships from iteration 1 documents
-            if iteration1_docs:
-                docs_text = "\n\n".join(iteration1_docs[:15])  # Limit context size
+            # STEP 1D: Deduplicate after iteration 1
+            iteration1_unique = deduplicate_docs(iteration1_docs)
+            all_retrieved_docs.extend(iteration1_unique)
+
+            # STEP 1E: Extract entities and relationships from iteration 1 documents
+            if iteration1_unique:
+                docs_text = "\n\n".join(iteration1_unique[:15])  # Limit context size
                 try:
                     extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    # Handle extraction results (ensure they are lists)
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
+                    entities_store.extend(normalize_list(extraction_result.entities))
+                    relationships_store.extend(normalize_list(extraction_result.relationships))
                 except Exception:
-                    # If extraction fails, continue without entities
                     pass
 
-            # ========== ITERATION 2: Gap Analysis and Targeted Retrieval ==========
-            # Perform gap analysis to identify missing information
+            # ========== ITERATION 2: Gap Analysis + Entity Title Extraction ==========
+
+            # STEP 2A: Perform gap analysis for semantic queries
             entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
             relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(iteration1_docs)} documents from sub-questions"
+            docs_summary = f"Retrieved {len(all_retrieved_docs)} unique documents from iteration 1"
 
             try:
                 gap_result = self.gap_analyzer(
@@ -156,58 +186,57 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     relationships_found=relationships_summary,
                     documents_retrieved=docs_summary
                 )
-
-                # Get targeted queries from gap analysis
-                targeted_queries = gap_result.targeted_queries
-                if not isinstance(targeted_queries, list):
-                    if isinstance(targeted_queries, str):
-                        targeted_queries = [q.strip() for q in targeted_queries.split('\n') if q.strip()]
-                        targeted_queries = [q.lstrip('0123456789.-)> ').strip() for q in targeted_queries if q.strip()]
-                    else:
-                        targeted_queries = []
-
-                # Limit to 3 queries to control retrieval volume
-                targeted_queries = targeted_queries[:3]
-
+                semantic_queries_iter2 = normalize_list(gap_result.targeted_queries)[:3]  # Max 3
             except Exception:
-                # If gap analysis fails, use fallback queries
-                targeted_queries = [claim]
+                semantic_queries_iter2 = [claim]
 
-            # Retrieve documents for each targeted query (k=5 per query)
+            # STEP 2B: Extract entity titles from current context
+            context_for_entities = "\n\n".join(all_retrieved_docs[:20]) if all_retrieved_docs else claim
+            try:
+                entity_title_result2 = self.entity_title_extractor(claim=claim, context=context_for_entities)
+                entity_queries_iter2 = normalize_list(entity_title_result2.entity_titles)[:5]  # Max 5
+            except Exception:
+                entity_queries_iter2 = []
+
+            # STEP 2C: Retrieve documents in parallel for both query types
             iteration2_docs = []
-            for query in targeted_queries:
+
+            # Semantic queries: k=5 per query
+            for query in semantic_queries_iter2:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    docs = self.retrieve_semantic(query).passages
                     iteration2_docs.extend(docs)
                 except Exception:
                     pass
 
-            all_retrieved_docs.extend(iteration2_docs)
-
-            # Extract entities from iteration 2 documents
-            if iteration2_docs:
-                docs_text = "\n\n".join(iteration2_docs[:15])
+            # Entity-title queries: k=3 per query
+            for entity in entity_queries_iter2:
                 try:
-                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
+                    docs = self.retrieve_entity(entity).passages
+                    iteration2_docs.extend(docs)
                 except Exception:
                     pass
 
-            # ========== ITERATION 3: Final Gap Analysis and Specific Retrieval ==========
-            # Update summaries with iteration 2 findings
+            # STEP 2D: Deduplicate after iteration 2
+            iteration2_unique = deduplicate_docs(iteration2_docs)
+            all_retrieved_docs.extend(iteration2_unique)
+
+            # STEP 2E: Extract entities from iteration 2 documents
+            if iteration2_unique:
+                docs_text = "\n\n".join(iteration2_unique[:15])
+                try:
+                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
+                    entities_store.extend(normalize_list(extraction_result.entities))
+                    relationships_store.extend(normalize_list(extraction_result.relationships))
+                except Exception:
+                    pass
+
+            # ========== ITERATION 3: Final Gap Analysis + Entity Title Extraction ==========
+
+            # STEP 3A: Final gap analysis for semantic queries
             entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
             relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(all_retrieved_docs)} documents total across iterations 1-2"
+            docs_summary = f"Retrieved {len(all_retrieved_docs)} unique documents total across iterations 1-2"
 
             try:
                 final_gap_result = self.gap_analyzer(
@@ -216,57 +245,53 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     relationships_found=relationships_summary,
                     documents_retrieved=docs_summary
                 )
-
-                # Get final targeted queries
-                final_queries = final_gap_result.targeted_queries
-                if not isinstance(final_queries, list):
-                    if isinstance(final_queries, str):
-                        final_queries = [q.strip() for q in final_queries.split('\n') if q.strip()]
-                        final_queries = [q.lstrip('0123456789.-)> ').strip() for q in final_queries if q.strip()]
-                    else:
-                        final_queries = []
-
-                # Limit to 3 queries
-                final_queries = final_queries[:3]
-
+                semantic_queries_iter3 = normalize_list(final_gap_result.targeted_queries)[:3]  # Max 3
             except Exception:
-                # Fallback: use claim-based query
-                final_queries = [claim]
+                semantic_queries_iter3 = [claim]
 
-            # Retrieve documents for final queries (k=5 per query)
+            # STEP 3B: Extract entity titles from accumulated context
+            context_for_entities_final = "\n\n".join(all_retrieved_docs[:30]) if all_retrieved_docs else claim
+            try:
+                entity_title_result3 = self.entity_title_extractor(claim=claim, context=context_for_entities_final)
+                entity_queries_iter3 = normalize_list(entity_title_result3.entity_titles)[:5]  # Max 5
+            except Exception:
+                entity_queries_iter3 = []
+
+            # STEP 3C: Retrieve documents in parallel for both query types
             iteration3_docs = []
-            for query in final_queries:
+
+            # Semantic queries: k=5 per query
+            for query in semantic_queries_iter3:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    docs = self.retrieve_semantic(query).passages
                     iteration3_docs.extend(docs)
                 except Exception:
                     pass
 
-            all_retrieved_docs.extend(iteration3_docs)
+            # Entity-title queries: k=3 per query
+            for entity in entity_queries_iter3:
+                try:
+                    docs = self.retrieve_entity(entity).passages
+                    iteration3_docs.extend(docs)
+                except Exception:
+                    pass
 
-            # ========== POST-ITERATION: Deduplication, Scoring, and Selection ==========
-            # Deduplicate documents based on title (before " | ")
-            unique_docs = []
-            seen_titles = set()
-            for doc in all_retrieved_docs:
-                title = doc.split(" | ")[0]
-                if title not in seen_titles:
-                    seen_titles.add(title)
-                    unique_docs.append(doc)
+            # STEP 3D: Deduplicate after iteration 3
+            iteration3_unique = deduplicate_docs(iteration3_docs)
+            all_retrieved_docs.extend(iteration3_unique)
 
+            # ========== POST-ITERATION: Scoring and Selection ==========
             # Score each unique document with DocumentRelevanceScorer
             scored_docs = []
-            for doc in unique_docs:
+            for doc in all_retrieved_docs:
                 try:
                     score_result = self.scorer(claim=claim, document=doc)
-                    # Parse score as integer, default to 5 if parsing fails
                     try:
                         score = int(score_result.score)
                     except (ValueError, TypeError):
                         score = 5
                     scored_docs.append((doc, score))
                 except Exception:
-                    # If scoring fails, assign neutral score
                     scored_docs.append((doc, 5))
 
             # Sort by score descending and take top 21

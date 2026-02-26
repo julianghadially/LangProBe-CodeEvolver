@@ -2,17 +2,19 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements Query Decomposition with Iterative Entity Discovery for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, and using gap analysis for self-correction. It retrieves ~40 documents across 3 iterations, then scores with LLM to return top 21 most relevant documents.
+This program implements a Dual-Query Architecture with Entity-Title Extraction for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system combines semantic retrieval with explicit entity-title queries to maximize recall. Each iteration generates TWO types of queries in parallel: (1) semantic queries from claim decomposition and gap analysis for contextual retrieval, and (2) entity-focused queries that are literal Wikipedia article titles (proper nouns) extracted from the claim and retrieved context. This dual approach ensures both semantic relevance and direct entity article retrieval across 3 iterations, retrieving and deduplicating documents before scoring with LLM to return the top 21 most relevant.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40 documents, scores with LLM, returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing dual-query architecture. For each of 3 iterations: (1) generates max 3 semantic queries (k=5 docs each) via ClaimDecomposition/GapAnalysis, (2) generates max 5 entity-title queries (k=3 docs each) via EntityTitleExtractor, (3) retrieves documents for both query types in parallel, (4) deduplicates by title after each iteration, (5) extracts entities/relationships for next iteration. After 3 iterations, scores all unique documents with LLM and returns top 21. Entry point for evaluation.
 
-**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
+**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 semantic sub-questions for contextual retrieval.
 
-**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge.
+**EntityTitleExtractor** (`hover_pipeline.py`): NEW signature extracting 3-5 potential Wikipedia article titles (proper nouns: people, places, events, works, organizations) from claim and context. Acts as lexical anchor for direct entity article retrieval.
 
-**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries.
+**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge tracking.
+
+**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating 2-3 targeted semantic queries for next iteration.
 
 **DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
 
@@ -22,10 +24,10 @@ This program implements Query Decomposition with Iterative Entity Discovery for 
 
 ## Data Flow
 1. Input claim enters `HoverMultiHopPipeline.forward()`
-2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=5 docs per question → extract entities/relationships
-3. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
-4. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40 docs)
-5. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
+2. **Iteration 1**: (A) Decompose claim → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from claim → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title → extract entities/relationships
+3. **Iteration 2**: (A) GapAnalysis on iteration 1 results → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from accumulated context → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title → update entities/relationships
+4. **Iteration 3**: (A) Final GapAnalysis → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from full context → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title
+5. **Post-Iteration**: Score all unique documents with DocumentRelevanceScorer (LLM reasoning) → sort by score descending → return top 21 documents
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture maximizes recall through claim decomposition, structured entity/relationship tracking, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
