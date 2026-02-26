@@ -36,6 +36,15 @@ class GapAnalysis(dspy.Signature):
     targeted_queries: list[str] = dspy.OutputField(desc="2-3 specific search queries to find the missing information")
 
 
+class BridgingEntityIdentifier(dspy.Signature):
+    """Identify specific bridging entities (people, organizations, events) mentioned in retrieved documents that are not explicitly in the original claim but are crucial for verification.
+    These entities appear in the documents as important intermediate connections and need their own dedicated document retrieval."""
+
+    claim: str = dspy.InputField(desc="the original claim being verified")
+    documents: str = dspy.InputField(desc="the retrieved documents to analyze for bridging entities")
+    bridging_entities: list[str] = dspy.OutputField(desc="3-5 specific entity names (people, organizations, events) that appear in documents but need standalone retrieval (e.g., 'Lisa Raymond', 'Ellis Ferreira', 'Wimbledon Championships')")
+
+
 class DocumentRelevanceSignature(dspy.Signature):
     """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
 
@@ -78,6 +87,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposition)
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
+        self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
         self.scorer = DocumentRelevanceScorer()
 
         # Retrieval module
@@ -141,6 +151,45 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     relationships_store.extend(relationships)
                 except Exception:
                     # If extraction fails, continue without entities
+                    pass
+
+            # ========== BRIDGING ENTITY DISCOVERY: Identify and Retrieve Implicit Entities ==========
+            # After iteration 1, identify bridging entities that appear in documents but need dedicated retrieval
+            if iteration1_docs:
+                docs_text_for_bridging = "\n\n".join(iteration1_docs[:15])  # Limit context size
+                try:
+                    bridging_result = self.bridging_identifier(claim=claim, documents=docs_text_for_bridging)
+
+                    # Get bridging entities
+                    bridging_entities = bridging_result.bridging_entities
+                    if not isinstance(bridging_entities, list):
+                        if isinstance(bridging_entities, str):
+                            # Parse string into list
+                            bridging_entities = [e.strip() for e in bridging_entities.split('\n') if e.strip()]
+                            # Remove numbered prefixes
+                            bridging_entities = [e.lstrip('0123456789.-)> ').strip() for e in bridging_entities if e.strip()]
+                        else:
+                            bridging_entities = []
+
+                    # Limit to 3-5 entities to control retrieval volume
+                    bridging_entities = bridging_entities[:5]
+
+                    # Retrieve documents for each bridging entity using just the entity name
+                    bridging_docs = []
+                    for entity_name in bridging_entities:
+                        try:
+                            # Direct retrieve using entity name as query (e.g., 'Lisa Raymond', 'Ellis Ferreira')
+                            docs = self.retrieve_k(entity_name).passages
+                            bridging_docs.extend(docs)
+                        except Exception:
+                            # If retrieval fails for this entity, continue with others
+                            pass
+
+                    # Add bridging documents to all_retrieved_docs before iteration 2
+                    all_retrieved_docs.extend(bridging_docs)
+
+                except Exception:
+                    # If bridging entity identification fails, continue without it
                     pass
 
             # ========== ITERATION 2: Gap Analysis and Targeted Retrieval ==========
