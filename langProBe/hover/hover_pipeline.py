@@ -14,6 +14,14 @@ class ClaimDecomposition(dspy.Signature):
     sub_questions: list[str] = dspy.OutputField(desc="2-3 specific sub-questions that break down the claim into answerable components")
 
 
+class GapAnalyzer(dspy.Signature):
+    """Analyze a claim to identify what specific facts and information need to be verified.
+    Focus on identifying missing pieces of information that would be needed to support or refute the claim."""
+
+    claim: str = dspy.InputField(desc="the claim to analyze")
+    missing_information: str = dspy.OutputField(desc="description of what facts need verification to assess the claim")
+
+
 class EntityExtractor(dspy.Signature):
     """Extract key entities and relationships from retrieved documents that are relevant to verifying the claim.
     Focus on concrete entities (people, places, organizations, dates, events) and their relationships."""
@@ -86,11 +94,13 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         # Initialize new modules for iterative entity discovery
         self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposition)
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
+        self.early_gap_analyzer = dspy.ChainOfThought(GapAnalyzer)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
         self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
         self.scorer = DocumentRelevanceScorer()
 
-        # Retrieval module
+        # Retrieval modules with different k values
+        self.retrieve_k18 = dspy.Retrieve(k=18)
         self.retrieve_k = dspy.Retrieve(k=5)
 
     def forward(self, claim):
@@ -100,7 +110,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             entities_store = []
             relationships_store = []
 
-            # ========== ITERATION 1: Decompose and Initial Retrieval ==========
+            # ========== ITERATION 1: Decompose and Initial Retrieval (k=18) ==========
             # Decompose claim into 2-3 sub-questions
             decomposition_result = self.claim_decomposer(claim=claim)
             sub_questions = decomposition_result.sub_questions
@@ -117,20 +127,48 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     # Fallback: use original claim
                     sub_questions = [claim]
 
-            # Limit to first 3 sub-questions to control retrieval volume
-            sub_questions = sub_questions[:3]
+            # Limit to first sub-question for initial retrieval
+            initial_query = sub_questions[0] if sub_questions else claim
 
-            # Retrieve documents for each sub-question (k=5 per sub-question)
+            # Initial retrieval with k=18
             iteration1_docs = []
-            for sub_q in sub_questions:
-                try:
-                    docs = self.retrieve_k(sub_q).passages
-                    iteration1_docs.extend(docs)
-                except Exception:
-                    # If retrieval fails, continue with other sub-questions
-                    pass
+            try:
+                docs = self.retrieve_k18(initial_query).passages
+                iteration1_docs.extend(docs)
+            except Exception:
+                # If retrieval fails, continue with empty docs
+                pass
 
             all_retrieved_docs.extend(iteration1_docs)
+
+            # ========== GAP ANALYSIS: Identify Missing Information ==========
+            # Invoke gap analyzer to identify what facts need verification
+            gap_result = None
+            try:
+                gap_result = self.early_gap_analyzer(claim=claim)
+                missing_info = gap_result.missing_information if gap_result else ""
+            except Exception:
+                missing_info = ""
+
+            # ========== SECOND TARGETED RETRIEVAL (k=18) ==========
+            # Generate a targeted query based on gap analysis output
+            if missing_info:
+                # Use the missing information as the query for second retrieval
+                second_query = missing_info
+            else:
+                # Fallback: use the claim itself
+                second_query = claim
+
+            iteration2_docs = []
+            try:
+                docs = self.retrieve_k18(second_query).passages
+                iteration2_docs.extend(docs)
+            except Exception:
+                # If retrieval fails, continue with empty docs
+                pass
+
+            # Combine both retrieval results
+            all_retrieved_docs.extend(iteration2_docs)
 
             # Extract entities and relationships from iteration 1 documents
             if iteration1_docs:
@@ -303,20 +341,46 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     seen_titles.add(title)
                     unique_docs.append(doc)
 
-            # Score each unique document with DocumentRelevanceScorer
+            # Extract entities from claim and gap analysis for scoring
+            claim_entities = set()
+            gap_entities = set()
+
+            # Extract simple entities from claim (words longer than 3 chars, capitalized or significant)
+            claim_words = claim.lower().split()
+            for word in claim_words:
+                if len(word) > 3:
+                    claim_entities.add(word)
+
+            # Extract entities from gap analysis missing_information
+            if missing_info:
+                gap_words = missing_info.lower().split()
+                for word in gap_words:
+                    if len(word) > 3:
+                        gap_entities.add(word)
+
+            # Combined entity set for matching
+            combined_entities = claim_entities.union(gap_entities)
+
+            # Score each unique document with entity-based scoring mechanism
             scored_docs = []
             for doc in unique_docs:
-                try:
-                    score_result = self.scorer(claim=claim, document=doc)
-                    # Parse score as integer, default to 5 if parsing fails
-                    try:
-                        score = int(score_result.score)
-                    except (ValueError, TypeError):
-                        score = 5
-                    scored_docs.append((doc, score))
-                except Exception:
-                    # If scoring fails, assign neutral score
-                    scored_docs.append((doc, 5))
+                doc_lower = doc.lower()
+
+                # Count entity matches
+                entity_match_score = 0
+                for entity in combined_entities:
+                    if entity in doc_lower:
+                        entity_match_score += 1
+
+                # Additional boost if entities from both claim AND gap analysis are present
+                claim_matches = sum(1 for e in claim_entities if e in doc_lower)
+                gap_matches = sum(1 for e in gap_entities if e in doc_lower)
+
+                # Prioritize documents that match entities from BOTH claim and gap analysis
+                if claim_matches > 0 and gap_matches > 0:
+                    entity_match_score += 10  # Bonus for matching both
+
+                scored_docs.append((doc, entity_match_score))
 
             # Sort by score descending and take top 21
             scored_docs.sort(key=lambda x: x[1], reverse=True)
