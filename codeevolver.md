@@ -6,7 +6,7 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery with bridging entity retrieval. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. After iteration 1, identifies bridging entities (people, organizations, events) in retrieved documents that need dedicated retrieval, retrieves k=5 docs per bridging entity. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40-55 documents, scores with LLM, returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery with bridging entity retrieval. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. After iteration 1, identifies bridging entities (people, organizations, locations, species, genera, concepts, works) in retrieved documents that need dedicated Wikipedia retrieval, retrieves k=5 docs per bridging entity. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40-55 documents, scores with LLM, returns top 21. Entry point for evaluation.
 
 **ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
 
@@ -14,7 +14,7 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 
 **GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries.
 
-**BridgingEntityIdentifier** (`hover_pipeline.py`): Signature identifying 3-5 specific bridging entities (people, organizations, events) in retrieved documents that appear as important intermediate connections but need standalone retrieval.
+**BridgingEntityIdentifier** (`hover_pipeline.py`): Signature identifying 3-5 specific bridging entities (people, organizations, locations, species, genera, concepts, works) in retrieved documents that appear as important intermediate connections but need standalone Wikipedia retrieval.
 
 **DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
 

@@ -37,12 +37,12 @@ class GapAnalysis(dspy.Signature):
 
 
 class BridgingEntityIdentifier(dspy.Signature):
-    """Identify specific bridging entities (people, organizations, events) mentioned in retrieved documents that are not explicitly in the original claim but are crucial for verification.
+    """Identify specific bridging entities (people, organizations, locations, species, genera, concepts, works) mentioned in retrieved documents that are not explicitly in the original claim but are crucial for verification.
     These entities appear in the documents as important intermediate connections and need their own dedicated document retrieval."""
 
     claim: str = dspy.InputField(desc="the original claim being verified")
     documents: str = dspy.InputField(desc="the retrieved documents to analyze for bridging entities")
-    bridging_entities: list[str] = dspy.OutputField(desc="3-5 specific entity names (people, organizations, events) that appear in documents but need standalone retrieval (e.g., 'Lisa Raymond', 'Ellis Ferreira', 'Wimbledon Championships')")
+    bridging_entities: list[str] = dspy.OutputField(desc="3-5 specific entity names (people, organizations, locations, species, genera, concepts, works) that appear in documents but need standalone Wikipedia retrieval (e.g., 'Lisa Raymond', 'Dieffenbachia', 'Wimbledon Championships', 'Asteraceae')")
 
 
 class DocumentRelevanceSignature(dspy.Signature):
