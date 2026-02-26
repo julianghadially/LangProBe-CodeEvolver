@@ -45,6 +45,14 @@ class BridgingEntityIdentifier(dspy.Signature):
     bridging_entities: list[str] = dspy.OutputField(desc="3-5 specific entity names (people, organizations, events) that appear in documents but need standalone retrieval (e.g., 'Lisa Raymond', 'Ellis Ferreira', 'Wimbledon Championships')")
 
 
+class QueryFusion(dspy.Signature):
+    """Combine multiple search queries into a single comprehensive query that captures all information needs.
+    The fused query should be optimized for retrieval while preserving all distinct information requirements from the input queries."""
+
+    queries: list[str] = dspy.InputField(desc="list of 2-3 queries to combine")
+    fused_query: str = dspy.OutputField(desc="a single comprehensive search query that captures all information needs from the input queries")
+
+
 class DocumentRelevanceSignature(dspy.Signature):
     """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
 
@@ -88,10 +96,12 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
         self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
+        self.query_fuser = dspy.ChainOfThought(QueryFusion)
         self.scorer = DocumentRelevanceScorer()
 
-        # Retrieval module
-        self.retrieve_k = dspy.Retrieve(k=5)
+        # Retrieval modules
+        self.retrieve_k = dspy.Retrieve(k=30)  # For fused queries in iterations
+        self.retrieve_bridging = dspy.Retrieve(k=5)  # For bridging entity retrieval
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -120,15 +130,22 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             # Limit to first 3 sub-questions to control retrieval volume
             sub_questions = sub_questions[:3]
 
-            # Retrieve documents for each sub-question (k=5 per sub-question)
+            # Fuse sub-questions into a single comprehensive query and retrieve once with k=30
             iteration1_docs = []
-            for sub_q in sub_questions:
+            if sub_questions:
                 try:
-                    docs = self.retrieve_k(sub_q).passages
+                    fusion_result = self.query_fuser(queries=sub_questions)
+                    fused_query = fusion_result.fused_query
+                    # Retrieve with fused query (k=30)
+                    docs = self.retrieve_k(fused_query).passages
                     iteration1_docs.extend(docs)
                 except Exception:
-                    # If retrieval fails, continue with other sub-questions
-                    pass
+                    # If fusion fails, fallback to using the claim
+                    try:
+                        docs = self.retrieve_k(claim).passages
+                        iteration1_docs.extend(docs)
+                    except Exception:
+                        pass
 
             all_retrieved_docs.extend(iteration1_docs)
 
@@ -179,7 +196,8 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     for entity_name in bridging_entities:
                         try:
                             # Direct retrieve using entity name as query (e.g., 'Lisa Raymond', 'Ellis Ferreira')
-                            docs = self.retrieve_k(entity_name).passages
+                            # Use retrieve_bridging with k=5 per entity
+                            docs = self.retrieve_bridging(entity_name).passages
                             bridging_docs.extend(docs)
                         except Exception:
                             # If retrieval fails for this entity, continue with others
@@ -222,14 +240,22 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 # If gap analysis fails, use fallback queries
                 targeted_queries = [claim]
 
-            # Retrieve documents for each targeted query (k=5 per query)
+            # Fuse targeted queries into a single comprehensive query and retrieve once with k=30
             iteration2_docs = []
-            for query in targeted_queries:
+            if targeted_queries:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    fusion_result = self.query_fuser(queries=targeted_queries)
+                    fused_query = fusion_result.fused_query
+                    # Retrieve with fused query (k=30)
+                    docs = self.retrieve_k(fused_query).passages
                     iteration2_docs.extend(docs)
                 except Exception:
-                    pass
+                    # If fusion fails, fallback to using the claim
+                    try:
+                        docs = self.retrieve_k(claim).passages
+                        iteration2_docs.extend(docs)
+                    except Exception:
+                        pass
 
             all_retrieved_docs.extend(iteration2_docs)
 
@@ -282,14 +308,22 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 # Fallback: use claim-based query
                 final_queries = [claim]
 
-            # Retrieve documents for final queries (k=5 per query)
+            # Fuse final queries into a single comprehensive query and retrieve once with k=30
             iteration3_docs = []
-            for query in final_queries:
+            if final_queries:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    fusion_result = self.query_fuser(queries=final_queries)
+                    fused_query = fusion_result.fused_query
+                    # Retrieve with fused query (k=30)
+                    docs = self.retrieve_k(fused_query).passages
                     iteration3_docs.extend(docs)
                 except Exception:
-                    pass
+                    # If fusion fails, fallback to using the claim
+                    try:
+                        docs = self.retrieve_k(claim).passages
+                        iteration3_docs.extend(docs)
+                    except Exception:
+                        pass
 
             all_retrieved_docs.extend(iteration3_docs)
 
