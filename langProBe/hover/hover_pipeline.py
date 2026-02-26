@@ -54,6 +54,16 @@ class DocumentRelevanceSignature(dspy.Signature):
     score: int = dspy.OutputField(desc="relevance score from 1 (irrelevant) to 10 (highly relevant)")
 
 
+class DocumentScorer(dspy.Signature):
+    """Score a document's relevance to a claim on a 0-10 scale. This signature uses LLM reasoning to identify documents that support multi-hop inference chains rather than just keyword matching."""
+
+    claim: str = dspy.InputField(desc="the claim to verify")
+    document_title: str = dspy.InputField(desc="the title of the document")
+    document_text: str = dspy.InputField(desc="the text content of the document")
+    relevance_score: float = dspy.OutputField(desc="relevance score from 0 (completely irrelevant) to 10 (highly relevant and critical for verification)")
+    reasoning: str = dspy.OutputField(desc="detailed explanation of why this document is relevant or not, considering multi-hop inference chains")
+
+
 class DocumentRelevanceScorer(dspy.Module):
     """Module that scores document relevance using chain-of-thought reasoning."""
 
@@ -88,7 +98,8 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
         self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
-        self.scorer = DocumentRelevanceScorer()
+        # Use new DocumentScorer signature with ChainOfThought for LLM-based reranking
+        self.document_scorer = dspy.ChainOfThought(DocumentScorer)
 
         # Retrieval module
         self.retrieve_k = dspy.Retrieve(k=5)
@@ -303,20 +314,36 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     seen_titles.add(title)
                     unique_docs.append(doc)
 
-            # Score each unique document with DocumentRelevanceScorer
+            # Score each unique document with DocumentScorer using ChainOfThought
             scored_docs = []
             for doc in unique_docs:
                 try:
-                    score_result = self.scorer(claim=claim, document=doc)
-                    # Parse score as integer, default to 5 if parsing fails
+                    # Parse document into title and text (format: "title | text")
+                    parts = doc.split(" | ", 1)
+                    if len(parts) == 2:
+                        doc_title = parts[0]
+                        doc_text = parts[1]
+                    else:
+                        # Fallback if format is different
+                        doc_title = doc
+                        doc_text = doc
+
+                    # Score using the new DocumentScorer signature
+                    score_result = self.document_scorer(
+                        claim=claim,
+                        document_title=doc_title,
+                        document_text=doc_text
+                    )
+
+                    # Parse score as float, default to 5.0 if parsing fails
                     try:
-                        score = int(score_result.score)
+                        score = float(score_result.relevance_score)
                     except (ValueError, TypeError):
-                        score = 5
+                        score = 5.0
                     scored_docs.append((doc, score))
                 except Exception:
                     # If scoring fails, assign neutral score
-                    scored_docs.append((doc, 5))
+                    scored_docs.append((doc, 5.0))
 
             # Sort by score descending and take top 21
             scored_docs.sort(key=lambda x: x[1], reverse=True)

@@ -16,7 +16,9 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 
 **BridgingEntityIdentifier** (`hover_pipeline.py`): Signature identifying 3-5 specific bridging entities (people, organizations, events) in retrieved documents that appear as important intermediate connections but need standalone retrieval.
 
-**DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
+**DocumentScorer** (`hover_pipeline.py`): Signature class for LLM-based document scoring with inputs (claim, document_title, document_text) and outputs (relevance_score: float, reasoning: str). Scores documents 0-10 to identify multi-hop inference chains.
+
+**DocumentRelevanceScorer** (`hover_pipeline.py`): Legacy ChainOfThought module scoring document relevance (1-10).
 
 **hover_utils**: Contains `discrete_retrieval_eval` metric for recall@21 evaluation.
 
@@ -28,7 +30,7 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 3. **Bridging Entity Discovery**: Identify 3-5 bridging entities from iteration 1 docs → retrieve k=5 docs per entity using entity name as direct query (e.g., 'Lisa Raymond', 'Ellis Ferreira') → add to all_retrieved_docs
 4. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
 5. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40-55 docs)
-6. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
+6. **Post-Iteration**: Deduplicate by title → score with DocumentScorer (LLM-based reranking with relevance_score 0-10 float and reasoning) → sort by score descending → return top 21 documents
 
 ## Metric
 The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture with bridging entity retrieval maximizes recall through claim decomposition, structured entity/relationship tracking, bridging entity identification for dedicated retrieval of implicit entities discovered through initial docs, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
