@@ -2,19 +2,19 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements Query Decomposition with Iterative Entity Discovery for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, and using gap analysis for self-correction. It retrieves ~40 documents across 3 iterations, then scores with LLM to return top 21 most relevant documents.
+This program implements Backward Chaining with Constraint Propagation for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system fundamentally changes retrieval reasoning from forward decomposition to backward constraint satisfaction. It generates competing hypotheses about what evidence would prove/disprove claims, extracts specific constraints (entities, dates, relationships, negations), performs targeted backward searches (max 3 searches, k=7 per search), and scores documents by constraint satisfaction with diversity penalties. Returns top 21 documents.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40 documents, scores with LLM, returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing backward chaining with constraint propagation. Generates 3-4 hypotheses, extracts constraints from claim, performs backward searches on top 2-3 hypotheses (max 3 total searches with k=7 retrievals each), deduplicates by title, scores by constraint satisfaction + diversity penalty, returns top 21. Entry point for evaluation.
 
-**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
+**HypothesisGenerator** (`hover_pipeline.py`): Signature generating 3-4 competing hypotheses about what supporting documents would prove/disprove the claim.
 
-**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge.
+**ConstraintExtractor** (`hover_pipeline.py`): Signature extracting specific constraints (entity names, dates, relationships, negations) from the claim that documents must satisfy.
 
-**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries.
+**BackwardQuery** (`hover_pipeline.py`): Signature generating targeted queries designed to find documents satisfying specific constraints and testing hypotheses.
 
-**DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
+**ConstraintSatisfactionScorer** (`hover_pipeline.py`): ChainOfThought module scoring documents (0-10) by counting how many extracted constraints they satisfy.
 
 **hover_utils**: Contains `discrete_retrieval_eval` metric for recall@21 evaluation.
 
@@ -22,13 +22,13 @@ This program implements Query Decomposition with Iterative Entity Discovery for 
 
 ## Data Flow
 1. Input claim enters `HoverMultiHopPipeline.forward()`
-2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=5 docs per question → extract entities/relationships
-3. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
-4. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40 docs)
-5. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
+2. **Step 1**: Generate 3-4 competing hypotheses about what evidence would prove/disprove claim → Extract specific constraints (entities, dates, relationships, negations) from claim
+3. **Step 2**: Select top 2-3 hypotheses → For each hypothesis, generate targeted backward queries satisfying constraints → Perform max 3 total searches (distributed across hypotheses) with k=7 retrievals each → Deduplicate by title as retrieved
+4. **Step 3**: Score each document by constraint satisfaction (0-10) → Apply diversity penalty (0-3) to penalize documents too similar to already-selected ones → Final score = constraint_score - diversity_penalty
+5. **Step 4**: Sort by final score descending → Return top 21 documents
 
 ## Metric
-The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture maximizes recall through claim decomposition, structured entity/relationship tracking, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
+The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The backward chaining with constraint propagation architecture maximizes recall by generating competing hypotheses about evidence, extracting explicit constraints from claims, performing targeted backward searches to find documents satisfying those constraints, and using constraint satisfaction scoring with diversity penalties to select the most relevant 21 documents.
 
 ## DSPy Patterns and Guidelines
 

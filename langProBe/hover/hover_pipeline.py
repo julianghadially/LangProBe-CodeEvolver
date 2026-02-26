@@ -4,67 +4,67 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
 
-# ============ New DSPy Signature Classes for Query Decomposition Architecture ============
+# ============ New DSPy Signature Classes for Backward Chaining with Constraint Propagation ============
 
-class ClaimDecomposition(dspy.Signature):
-    """Decompose a complex multi-hop claim into 2-3 specific sub-questions that can be answered independently.
-    Each sub-question should target a distinct piece of information needed to verify the claim."""
-
-    claim: str = dspy.InputField(desc="the complex claim to verify")
-    sub_questions: list[str] = dspy.OutputField(desc="2-3 specific sub-questions that break down the claim into answerable components")
-
-
-class EntityExtractor(dspy.Signature):
-    """Extract key entities and relationships from retrieved documents that are relevant to verifying the claim.
-    Focus on concrete entities (people, places, organizations, dates, events) and their relationships."""
-
-    claim: str = dspy.InputField(desc="the claim being verified")
-    documents: str = dspy.InputField(desc="the retrieved documents to analyze")
-    entities: list[str] = dspy.OutputField(desc="list of key entities discovered (e.g., 'Person: John Doe', 'Movie: The River Rat', 'Date: 1984')")
-    relationships: list[str] = dspy.OutputField(desc="list of relationships between entities (e.g., 'John Doe directed The River Rat', 'The River Rat was released in 1984')")
-
-
-class GapAnalysis(dspy.Signature):
-    """Analyze what critical information is still missing to verify the claim, given what has been discovered so far.
-    Identify specific entities, relationships, or facts that need to be retrieved in the next iteration."""
-
-    claim: str = dspy.InputField(desc="the claim being verified")
-    entities_found: str = dspy.InputField(desc="entities discovered so far")
-    relationships_found: str = dspy.InputField(desc="relationships discovered so far")
-    documents_retrieved: str = dspy.InputField(desc="summary of documents retrieved so far")
-    missing_information: list[str] = dspy.OutputField(desc="specific pieces of missing information needed to verify the claim")
-    targeted_queries: list[str] = dspy.OutputField(desc="2-3 specific search queries to find the missing information")
-
-
-class DocumentRelevanceSignature(dspy.Signature):
-    """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
+class HypothesisGenerator(dspy.Signature):
+    """Generate 3-4 competing hypotheses about what types of supporting documents would prove or disprove the claim.
+    Each hypothesis should describe a specific kind of evidence that would be decisive."""
 
     claim: str = dspy.InputField(desc="the claim to verify")
+    hypotheses: list[str] = dspy.OutputField(desc="3-4 competing hypotheses about what evidence would prove/disprove the claim")
+
+
+class ConstraintExtractor(dspy.Signature):
+    """Extract specific constraints from the claim that documents must satisfy.
+    Focus on concrete requirements: entity names, dates, relationships, negations, and specific factual requirements."""
+
+    claim: str = dspy.InputField(desc="the claim to verify")
+    constraints: list[str] = dspy.OutputField(desc="list of specific constraints that supporting documents must satisfy (e.g., 'Must mention entity X', 'Must describe relationship between X and Y', 'Must contain date information', 'Must confirm/deny specific fact')")
+
+
+class BackwardQuery(dspy.Signature):
+    """Generate a targeted search query designed to find documents that satisfy specific constraints and test a hypothesis.
+    The query should be optimized to retrieve documents containing the required entities, relationships, or facts."""
+
+    hypothesis: str = dspy.InputField(desc="the hypothesis being tested")
+    constraints: str = dspy.InputField(desc="the constraints that documents must satisfy")
+    claim: str = dspy.InputField(desc="the original claim for context")
+    query: str = dspy.OutputField(desc="a targeted search query designed to find documents satisfying the constraints")
+
+
+class ConstraintSatisfactionSignature(dspy.Signature):
+    """Score how many constraints from the claim this document satisfies on a scale of 0-10.
+    Count each constraint the document addresses: entities mentioned, relationships described, dates provided, facts confirmed/denied."""
+
+    claim: str = dspy.InputField(desc="the claim being verified")
+    constraints: str = dspy.InputField(desc="the constraints extracted from the claim")
     document: str = dspy.InputField(desc="the document to evaluate")
-    reasoning: str = dspy.OutputField(desc="explanation of why this document is relevant or not relevant to the claim")
-    score: int = dspy.OutputField(desc="relevance score from 1 (irrelevant) to 10 (highly relevant)")
+    reasoning: str = dspy.OutputField(desc="explanation of which constraints this document satisfies and which it doesn't")
+    score: int = dspy.OutputField(desc="constraint satisfaction score from 0 (satisfies no constraints) to 10 (satisfies all key constraints)")
 
 
-class DocumentRelevanceScorer(dspy.Module):
-    """Module that scores document relevance using chain-of-thought reasoning."""
+class ConstraintSatisfactionScorer(dspy.Module):
+    """Module that scores documents by constraint satisfaction using chain-of-thought reasoning."""
 
     def __init__(self):
         super().__init__()
-        self.scorer = dspy.ChainOfThought(DocumentRelevanceSignature)
+        self.scorer = dspy.ChainOfThought(ConstraintSatisfactionSignature)
 
-    def forward(self, claim, document):
-        return self.scorer(claim=claim, document=document)
+    def forward(self, claim, constraints, document):
+        return self.scorer(claim=claim, constraints=constraints, document=document)
 
 
-# ============ Main Pipeline with Iterative Entity Discovery ============
+# ============ Main Pipeline with Backward Chaining and Constraint Propagation ============
 
 class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi-hop system for retrieving documents for a provided claim using Query Decomposition with Iterative Entity Discovery.
+    '''Multi-hop system for retrieving documents for a provided claim using Backward Chaining with Constraint Propagation.
 
     ARCHITECTURE:
-    - Replaces linear 3-hop retrieval with iterative entity-driven approach
-    - Uses structured reasoning to discover implicit entities and relationships
-    - Each iteration builds on previous knowledge with gap analysis and self-correction
+    - Replaces forward claim decomposition with backward constraint satisfaction
+    - Generates competing hypotheses about what evidence would prove/disprove the claim
+    - Extracts specific constraints (entities, dates, relationships) from the claim
+    - Performs backward search targeting documents that satisfy constraints
+    - Scores documents by constraint satisfaction + diversity to avoid redundancy
 
     EVALUATION:
     - This system is assessed by retrieving the correct documents that are most relevant.
@@ -74,203 +74,170 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.rm = dspy.ColBERTv2(url=COLBERT_URL)
 
-        # Initialize new modules for iterative entity discovery
-        self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposition)
-        self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
-        self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
-        self.scorer = DocumentRelevanceScorer()
+        # Initialize backward chaining modules
+        self.hypothesis_generator = dspy.ChainOfThought(HypothesisGenerator)
+        self.constraint_extractor = dspy.ChainOfThought(ConstraintExtractor)
+        self.backward_query_generator = dspy.ChainOfThought(BackwardQuery)
+        self.constraint_scorer = ConstraintSatisfactionScorer()
 
-        # Retrieval module
-        self.retrieve_k = dspy.Retrieve(k=5)
+        # Retrieval module with k=7 for backward search
+        self.retrieve_k = dspy.Retrieve(k=7)
+
+    def _cosine_similarity_simple(self, text1, text2):
+        """Simple word-based similarity for diversity scoring."""
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        if not words1 or not words2:
+            return 0.0
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        return len(intersection) / len(union) if union else 0.0
+
+    def _calculate_diversity_penalty(self, doc, selected_docs):
+        """Calculate penalty based on similarity to already-selected documents."""
+        if not selected_docs:
+            return 0.0
+
+        max_similarity = 0.0
+        for selected_doc in selected_docs:
+            similarity = self._cosine_similarity_simple(doc, selected_doc)
+            max_similarity = max(max_similarity, similarity)
+
+        # Penalty increases with similarity (0-3 range)
+        return max_similarity * 3.0
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
-            # Storage for iterative discovery
+            # ========== STEP 1: Generate Hypotheses and Extract Constraints ==========
+            # Generate 3-4 competing hypotheses
+            try:
+                hypothesis_result = self.hypothesis_generator(claim=claim)
+                hypotheses = hypothesis_result.hypotheses
+
+                # Ensure hypotheses is a list
+                if not isinstance(hypotheses, list):
+                    if isinstance(hypotheses, str):
+                        hypotheses = [h.strip() for h in hypotheses.split('\n') if h.strip()]
+                        hypotheses = [h.lstrip('0123456789.-)> ').strip() for h in hypotheses if h.strip()]
+                    else:
+                        hypotheses = [str(hypotheses)]
+
+                # Limit to 4 hypotheses
+                hypotheses = hypotheses[:4]
+            except Exception:
+                # Fallback: create default hypothesis
+                hypotheses = [f"Documents that directly discuss the entities and facts mentioned in: {claim}"]
+
+            # Extract constraints from the claim
+            try:
+                constraint_result = self.constraint_extractor(claim=claim)
+                constraints = constraint_result.constraints
+
+                # Ensure constraints is a list
+                if not isinstance(constraints, list):
+                    if isinstance(constraints, str):
+                        constraints = [c.strip() for c in constraints.split('\n') if c.strip()]
+                        constraints = [c.lstrip('0123456789.-)> ').strip() for c in constraints if c.strip()]
+                    else:
+                        constraints = [str(constraints)]
+
+            except Exception:
+                # Fallback constraints
+                constraints = ["Must be relevant to the claim"]
+
+            # Format constraints as a string for scoring
+            constraints_str = "\n".join(constraints)
+
+            # ========== STEP 2: Backward Search with Constraint Targeting ==========
+            # Select top 2-3 hypotheses to search (prioritize diversity)
+            num_hypotheses_to_search = min(3, len(hypotheses))
+            selected_hypotheses = hypotheses[:num_hypotheses_to_search]
+
+            # Calculate how many searches per hypothesis (max 3 total searches)
+            max_total_searches = 3
+            searches_per_hypothesis = max_total_searches // num_hypotheses_to_search
+            remaining_searches = max_total_searches % num_hypotheses_to_search
+
             all_retrieved_docs = []
-            entities_store = []
-            relationships_store = []
-
-            # ========== ITERATION 1: Decompose and Initial Retrieval ==========
-            # Decompose claim into 2-3 sub-questions
-            decomposition_result = self.claim_decomposer(claim=claim)
-            sub_questions = decomposition_result.sub_questions
-
-            # Ensure we have a list of sub-questions (handle different DSPy output formats)
-            if not isinstance(sub_questions, list):
-                # If it's a string, try to parse it as a list
-                if isinstance(sub_questions, str):
-                    # Try to split by newlines or common delimiters
-                    sub_questions = [q.strip() for q in sub_questions.split('\n') if q.strip()]
-                    # Remove numbered prefixes like "1.", "2.", etc.
-                    sub_questions = [q.lstrip('0123456789.-)> ').strip() for q in sub_questions if q.strip()]
-                else:
-                    # Fallback: use original claim
-                    sub_questions = [claim]
-
-            # Limit to first 3 sub-questions to control retrieval volume
-            sub_questions = sub_questions[:3]
-
-            # Retrieve documents for each sub-question (k=5 per sub-question)
-            iteration1_docs = []
-            for sub_q in sub_questions:
-                try:
-                    docs = self.retrieve_k(sub_q).passages
-                    iteration1_docs.extend(docs)
-                except Exception:
-                    # If retrieval fails, continue with other sub-questions
-                    pass
-
-            all_retrieved_docs.extend(iteration1_docs)
-
-            # Extract entities and relationships from iteration 1 documents
-            if iteration1_docs:
-                docs_text = "\n\n".join(iteration1_docs[:15])  # Limit context size
-                try:
-                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    # Handle extraction results (ensure they are lists)
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
-                except Exception:
-                    # If extraction fails, continue without entities
-                    pass
-
-            # ========== ITERATION 2: Gap Analysis and Targeted Retrieval ==========
-            # Perform gap analysis to identify missing information
-            entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
-            relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(iteration1_docs)} documents from sub-questions"
-
-            try:
-                gap_result = self.gap_analyzer(
-                    claim=claim,
-                    entities_found=entities_summary,
-                    relationships_found=relationships_summary,
-                    documents_retrieved=docs_summary
-                )
-
-                # Get targeted queries from gap analysis
-                targeted_queries = gap_result.targeted_queries
-                if not isinstance(targeted_queries, list):
-                    if isinstance(targeted_queries, str):
-                        targeted_queries = [q.strip() for q in targeted_queries.split('\n') if q.strip()]
-                        targeted_queries = [q.lstrip('0123456789.-)> ').strip() for q in targeted_queries if q.strip()]
-                    else:
-                        targeted_queries = []
-
-                # Limit to 3 queries to control retrieval volume
-                targeted_queries = targeted_queries[:3]
-
-            except Exception:
-                # If gap analysis fails, use fallback queries
-                targeted_queries = [claim]
-
-            # Retrieve documents for each targeted query (k=5 per query)
-            iteration2_docs = []
-            for query in targeted_queries:
-                try:
-                    docs = self.retrieve_k(query).passages
-                    iteration2_docs.extend(docs)
-                except Exception:
-                    pass
-
-            all_retrieved_docs.extend(iteration2_docs)
-
-            # Extract entities from iteration 2 documents
-            if iteration2_docs:
-                docs_text = "\n\n".join(iteration2_docs[:15])
-                try:
-                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
-                except Exception:
-                    pass
-
-            # ========== ITERATION 3: Final Gap Analysis and Specific Retrieval ==========
-            # Update summaries with iteration 2 findings
-            entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
-            relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(all_retrieved_docs)} documents total across iterations 1-2"
-
-            try:
-                final_gap_result = self.gap_analyzer(
-                    claim=claim,
-                    entities_found=entities_summary,
-                    relationships_found=relationships_summary,
-                    documents_retrieved=docs_summary
-                )
-
-                # Get final targeted queries
-                final_queries = final_gap_result.targeted_queries
-                if not isinstance(final_queries, list):
-                    if isinstance(final_queries, str):
-                        final_queries = [q.strip() for q in final_queries.split('\n') if q.strip()]
-                        final_queries = [q.lstrip('0123456789.-)> ').strip() for q in final_queries if q.strip()]
-                    else:
-                        final_queries = []
-
-                # Limit to 3 queries
-                final_queries = final_queries[:3]
-
-            except Exception:
-                # Fallback: use claim-based query
-                final_queries = [claim]
-
-            # Retrieve documents for final queries (k=5 per query)
-            iteration3_docs = []
-            for query in final_queries:
-                try:
-                    docs = self.retrieve_k(query).passages
-                    iteration3_docs.extend(docs)
-                except Exception:
-                    pass
-
-            all_retrieved_docs.extend(iteration3_docs)
-
-            # ========== POST-ITERATION: Deduplication, Scoring, and Selection ==========
-            # Deduplicate documents based on title (before " | ")
-            unique_docs = []
             seen_titles = set()
-            for doc in all_retrieved_docs:
-                title = doc.split(" | ")[0]
-                if title not in seen_titles:
-                    seen_titles.add(title)
-                    unique_docs.append(doc)
 
-            # Score each unique document with DocumentRelevanceScorer
-            scored_docs = []
-            for doc in unique_docs:
-                try:
-                    score_result = self.scorer(claim=claim, document=doc)
-                    # Parse score as integer, default to 5 if parsing fails
+            # Perform backward search for each selected hypothesis
+            for idx, hypothesis in enumerate(selected_hypotheses):
+                # Determine number of searches for this hypothesis
+                num_searches = searches_per_hypothesis
+                if idx < remaining_searches:
+                    num_searches += 1
+
+                # Generate backward queries for this hypothesis
+                hypothesis_queries = []
+                for _ in range(num_searches):
                     try:
-                        score = int(score_result.score)
+                        query_result = self.backward_query_generator(
+                            hypothesis=hypothesis,
+                            constraints=constraints_str,
+                            claim=claim
+                        )
+                        query = query_result.query
+                        if query and isinstance(query, str):
+                            hypothesis_queries.append(query)
+                    except Exception:
+                        # Fallback: use hypothesis as query
+                        hypothesis_queries.append(hypothesis)
+
+                # Retrieve documents for each query (k=7 per query)
+                for query in hypothesis_queries[:num_searches]:
+                    try:
+                        docs = self.retrieve_k(query).passages
+
+                        # Deduplicate by title as we add
+                        for doc in docs:
+                            title = doc.split(" | ")[0]
+                            if title not in seen_titles:
+                                seen_titles.add(title)
+                                all_retrieved_docs.append(doc)
+                    except Exception:
+                        # If retrieval fails, continue
+                        pass
+
+            # ========== STEP 3: Score by Constraint Satisfaction + Diversity ==========
+            scored_docs = []
+            selected_docs_for_diversity = []
+
+            for doc in all_retrieved_docs:
+                try:
+                    # Get constraint satisfaction score (0-10)
+                    score_result = self.constraint_scorer(
+                        claim=claim,
+                        constraints=constraints_str,
+                        document=doc
+                    )
+
+                    try:
+                        constraint_score = int(score_result.score)
                     except (ValueError, TypeError):
-                        score = 5
-                    scored_docs.append((doc, score))
+                        constraint_score = 5
+
+                    # Calculate diversity penalty (penalize similar documents)
+                    diversity_penalty = self._calculate_diversity_penalty(doc, selected_docs_for_diversity)
+
+                    # Final score: constraint satisfaction - diversity penalty
+                    final_score = constraint_score - diversity_penalty
+
+                    scored_docs.append((doc, final_score, constraint_score))
+
                 except Exception:
                     # If scoring fails, assign neutral score
-                    scored_docs.append((doc, 5))
+                    scored_docs.append((doc, 5.0, 5))
 
-            # Sort by score descending and take top 21
+            # ========== STEP 4: Select Top 21 Documents ==========
+            # Sort by final score (constraint satisfaction - diversity penalty)
             scored_docs.sort(key=lambda x: x[1], reverse=True)
-            top_docs = [doc for doc, score in scored_docs[:21]]
 
-            return dspy.Prediction(retrieved_docs=top_docs)
+            # Select top 21, updating diversity tracking as we go
+            final_docs = []
+            for doc, final_score, constraint_score in scored_docs:
+                if len(final_docs) < 21:
+                    final_docs.append(doc)
+                    selected_docs_for_diversity.append(doc)
+
+            return dspy.Prediction(retrieved_docs=final_docs)
