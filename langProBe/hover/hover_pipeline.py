@@ -46,6 +46,18 @@ class EntityTitleExtractor(dspy.Signature):
     entity_titles: list[str] = dspy.OutputField(desc="list of 3-5 potential Wikipedia article titles (proper nouns: people, places, events, works, organizations)")
 
 
+class AttributeExtractor(dspy.Signature):
+    """Identify specific attributes and qualifiers from the claim and retrieved context that can enhance search queries.
+    Focus on three types: (1) temporal qualifiers (years, dates, decades, seasons), (2) relational qualifiers (films, albums, TV shows, books, songs), (3) other specific attributes (locations, roles, awards, events).
+    Extract entities along with their associated attributes for creating precise attribute-enhanced queries."""
+
+    claim: str = dspy.InputField(desc="the claim being verified")
+    context: str = dspy.InputField(desc="retrieved documents providing context")
+    temporal_attributes: list[str] = dspy.OutputField(desc="list of temporal qualifiers found (e.g., '1995', '1974 season', '2010s', 'summer 2005')")
+    relational_attributes: list[str] = dspy.OutputField(desc="list of relational qualifiers found (e.g., 'debut film', 'Josie Pussycats movie', 'album release', 'TV series')")
+    entity_attribute_pairs: list[str] = dspy.OutputField(desc="list of 3-4 entity-attribute combinations for enhanced queries (e.g., 'Rosario Dawson 1995 film debut', 'New York Islanders 1974 season', 'Rachael Leigh Cook Josie Pussycats')")
+
+
 class DocumentRelevanceSignature(dspy.Signature):
     """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
 
@@ -89,11 +101,13 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
         self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
         self.entity_title_extractor = dspy.ChainOfThought(EntityTitleExtractor)
+        self.attribute_extractor = dspy.ChainOfThought(AttributeExtractor)
         self.scorer = DocumentRelevanceScorer()
 
         # Retrieval modules with different k values
         self.retrieve_semantic = dspy.Retrieve(k=5)  # For semantic queries
         self.retrieve_entity = dspy.Retrieve(k=3)    # For entity-title queries
+        self.retrieve_attribute = dspy.Retrieve(k=3)  # For attribute-enhanced queries
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -123,7 +137,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     return [str(value)] if value else []
                 return value
 
-            # ========== ITERATION 1: Dual-Query Architecture (Semantic + Entity) ==========
+            # ========== ITERATION 1: Triple-Query Architecture (Semantic + Entity + Attribute) ==========
 
             # STEP 1A: Decompose claim into semantic sub-questions
             try:
@@ -135,11 +149,18 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             # STEP 1B: Extract entity titles from claim
             try:
                 entity_title_result = self.entity_title_extractor(claim=claim, context=claim)
-                entity_queries = normalize_list(entity_title_result.entity_titles)[:5]  # Max 5
+                entity_queries = normalize_list(entity_title_result.entity_titles)[:3]  # Max 3 (reduced from 5)
             except Exception:
                 entity_queries = []
 
-            # STEP 1C: Retrieve documents in parallel for both query types
+            # STEP 1C: Extract attributes and generate attribute-enhanced queries
+            try:
+                attribute_result = self.attribute_extractor(claim=claim, context=claim)
+                attribute_queries = normalize_list(attribute_result.entity_attribute_pairs)[:4]  # Max 4
+            except Exception:
+                attribute_queries = []
+
+            # STEP 1D: Retrieve documents in parallel for all three query types
             iteration1_docs = []
 
             # Semantic queries: k=5 per query
@@ -158,11 +179,19 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 except Exception:
                     pass
 
-            # STEP 1D: Deduplicate after iteration 1
+            # Attribute-enhanced queries: k=3 per query
+            for attr_query in attribute_queries:
+                try:
+                    docs = self.retrieve_attribute(attr_query).passages
+                    iteration1_docs.extend(docs)
+                except Exception:
+                    pass
+
+            # STEP 1E: Deduplicate after iteration 1
             iteration1_unique = deduplicate_docs(iteration1_docs)
             all_retrieved_docs.extend(iteration1_unique)
 
-            # STEP 1E: Extract entities and relationships from iteration 1 documents
+            # STEP 1F: Extract entities and relationships from iteration 1 documents
             if iteration1_unique:
                 docs_text = "\n\n".join(iteration1_unique[:15])  # Limit context size
                 try:
@@ -172,7 +201,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 except Exception:
                     pass
 
-            # ========== ITERATION 2: Gap Analysis + Entity Title Extraction ==========
+            # ========== ITERATION 2: Triple-Query Architecture (Gap Analysis + Entity + Attribute) ==========
 
             # STEP 2A: Perform gap analysis for semantic queries
             entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
@@ -194,11 +223,18 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             context_for_entities = "\n\n".join(all_retrieved_docs[:20]) if all_retrieved_docs else claim
             try:
                 entity_title_result2 = self.entity_title_extractor(claim=claim, context=context_for_entities)
-                entity_queries_iter2 = normalize_list(entity_title_result2.entity_titles)[:5]  # Max 5
+                entity_queries_iter2 = normalize_list(entity_title_result2.entity_titles)[:3]  # Max 3 (reduced from 5)
             except Exception:
                 entity_queries_iter2 = []
 
-            # STEP 2C: Retrieve documents in parallel for both query types
+            # STEP 2C: Extract attributes from current context and generate attribute-enhanced queries
+            try:
+                attribute_result2 = self.attribute_extractor(claim=claim, context=context_for_entities)
+                attribute_queries_iter2 = normalize_list(attribute_result2.entity_attribute_pairs)[:4]  # Max 4
+            except Exception:
+                attribute_queries_iter2 = []
+
+            # STEP 2D: Retrieve documents in parallel for all three query types
             iteration2_docs = []
 
             # Semantic queries: k=5 per query
@@ -217,11 +253,19 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 except Exception:
                     pass
 
-            # STEP 2D: Deduplicate after iteration 2
+            # Attribute-enhanced queries: k=3 per query
+            for attr_query in attribute_queries_iter2:
+                try:
+                    docs = self.retrieve_attribute(attr_query).passages
+                    iteration2_docs.extend(docs)
+                except Exception:
+                    pass
+
+            # STEP 2E: Deduplicate after iteration 2
             iteration2_unique = deduplicate_docs(iteration2_docs)
             all_retrieved_docs.extend(iteration2_unique)
 
-            # STEP 2E: Extract entities from iteration 2 documents
+            # STEP 2F: Extract entities from iteration 2 documents
             if iteration2_unique:
                 docs_text = "\n\n".join(iteration2_unique[:15])
                 try:
@@ -231,7 +275,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 except Exception:
                     pass
 
-            # ========== ITERATION 3: Final Gap Analysis + Entity Title Extraction ==========
+            # ========== ITERATION 3: Final Triple-Query Architecture (Gap Analysis + Entity + Attribute) ==========
 
             # STEP 3A: Final gap analysis for semantic queries
             entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
@@ -253,11 +297,18 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             context_for_entities_final = "\n\n".join(all_retrieved_docs[:30]) if all_retrieved_docs else claim
             try:
                 entity_title_result3 = self.entity_title_extractor(claim=claim, context=context_for_entities_final)
-                entity_queries_iter3 = normalize_list(entity_title_result3.entity_titles)[:5]  # Max 5
+                entity_queries_iter3 = normalize_list(entity_title_result3.entity_titles)[:3]  # Max 3 (reduced from 5)
             except Exception:
                 entity_queries_iter3 = []
 
-            # STEP 3C: Retrieve documents in parallel for both query types
+            # STEP 3C: Extract attributes from accumulated context and generate attribute-enhanced queries
+            try:
+                attribute_result3 = self.attribute_extractor(claim=claim, context=context_for_entities_final)
+                attribute_queries_iter3 = normalize_list(attribute_result3.entity_attribute_pairs)[:4]  # Max 4
+            except Exception:
+                attribute_queries_iter3 = []
+
+            # STEP 3D: Retrieve documents in parallel for all three query types
             iteration3_docs = []
 
             # Semantic queries: k=5 per query
@@ -276,7 +327,15 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 except Exception:
                     pass
 
-            # STEP 3D: Deduplicate after iteration 3
+            # Attribute-enhanced queries: k=3 per query
+            for attr_query in attribute_queries_iter3:
+                try:
+                    docs = self.retrieve_attribute(attr_query).passages
+                    iteration3_docs.extend(docs)
+                except Exception:
+                    pass
+
+            # STEP 3E: Deduplicate after iteration 3
             iteration3_unique = deduplicate_docs(iteration3_docs)
             all_retrieved_docs.extend(iteration3_unique)
 
