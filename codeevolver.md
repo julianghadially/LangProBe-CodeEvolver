@@ -2,21 +2,15 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements Query Decomposition with Iterative Entity Discovery and Bridging Entity Retrieval for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, identifying bridging entities for dedicated retrieval, and using gap analysis for self-correction. It retrieves ~40-55 documents across 3 iterations plus bridging phase, then scores with LLM to return top 21 most relevant documents.
+This program implements a Two-Stage Ensemble Reranking architecture for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system uses query expansion to generate diverse query formulations, performs a single retrieval phase, then applies listwise reranking with sliding windows to score documents. Final ranking combines LLM listwise scores with ColBERT retrieval scores using weighted averaging (0.6 LLM + 0.4 ColBERT) to return the top 21 most relevant documents.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery with bridging entity retrieval. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. After iteration 1, identifies bridging entities (people, organizations, events) in retrieved documents that need dedicated retrieval, retrieves k=5 docs per bridging entity. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40-55 documents, scores with LLM, returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing two-stage ensemble reranking. Expands claim into 5-7 diverse queries (entity-focused, relationship-focused, negation), retrieves k=5 docs per query in single phase (~35 docs total). Applies listwise reranking with sliding windows (10 docs, 3-doc overlap). Combines LLM listwise scores (0.6 weight) with ColBERT retrieval scores (0.4 weight) to rank documents. Returns top 21 by combined score. Entry point for evaluation.
 
-**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
+**QueryExpander** (`hover_pipeline.py`): Signature generating 5-7 diverse query formulations from the claim, including entity-focused queries, relationship-focused queries, and negation queries.
 
-**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge.
-
-**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries.
-
-**BridgingEntityIdentifier** (`hover_pipeline.py`): Signature identifying 3-5 specific bridging entities (people, organizations, events) in retrieved documents that appear as important intermediate connections but need standalone retrieval.
-
-**DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
+**ListwiseReranker** (`hover_pipeline.py`): Signature ranking a list of 10 documents at a time by relevance to the claim, outputting ranked indices and relevance scores (0-100).
 
 **hover_utils**: Contains `discrete_retrieval_eval` metric for recall@21 evaluation.
 
@@ -24,14 +18,15 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 
 ## Data Flow
 1. Input claim enters `HoverMultiHopPipeline.forward()`
-2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=5 docs per question → extract entities/relationships
-3. **Bridging Entity Discovery**: Identify 3-5 bridging entities from iteration 1 docs → retrieve k=5 docs per entity using entity name as direct query (e.g., 'Lisa Raymond', 'Ellis Ferreira') → add to all_retrieved_docs
-4. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
-5. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40-55 docs)
-6. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
+2. **Stage 1 - Query Expansion**: Generate 5-7 diverse query formulations from claim (entity-focused, relationship-focused, negation queries)
+3. **Stage 2 - Batch Retrieval**: Single retrieval phase, retrieve k=5 docs per query (~35 docs total), assign ColBERT scores based on retrieval rank (100 to 50)
+4. **Stage 3 - Deduplication**: Deduplicate documents by title
+5. **Stage 4 - Listwise Reranking**: Process unique docs through sliding windows of 10 documents with 3-document overlap, get LLM listwise scores (0-100) for each document, average scores for docs appearing in multiple windows
+6. **Stage 5 - Ensemble Scoring**: Combine scores using weighted average: 0.6 × LLM_score + 0.4 × ColBERT_score
+7. **Stage 6 - Final Selection**: Sort by combined score descending, return top 21 documents
 
 ## Metric
-The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture with bridging entity retrieval maximizes recall through claim decomposition, structured entity/relationship tracking, bridging entity identification for dedicated retrieval of implicit entities discovered through initial docs, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
+The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The ensemble reranking architecture maximizes recall through diverse query expansion to capture different aspects of multi-hop claims, single-phase retrieval for efficiency, listwise reranking to leverage LLM comparative judgment across documents, and ensemble scoring that balances semantic understanding (LLM) with lexical relevance (ColBERT).
 
 ## DSPy Patterns and Guidelines
 

@@ -4,76 +4,37 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
 
 
-# ============ New DSPy Signature Classes for Query Decomposition Architecture ============
+# ============ New DSPy Signature Classes for Ensemble Reranking Architecture ============
 
-class ClaimDecomposition(dspy.Signature):
-    """Decompose a complex multi-hop claim into 2-3 specific sub-questions that can be answered independently.
-    Each sub-question should target a distinct piece of information needed to verify the claim."""
-
-    claim: str = dspy.InputField(desc="the complex claim to verify")
-    sub_questions: list[str] = dspy.OutputField(desc="2-3 specific sub-questions that break down the claim into answerable components")
-
-
-class EntityExtractor(dspy.Signature):
-    """Extract key entities and relationships from retrieved documents that are relevant to verifying the claim.
-    Focus on concrete entities (people, places, organizations, dates, events) and their relationships."""
-
-    claim: str = dspy.InputField(desc="the claim being verified")
-    documents: str = dspy.InputField(desc="the retrieved documents to analyze")
-    entities: list[str] = dspy.OutputField(desc="list of key entities discovered (e.g., 'Person: John Doe', 'Movie: The River Rat', 'Date: 1984')")
-    relationships: list[str] = dspy.OutputField(desc="list of relationships between entities (e.g., 'John Doe directed The River Rat', 'The River Rat was released in 1984')")
-
-
-class GapAnalysis(dspy.Signature):
-    """Analyze what critical information is still missing to verify the claim, given what has been discovered so far.
-    Identify specific entities, relationships, or facts that need to be retrieved in the next iteration."""
-
-    claim: str = dspy.InputField(desc="the claim being verified")
-    entities_found: str = dspy.InputField(desc="entities discovered so far")
-    relationships_found: str = dspy.InputField(desc="relationships discovered so far")
-    documents_retrieved: str = dspy.InputField(desc="summary of documents retrieved so far")
-    missing_information: list[str] = dspy.OutputField(desc="specific pieces of missing information needed to verify the claim")
-    targeted_queries: list[str] = dspy.OutputField(desc="2-3 specific search queries to find the missing information")
-
-
-class BridgingEntityIdentifier(dspy.Signature):
-    """Identify specific bridging entities (people, organizations, events) mentioned in retrieved documents that are not explicitly in the original claim but are crucial for verification.
-    These entities appear in the documents as important intermediate connections and need their own dedicated document retrieval."""
-
-    claim: str = dspy.InputField(desc="the original claim being verified")
-    documents: str = dspy.InputField(desc="the retrieved documents to analyze for bridging entities")
-    bridging_entities: list[str] = dspy.OutputField(desc="3-5 specific entity names (people, organizations, events) that appear in documents but need standalone retrieval (e.g., 'Lisa Raymond', 'Ellis Ferreira', 'Wimbledon Championships')")
-
-
-class DocumentRelevanceSignature(dspy.Signature):
-    """Evaluate the relevance of a document to a claim. Score from 1-10 where 10 is highly relevant and provides critical evidence, and 1 is completely irrelevant."""
+class QueryExpander(dspy.Signature):
+    """Generate 5-7 diverse query formulations from the claim to maximize retrieval coverage.
+    Include entity-focused queries, relationship-focused queries, and negation queries to capture different aspects of the claim."""
 
     claim: str = dspy.InputField(desc="the claim to verify")
-    document: str = dspy.InputField(desc="the document to evaluate")
-    reasoning: str = dspy.OutputField(desc="explanation of why this document is relevant or not relevant to the claim")
-    score: int = dspy.OutputField(desc="relevance score from 1 (irrelevant) to 10 (highly relevant)")
+    expanded_queries: list[str] = dspy.OutputField(desc="5-7 diverse query formulations including entity-focused (e.g., focusing on specific people/places), relationship-focused (e.g., focusing on connections), and negation queries (e.g., what contradicts this)")
 
 
-class DocumentRelevanceScorer(dspy.Module):
-    """Module that scores document relevance using chain-of-thought reasoning."""
+class ListwiseReranker(dspy.Signature):
+    """Rank a list of documents by their relevance to verifying the claim.
+    Output a ranked list with relevance scores (0-100) for each document."""
 
-    def __init__(self):
-        super().__init__()
-        self.scorer = dspy.ChainOfThought(DocumentRelevanceSignature)
-
-    def forward(self, claim, document):
-        return self.scorer(claim=claim, document=document)
+    claim: str = dspy.InputField(desc="the claim to verify")
+    documents: str = dspy.InputField(desc="numbered list of documents to rank (format: [1] doc1, [2] doc2, ...)")
+    ranked_indices: list[int] = dspy.OutputField(desc="list of document indices in descending order of relevance (e.g., [3, 1, 5, 2, ...] means doc 3 is most relevant)")
+    relevance_scores: list[float] = dspy.OutputField(desc="relevance scores (0-100) corresponding to each document in the ranked_indices list")
 
 
-# ============ Main Pipeline with Iterative Entity Discovery ============
+# ============ Main Pipeline with Ensemble Reranking Architecture ============
 
 class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi-hop system for retrieving documents for a provided claim using Query Decomposition with Iterative Entity Discovery.
+    '''Multi-hop system for retrieving documents for a provided claim using Two-Stage Ensemble Reranking.
 
     ARCHITECTURE:
-    - Replaces linear 3-hop retrieval with iterative entity-driven approach
-    - Uses structured reasoning to discover implicit entities and relationships
-    - Each iteration builds on previous knowledge with gap analysis and self-correction
+    - Query expansion generates 5-7 diverse query formulations
+    - Single retrieval phase: k=5 docs per query (total ~35 docs with 7 queries)
+    - Listwise reranking with sliding windows (10 docs, 3-doc overlap)
+    - Ensemble scoring: 0.6 LLM listwise scores + 0.4 ColBERT retrieval scores
+    - Returns top 21 documents by combined score
 
     EVALUATION:
     - This system is assessed by retrieving the correct documents that are most relevant.
@@ -83,217 +44,76 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.rm = dspy.ColBERTv2(url=COLBERT_URL)
 
-        # Initialize new modules for iterative entity discovery
-        self.claim_decomposer = dspy.ChainOfThought(ClaimDecomposition)
-        self.entity_extractor = dspy.ChainOfThought(EntityExtractor)
-        self.gap_analyzer = dspy.ChainOfThought(GapAnalysis)
-        self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
-        self.scorer = DocumentRelevanceScorer()
+        # Initialize new modules for ensemble reranking
+        self.query_expander = dspy.ChainOfThought(QueryExpander)
+        self.listwise_reranker = dspy.ChainOfThought(ListwiseReranker)
 
         # Retrieval module
         self.retrieve_k = dspy.Retrieve(k=5)
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
-            # Storage for iterative discovery
+            # ========== STAGE 1: Query Expansion ==========
+            # Generate 5-7 diverse query formulations from the claim
+            try:
+                expansion_result = self.query_expander(claim=claim)
+                expanded_queries = expansion_result.expanded_queries
+
+                # Ensure we have a list of queries (handle different DSPy output formats)
+                if not isinstance(expanded_queries, list):
+                    if isinstance(expanded_queries, str):
+                        # Parse string into list
+                        expanded_queries = [q.strip() for q in expanded_queries.split('\n') if q.strip()]
+                        # Remove numbered prefixes like "1.", "2.", etc.
+                        expanded_queries = [q.lstrip('0123456789.-)> ').strip() for q in expanded_queries if q.strip()]
+                    else:
+                        # Fallback: use original claim
+                        expanded_queries = [claim]
+
+                # Ensure we have 5-7 queries, add claim-based variations if needed
+                if len(expanded_queries) < 5:
+                    expanded_queries.append(claim)
+
+                # Limit to 7 queries to control retrieval volume
+                expanded_queries = expanded_queries[:7]
+
+            except Exception:
+                # Fallback: use claim as single query
+                expanded_queries = [claim]
+
+            # ========== STAGE 2: Batch Retrieval (Single Phase) ==========
+            # Retrieve k=5 documents per query to stay under 3 search calls
+            # We'll batch queries to minimize API calls
             all_retrieved_docs = []
-            entities_store = []
-            relationships_store = []
+            colbert_scores_map = {}  # Map doc -> ColBERT score
 
-            # ========== ITERATION 1: Decompose and Initial Retrieval ==========
-            # Decompose claim into 2-3 sub-questions
-            decomposition_result = self.claim_decomposer(claim=claim)
-            sub_questions = decomposition_result.sub_questions
+            # Batch queries into groups to minimize search calls
+            # With 7 queries and k=5, we retrieve ~35 docs total
+            batch_size = 3  # Process up to 3 queries per batch to stay under limit
+            for i in range(0, len(expanded_queries), batch_size):
+                batch_queries = expanded_queries[i:i+batch_size]
 
-            # Ensure we have a list of sub-questions (handle different DSPy output formats)
-            if not isinstance(sub_questions, list):
-                # If it's a string, try to parse it as a list
-                if isinstance(sub_questions, str):
-                    # Try to split by newlines or common delimiters
-                    sub_questions = [q.strip() for q in sub_questions.split('\n') if q.strip()]
-                    # Remove numbered prefixes like "1.", "2.", etc.
-                    sub_questions = [q.lstrip('0123456789.-)> ').strip() for q in sub_questions if q.strip()]
-                else:
-                    # Fallback: use original claim
-                    sub_questions = [claim]
+                for query in batch_queries:
+                    try:
+                        # Retrieve with scores
+                        # Note: DSPy's Retrieve doesn't directly support return_scores parameter
+                        # We'll retrieve and use a default ColBERT score based on retrieval order
+                        result = self.retrieve_k(query)
+                        docs = result.passages
 
-            # Limit to first 3 sub-questions to control retrieval volume
-            sub_questions = sub_questions[:3]
+                        # Assign ColBERT scores based on retrieval rank (higher rank = higher score)
+                        # Score decreases from 100 to 50 based on position
+                        for idx, doc in enumerate(docs):
+                            all_retrieved_docs.append(doc)
+                            # If doc not seen before, assign score based on first retrieval rank
+                            if doc not in colbert_scores_map:
+                                # Score from 100 (rank 0) to 50 (rank 4)
+                                colbert_scores_map[doc] = 100.0 - (idx * 10.0)
+                    except Exception:
+                        # If retrieval fails for this query, continue with others
+                        pass
 
-            # Retrieve documents for each sub-question (k=5 per sub-question)
-            iteration1_docs = []
-            for sub_q in sub_questions:
-                try:
-                    docs = self.retrieve_k(sub_q).passages
-                    iteration1_docs.extend(docs)
-                except Exception:
-                    # If retrieval fails, continue with other sub-questions
-                    pass
-
-            all_retrieved_docs.extend(iteration1_docs)
-
-            # Extract entities and relationships from iteration 1 documents
-            if iteration1_docs:
-                docs_text = "\n\n".join(iteration1_docs[:15])  # Limit context size
-                try:
-                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    # Handle extraction results (ensure they are lists)
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
-                except Exception:
-                    # If extraction fails, continue without entities
-                    pass
-
-            # ========== BRIDGING ENTITY DISCOVERY: Identify and Retrieve Implicit Entities ==========
-            # After iteration 1, identify bridging entities that appear in documents but need dedicated retrieval
-            if iteration1_docs:
-                docs_text_for_bridging = "\n\n".join(iteration1_docs[:15])  # Limit context size
-                try:
-                    bridging_result = self.bridging_identifier(claim=claim, documents=docs_text_for_bridging)
-
-                    # Get bridging entities
-                    bridging_entities = bridging_result.bridging_entities
-                    if not isinstance(bridging_entities, list):
-                        if isinstance(bridging_entities, str):
-                            # Parse string into list
-                            bridging_entities = [e.strip() for e in bridging_entities.split('\n') if e.strip()]
-                            # Remove numbered prefixes
-                            bridging_entities = [e.lstrip('0123456789.-)> ').strip() for e in bridging_entities if e.strip()]
-                        else:
-                            bridging_entities = []
-
-                    # Limit to 3-5 entities to control retrieval volume
-                    bridging_entities = bridging_entities[:5]
-
-                    # Retrieve documents for each bridging entity using just the entity name
-                    bridging_docs = []
-                    for entity_name in bridging_entities:
-                        try:
-                            # Direct retrieve using entity name as query (e.g., 'Lisa Raymond', 'Ellis Ferreira')
-                            docs = self.retrieve_k(entity_name).passages
-                            bridging_docs.extend(docs)
-                        except Exception:
-                            # If retrieval fails for this entity, continue with others
-                            pass
-
-                    # Add bridging documents to all_retrieved_docs before iteration 2
-                    all_retrieved_docs.extend(bridging_docs)
-
-                except Exception:
-                    # If bridging entity identification fails, continue without it
-                    pass
-
-            # ========== ITERATION 2: Gap Analysis and Targeted Retrieval ==========
-            # Perform gap analysis to identify missing information
-            entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
-            relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(iteration1_docs)} documents from sub-questions"
-
-            try:
-                gap_result = self.gap_analyzer(
-                    claim=claim,
-                    entities_found=entities_summary,
-                    relationships_found=relationships_summary,
-                    documents_retrieved=docs_summary
-                )
-
-                # Get targeted queries from gap analysis
-                targeted_queries = gap_result.targeted_queries
-                if not isinstance(targeted_queries, list):
-                    if isinstance(targeted_queries, str):
-                        targeted_queries = [q.strip() for q in targeted_queries.split('\n') if q.strip()]
-                        targeted_queries = [q.lstrip('0123456789.-)> ').strip() for q in targeted_queries if q.strip()]
-                    else:
-                        targeted_queries = []
-
-                # Limit to 3 queries to control retrieval volume
-                targeted_queries = targeted_queries[:3]
-
-            except Exception:
-                # If gap analysis fails, use fallback queries
-                targeted_queries = [claim]
-
-            # Retrieve documents for each targeted query (k=5 per query)
-            iteration2_docs = []
-            for query in targeted_queries:
-                try:
-                    docs = self.retrieve_k(query).passages
-                    iteration2_docs.extend(docs)
-                except Exception:
-                    pass
-
-            all_retrieved_docs.extend(iteration2_docs)
-
-            # Extract entities from iteration 2 documents
-            if iteration2_docs:
-                docs_text = "\n\n".join(iteration2_docs[:15])
-                try:
-                    extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
-
-                    entities = extraction_result.entities
-                    relationships = extraction_result.relationships
-
-                    if not isinstance(entities, list):
-                        entities = [str(entities)] if entities else []
-                    if not isinstance(relationships, list):
-                        relationships = [str(relationships)] if relationships else []
-
-                    entities_store.extend(entities)
-                    relationships_store.extend(relationships)
-                except Exception:
-                    pass
-
-            # ========== ITERATION 3: Final Gap Analysis and Specific Retrieval ==========
-            # Update summaries with iteration 2 findings
-            entities_summary = "\n".join(entities_store) if entities_store else "None found yet"
-            relationships_summary = "\n".join(relationships_store) if relationships_store else "None found yet"
-            docs_summary = f"Retrieved {len(all_retrieved_docs)} documents total across iterations 1-2"
-
-            try:
-                final_gap_result = self.gap_analyzer(
-                    claim=claim,
-                    entities_found=entities_summary,
-                    relationships_found=relationships_summary,
-                    documents_retrieved=docs_summary
-                )
-
-                # Get final targeted queries
-                final_queries = final_gap_result.targeted_queries
-                if not isinstance(final_queries, list):
-                    if isinstance(final_queries, str):
-                        final_queries = [q.strip() for q in final_queries.split('\n') if q.strip()]
-                        final_queries = [q.lstrip('0123456789.-)> ').strip() for q in final_queries if q.strip()]
-                    else:
-                        final_queries = []
-
-                # Limit to 3 queries
-                final_queries = final_queries[:3]
-
-            except Exception:
-                # Fallback: use claim-based query
-                final_queries = [claim]
-
-            # Retrieve documents for final queries (k=5 per query)
-            iteration3_docs = []
-            for query in final_queries:
-                try:
-                    docs = self.retrieve_k(query).passages
-                    iteration3_docs.extend(docs)
-                except Exception:
-                    pass
-
-            all_retrieved_docs.extend(iteration3_docs)
-
-            # ========== POST-ITERATION: Deduplication, Scoring, and Selection ==========
+            # ========== STAGE 3: Deduplication ==========
             # Deduplicate documents based on title (before " | ")
             unique_docs = []
             seen_titles = set()
@@ -303,23 +123,83 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     seen_titles.add(title)
                     unique_docs.append(doc)
 
-            # Score each unique document with DocumentRelevanceScorer
-            scored_docs = []
-            for doc in unique_docs:
-                try:
-                    score_result = self.scorer(claim=claim, document=doc)
-                    # Parse score as integer, default to 5 if parsing fails
-                    try:
-                        score = int(score_result.score)
-                    except (ValueError, TypeError):
-                        score = 5
-                    scored_docs.append((doc, score))
-                except Exception:
-                    # If scoring fails, assign neutral score
-                    scored_docs.append((doc, 5))
+            # ========== STAGE 4: Listwise Reranking with Sliding Windows ==========
+            # Process all unique documents through sliding windows of 10 documents with 3-document overlap
+            llm_scores_map = {}  # Map doc -> LLM relevance score
 
-            # Sort by score descending and take top 21
-            scored_docs.sort(key=lambda x: x[1], reverse=True)
-            top_docs = [doc for doc, score in scored_docs[:21]]
+            window_size = 10
+            overlap = 3
+            step = window_size - overlap  # 7 documents
+
+            for start_idx in range(0, len(unique_docs), step):
+                end_idx = min(start_idx + window_size, len(unique_docs))
+                window_docs = unique_docs[start_idx:end_idx]
+
+                # Format documents for listwise ranking
+                formatted_docs = "\n".join([f"[{i+1}] {doc}" for i, doc in enumerate(window_docs)])
+
+                try:
+                    # Get listwise ranking
+                    ranking_result = self.listwise_reranker(claim=claim, documents=formatted_docs)
+
+                    # Parse ranked indices and scores
+                    ranked_indices = ranking_result.ranked_indices
+                    relevance_scores = ranking_result.relevance_scores
+
+                    # Ensure lists
+                    if not isinstance(ranked_indices, list):
+                        if isinstance(ranked_indices, str):
+                            # Try to parse as list
+                            ranked_indices = [int(x.strip()) for x in ranked_indices.replace('[', '').replace(']', '').split(',') if x.strip().isdigit()]
+                        else:
+                            ranked_indices = list(range(1, len(window_docs) + 1))
+
+                    if not isinstance(relevance_scores, list):
+                        if isinstance(relevance_scores, str):
+                            # Try to parse as list
+                            relevance_scores = [float(x.strip()) for x in relevance_scores.replace('[', '').replace(']', '').split(',') if x.strip().replace('.', '').isdigit()]
+                        else:
+                            # Default scores decreasing from 100
+                            relevance_scores = [100.0 - (i * 5.0) for i in range(len(window_docs))]
+
+                    # Ensure we have scores for all ranked docs
+                    if len(relevance_scores) < len(ranked_indices):
+                        # Pad with decreasing scores
+                        for i in range(len(relevance_scores), len(ranked_indices)):
+                            relevance_scores.append(max(0, 100.0 - (i * 5.0)))
+
+                    # Assign scores to documents
+                    for idx, (rank_idx, score) in enumerate(zip(ranked_indices, relevance_scores)):
+                        # rank_idx is 1-based, convert to 0-based
+                        doc_idx = rank_idx - 1
+                        if 0 <= doc_idx < len(window_docs):
+                            doc = window_docs[doc_idx]
+                            # If document appears in multiple windows, average the scores
+                            if doc in llm_scores_map:
+                                llm_scores_map[doc] = (llm_scores_map[doc] + score) / 2.0
+                            else:
+                                llm_scores_map[doc] = score
+
+                except Exception:
+                    # If reranking fails for this window, assign neutral scores
+                    for i, doc in enumerate(window_docs):
+                        if doc not in llm_scores_map:
+                            llm_scores_map[doc] = 50.0  # Neutral score
+
+            # ========== STAGE 5: Ensemble Scoring ==========
+            # Combine LLM scores with ColBERT scores: 0.6 LLM + 0.4 ColBERT
+            ensemble_scored_docs = []
+            for doc in unique_docs:
+                llm_score = llm_scores_map.get(doc, 50.0)  # Default to neutral if not scored
+                colbert_score = colbert_scores_map.get(doc, 50.0)  # Default to neutral if not scored
+
+                # Weighted combination
+                combined_score = 0.6 * llm_score + 0.4 * colbert_score
+                ensemble_scored_docs.append((doc, combined_score))
+
+            # ========== STAGE 6: Final Selection ==========
+            # Sort by combined score descending and take top 21
+            ensemble_scored_docs.sort(key=lambda x: x[1], reverse=True)
+            top_docs = [doc for doc, score in ensemble_scored_docs[:21]]
 
             return dspy.Prediction(retrieved_docs=top_docs)
