@@ -91,7 +91,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.scorer = DocumentRelevanceScorer()
 
         # Retrieval module
-        self.retrieve_k = dspy.Retrieve(k=5)
+        self.retrieve_k = dspy.Retrieve(k=12)
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):

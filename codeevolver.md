@@ -2,11 +2,11 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements Query Decomposition with Iterative Entity Discovery and Bridging Entity Retrieval for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, identifying bridging entities for dedicated retrieval, and using gap analysis for self-correction. It retrieves ~40-55 documents across 3 iterations plus bridging phase, then scores with LLM to return top 21 most relevant documents.
+This program implements Query Decomposition with Iterative Entity Discovery and Bridging Entity Retrieval for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system transforms retrieval from similarity search to structured reasoning by decomposing claims into sub-questions, discovering entities/relationships iteratively, identifying bridging entities for dedicated retrieval, and using gap analysis for self-correction. It retrieves ~96-120 documents across 3 iterations plus bridging phase (k=12 per query), then scores with LLM to return top 21 most relevant documents.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery with bridging entity retrieval. Decomposes claims into sub-questions, retrieves k=5 docs per question, extracts entities/relationships. After iteration 1, identifies bridging entities (people, organizations, events) in retrieved documents that need dedicated retrieval, retrieves k=5 docs per bridging entity. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~40-55 documents, scores with LLM, returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing iterative entity discovery with bridging entity retrieval. Decomposes claims into sub-questions, retrieves k=12 docs per question, extracts entities/relationships. After iteration 1, identifies bridging entities (people, organizations, events) in retrieved documents that need dedicated retrieval, retrieves k=12 docs per bridging entity. Performs gap analysis twice to identify missing info and generate targeted queries. Deduplicates ~96-120 documents, scores with LLM, returns top 21. Entry point for evaluation.
 
 **ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 answerable sub-questions.
 
@@ -24,10 +24,10 @@ This program implements Query Decomposition with Iterative Entity Discovery and 
 
 ## Data Flow
 1. Input claim enters `HoverMultiHopPipeline.forward()`
-2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=5 docs per question → extract entities/relationships
-3. **Bridging Entity Discovery**: Identify 3-5 bridging entities from iteration 1 docs → retrieve k=5 docs per entity using entity name as direct query (e.g., 'Lisa Raymond', 'Ellis Ferreira') → add to all_retrieved_docs
-4. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=5 docs per query → update entities/relationships
-5. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=5 docs per query (total ~40-55 docs)
+2. **Iteration 1**: Decompose claim → 2-3 sub-questions → retrieve k=12 docs per question → extract entities/relationships
+3. **Bridging Entity Discovery**: Identify 3-5 bridging entities from iteration 1 docs → retrieve k=12 docs per entity using entity name as direct query (e.g., 'Lisa Raymond', 'Ellis Ferreira') → add to all_retrieved_docs
+4. **Iteration 2**: GapAnalysis identifies missing info → generate 3 targeted queries → retrieve k=12 docs per query → update entities/relationships
+5. **Iteration 3**: Final GapAnalysis → generate 3 queries for remaining gaps → retrieve k=12 docs per query (total ~96-120 docs)
 6. **Post-Iteration**: Deduplicate by title → score with DocumentRelevanceScorer (LLM reasoning) → sort by score → return top 21 documents
 
 ## Metric
