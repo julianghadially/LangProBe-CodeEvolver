@@ -2,21 +2,17 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-This program implements a Dual-Query Architecture with Entity-Title Extraction for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system combines semantic retrieval with explicit entity-title queries to maximize recall. Each iteration generates TWO types of queries in parallel: (1) semantic queries from claim decomposition and gap analysis for contextual retrieval, and (2) entity-focused queries that are literal Wikipedia article titles (proper nouns) extracted from the claim and retrieved context. This dual approach ensures both semantic relevance and direct entity article retrieval across 3 iterations, retrieving and deduplicating documents before scoring with LLM to return the top 21 most relevant.
+This program implements a Reciprocal Rank Fusion (RRF) reranking architecture for multi-hop document retrieval on the HoVer claim verification benchmark using DSPy. The system uses query perspective generation to create 4-5 diverse query reformulations per iteration from different angles (entity-focused, relationship-focused, temporal-focused, comparison-focused, context-focused). Each iteration retrieves k=7 documents per query (~35 documents per iteration). After retrieval, RRF formula (score = sum(1/(60 + rank))) mathematically prioritizes documents that consistently rank well across multiple query perspectives. The top 30 documents by RRF score are retained after each iteration to provide context for the next iteration. After 3 iterations, final RRF scoring across all accumulated query results returns the top 21 documents, eliminating expensive LLM-based scoring.
 
 ## Key Modules
 
-**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing dual-query architecture. For each of 3 iterations: (1) generates max 3 semantic queries (k=5 docs each) via ClaimDecomposition/GapAnalysis, (2) generates max 5 entity-title queries (k=3 docs each) via EntityTitleExtractor, (3) retrieves documents for both query types in parallel, (4) deduplicates by title after each iteration, (5) extracts entities/relationships for next iteration. After 3 iterations, scores all unique documents with LLM and returns top 21. Entry point for evaluation.
+**HoverMultiHopPipeline** (`hover_pipeline.py`): Main pipeline implementing RRF reranking architecture. For each of 3 iterations: (1) generates 4-5 diverse query perspectives via QueryPerspectiveGenerator, (2) retrieves k=7 documents per query, (3) applies RRF formula across all query results, (4) keeps top 30 documents by RRF score for next iteration's context. After 3 iterations, applies final RRF scoring across all accumulated query results and returns top 21 documents. Entry point for evaluation.
 
-**ClaimDecomposition** (`hover_pipeline.py`): Signature decomposing claims into 2-3 semantic sub-questions for contextual retrieval.
+**QueryPerspectiveGenerator** (`hover_pipeline.py`): Signature generating 4-5 diverse query reformulations from different perspectives: entity-focused (targeting specific entities), relationship-focused (connections between entities), temporal-focused (time periods/dates), comparison-focused (contrasting aspects), and context-focused (background information). Maximizes retrieval coverage by approaching claim from multiple angles.
 
-**EntityTitleExtractor** (`hover_pipeline.py`): NEW signature extracting 3-5 potential Wikipedia article titles (proper nouns: people, places, events, works, organizations) from claim and context. Acts as lexical anchor for direct entity article retrieval.
+**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge tracking (retained but not actively used in RRF flow).
 
-**EntityExtractor** (`hover_pipeline.py`): Signature extracting entities/relationships from documents for structured knowledge tracking.
-
-**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating 2-3 targeted semantic queries for next iteration.
-
-**DocumentRelevanceScorer** (`hover_pipeline.py`): ChainOfThought module scoring document relevance (1-10).
+**GapAnalysis** (`hover_pipeline.py`): Signature analyzing missing information, generating targeted queries for next iteration (retained but not actively used in RRF flow).
 
 **hover_utils**: Contains `discrete_retrieval_eval` metric for recall@21 evaluation.
 
@@ -24,13 +20,13 @@ This program implements a Dual-Query Architecture with Entity-Title Extraction f
 
 ## Data Flow
 1. Input claim enters `HoverMultiHopPipeline.forward()`
-2. **Iteration 1**: (A) Decompose claim → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from claim → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title → extract entities/relationships
-3. **Iteration 2**: (A) GapAnalysis on iteration 1 results → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from accumulated context → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title → update entities/relationships
-4. **Iteration 3**: (A) Final GapAnalysis → max 3 semantic queries → retrieve k=5 docs per query; (B) Extract entity titles from full context → max 5 entity queries → retrieve k=3 docs per entity; (C) Deduplicate by title
-5. **Post-Iteration**: Score all unique documents with DocumentRelevanceScorer (LLM reasoning) → sort by score descending → return top 21 documents
+2. **Iteration 1**: (A) Generate 4-5 diverse query perspectives from claim; (B) Retrieve k=7 documents per query (~35 docs total); (C) Apply RRF formula across all query results; (D) Keep top 30 documents by RRF score; (E) Use top 10 docs as context for next iteration
+3. **Iteration 2**: (A) Generate 4-5 diverse query perspectives informed by iteration 1 context; (B) Retrieve k=7 documents per query; (C) Apply RRF across ALL accumulated query results (from iterations 1+2); (D) Keep top 30 documents by RRF score; (E) Use top 10 docs as context for next iteration
+4. **Iteration 3**: (A) Generate 4-5 diverse query perspectives informed by iteration 2 context; (B) Retrieve k=7 documents per query; (C) Accumulate all query results
+5. **Final RRF**: Apply RRF scoring across ALL accumulated query results from all 3 iterations (~15 queries total) → return top 21 documents by final RRF score
 
 ## Metric
-The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The iterative entity discovery architecture maximizes recall through claim decomposition, structured entity/relationship tracking, gap analysis for missing information, and LLM scoring to select the most relevant 21 documents.
+The `discrete_retrieval_eval` metric computes recall@21: whether all gold supporting document titles are in the retrieved set. The RRF reranking architecture maximizes recall by generating diverse query perspectives that approach the claim from multiple angles, then mathematically prioritizing documents that consistently rank well across these perspectives. This eliminates the need for expensive LLM-based scoring while improving document diversity and recall.
 
 ## DSPy Patterns and Guidelines
 
