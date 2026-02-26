@@ -90,8 +90,10 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         self.bridging_identifier = dspy.ChainOfThought(BridgingEntityIdentifier)
         self.scorer = DocumentRelevanceScorer()
 
-        # Retrieval module
-        self.retrieve_k = dspy.Retrieve(k=5)
+        # Retrieval modules
+        # Two-stage retrieval: k=20 for broad initial coverage, k=10 for targeted gap-filling
+        self.retrieve_k = dspy.Retrieve(k=20)
+        self.retrieve_k_targeted = dspy.Retrieve(k=10)
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -120,7 +122,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             # Limit to first 3 sub-questions to control retrieval volume
             sub_questions = sub_questions[:3]
 
-            # Retrieve documents for each sub-question (k=5 per sub-question)
+            # Retrieve documents for each sub-question (k=20 per sub-question for broad coverage)
             iteration1_docs = []
             for sub_q in sub_questions:
                 try:
@@ -130,11 +132,34 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     # If retrieval fails, continue with other sub-questions
                     pass
 
+            # ========== INTERMEDIATE RERANKING: Score iteration 1 docs and keep top 15 ==========
+            # Apply early reranking to focus on most promising documents for entity extraction
+            reranked_iteration1_docs = iteration1_docs
+            if iteration1_docs:
+                scored_iter1_docs = []
+                for doc in iteration1_docs:
+                    try:
+                        score_result = self.scorer(claim=claim, document=doc)
+                        # Parse score as integer, default to 5 if parsing fails
+                        try:
+                            score = int(score_result.score)
+                        except (ValueError, TypeError):
+                            score = 5
+                        scored_iter1_docs.append((doc, score))
+                    except Exception:
+                        # If scoring fails, assign neutral score
+                        scored_iter1_docs.append((doc, 5))
+
+                # Sort by score descending and take top 15 for entity extraction
+                scored_iter1_docs.sort(key=lambda x: x[1], reverse=True)
+                reranked_iteration1_docs = [doc for doc, score in scored_iter1_docs[:15]]
+
+            # Add all iteration 1 docs (before reranking) to the pool
             all_retrieved_docs.extend(iteration1_docs)
 
-            # Extract entities and relationships from iteration 1 documents
-            if iteration1_docs:
-                docs_text = "\n\n".join(iteration1_docs[:15])  # Limit context size
+            # Extract entities and relationships from top-15 reranked iteration 1 documents
+            if reranked_iteration1_docs:
+                docs_text = "\n\n".join(reranked_iteration1_docs)  # Use top 15 reranked docs
                 try:
                     extraction_result = self.entity_extractor(claim=claim, documents=docs_text)
 
@@ -154,9 +179,9 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     pass
 
             # ========== BRIDGING ENTITY DISCOVERY: Identify and Retrieve Implicit Entities ==========
-            # After iteration 1, identify bridging entities that appear in documents but need dedicated retrieval
-            if iteration1_docs:
-                docs_text_for_bridging = "\n\n".join(iteration1_docs[:15])  # Limit context size
+            # After iteration 1, identify bridging entities from top-scored documents
+            if reranked_iteration1_docs:
+                docs_text_for_bridging = "\n\n".join(reranked_iteration1_docs)  # Use top 15 reranked docs
                 try:
                     bridging_result = self.bridging_identifier(claim=claim, documents=docs_text_for_bridging)
 
@@ -178,8 +203,8 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                     bridging_docs = []
                     for entity_name in bridging_entities:
                         try:
-                            # Direct retrieve using entity name as query (e.g., 'Lisa Raymond', 'Ellis Ferreira')
-                            docs = self.retrieve_k(entity_name).passages
+                            # Direct retrieve using entity name as targeted query (e.g., 'Lisa Raymond', 'Ellis Ferreira')
+                            docs = self.retrieve_k_targeted(entity_name).passages
                             bridging_docs.extend(docs)
                         except Exception:
                             # If retrieval fails for this entity, continue with others
@@ -222,11 +247,11 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 # If gap analysis fails, use fallback queries
                 targeted_queries = [claim]
 
-            # Retrieve documents for each targeted query (k=5 per query)
+            # Retrieve documents for each targeted query (k=10 per query, targeted retrieval)
             iteration2_docs = []
             for query in targeted_queries:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    docs = self.retrieve_k_targeted(query).passages
                     iteration2_docs.extend(docs)
                 except Exception:
                     pass
@@ -282,11 +307,11 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
                 # Fallback: use claim-based query
                 final_queries = [claim]
 
-            # Retrieve documents for final queries (k=5 per query)
+            # Retrieve documents for final queries (k=10 per query, targeted retrieval)
             iteration3_docs = []
             for query in final_queries:
                 try:
-                    docs = self.retrieve_k(query).passages
+                    docs = self.retrieve_k_targeted(query).passages
                     iteration3_docs.extend(docs)
                 except Exception:
                     pass
