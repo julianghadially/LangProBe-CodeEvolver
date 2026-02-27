@@ -17,11 +17,21 @@ class GenerateRelationshipQuery(dspy.Signature):
     query: str = dspy.OutputField(desc="a relationship-focused search query")
 
 
-class RerankForCoverage(dspy.Signature):
-    """Given a claim and retrieved documents, identify which documents provide the best coverage of entities, relationships, and facts mentioned in the claim. Select documents that collectively cover different aspects of the claim to support multi-hop reasoning chains."""
+class AnalyzeRetrievalGaps(dspy.Signature):
+    """Analyze the initial retrieved documents to identify coverage gaps. Determine which key entities, facts, or relationships from the claim are well-covered by the documents, which are missing or poorly covered, and generate a targeted query to fill the most critical gaps."""
     claim: str = dspy.InputField()
-    documents: str = dspy.InputField(desc="all retrieved documents, numbered")
-    selected_indices: str = dspy.OutputField(desc="comma-separated list of exactly 21 document indices (e.g., '0,3,5,7,...') that provide the best coverage")
+    documents: str = dspy.InputField(desc="initial retrieved documents")
+    well_covered: str = dspy.OutputField(desc="key entities/facts from the claim that are well-covered by the documents")
+    missing_or_poor: str = dspy.OutputField(desc="key entities/facts from the claim that are missing or poorly covered")
+    gap_filling_query: str = dspy.OutputField(desc="a specific search query targeting the missing information")
+
+
+class ScoreDocumentRelevance(dspy.Signature):
+    """Score a single document's relevance to the claim on a scale of 0-10, where 10 is highly relevant and 0 is irrelevant. Consider how well the document covers key entities, facts, and relationships mentioned in the claim."""
+    claim: str = dspy.InputField()
+    document: str = dspy.InputField(desc="a single document to score")
+    score: int = dspy.OutputField(desc="relevance score from 0-10")
+    justification: str = dspy.OutputField(desc="brief explanation for the score")
 
 
 class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
@@ -35,9 +45,11 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.rm = dspy.ColBERTv2(url=COLBERT_URL)
         self.retrieve_25 = dspy.Retrieve(k=25)
+        self.retrieve_10 = dspy.Retrieve(k=10)
         self.entity_query_gen = dspy.Predict(GenerateEntityQuery)
         self.relationship_query_gen = dspy.Predict(GenerateRelationshipQuery)
-        self.reranker = dspy.Predict(RerankForCoverage)
+        self.gap_analyzer = dspy.ChainOfThought(AnalyzeRetrievalGaps)
+        self.doc_scorer = dspy.Predict(ScoreDocumentRelevance)
 
     def forward(self, claim):
         with dspy.context(rm=self.rm):
@@ -50,33 +62,64 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             relationship_query = self.relationship_query_gen(claim=claim).query
             relationship_docs = self.retrieve_25(relationship_query).passages
 
-            # Combine all 50 documents
-            all_docs = entity_docs + relationship_docs
+            # Combine initial 50 documents
+            initial_docs = entity_docs + relationship_docs
 
-            # Stage 2: Coverage-based reranking
-            # Format documents with indices for the reranker
-            doc_list_str = "\n".join([f"{i}. {doc}" for i, doc in enumerate(all_docs)])
+            # Stage 2: Gap analysis
+            # Format documents for gap analysis
+            doc_list_str = "\n".join([f"{i}. {doc}" for i, doc in enumerate(initial_docs)])
 
-            # Get reranked indices
-            rerank_result = self.reranker(claim=claim, documents=doc_list_str)
-            selected_indices_str = rerank_result.selected_indices
+            # Analyze coverage gaps with reasoning
+            gap_analysis = self.gap_analyzer(claim=claim, documents=doc_list_str)
+            gap_filling_query = gap_analysis.gap_filling_query
 
-            # Parse the indices and select top 21 documents
-            try:
-                # Parse comma-separated indices
-                selected_indices = [int(idx.strip()) for idx in selected_indices_str.split(',')]
-                # Filter valid indices and limit to 21
-                selected_indices = [idx for idx in selected_indices if 0 <= idx < len(all_docs)][:21]
+            # Stage 3: Targeted retrieval to fill gaps
+            gap_docs = self.retrieve_10(gap_filling_query).passages
 
-                # Select the documents based on indices
-                reranked_docs = [all_docs[idx] for idx in selected_indices]
+            # Combine all 60 documents
+            all_docs = initial_docs + gap_docs
 
-                # If we got fewer than 21 documents, pad with remaining docs
-                if len(reranked_docs) < 21:
-                    remaining_docs = [doc for i, doc in enumerate(all_docs) if i not in selected_indices]
-                    reranked_docs.extend(remaining_docs[:21 - len(reranked_docs)])
-            except (ValueError, IndexError):
-                # Fallback: if parsing fails, just take first 21 documents
-                reranked_docs = all_docs[:21]
+            # Stage 4: Deterministic deduplication by normalized title
+            def normalize_title(doc):
+                """Extract and normalize document title."""
+                # Documents are in format "title | content"
+                title = doc.split(" | ")[0] if " | " in doc else doc
+                # Normalize: lowercase and strip whitespace
+                return title.lower().strip()
 
-            return dspy.Prediction(retrieved_docs=reranked_docs)
+            # Deduplicate by normalized title
+            seen_titles = set()
+            unique_docs = []
+            for doc in all_docs:
+                norm_title = normalize_title(doc)
+                if norm_title not in seen_titles:
+                    seen_titles.add(norm_title)
+                    unique_docs.append(doc)
+
+            # Stage 5: Hybrid scoring approach
+            # Score all unique documents
+            scored_docs = []
+            for doc in unique_docs:
+                try:
+                    score_result = self.doc_scorer(claim=claim, document=doc)
+                    score = score_result.score
+                    # Ensure score is an integer between 0 and 10
+                    if isinstance(score, str):
+                        score = int(score)
+                    score = max(0, min(10, score))
+                    scored_docs.append((score, doc))
+                except (ValueError, AttributeError):
+                    # If scoring fails, assign a default middle score
+                    scored_docs.append((5, doc))
+
+            # Sort by score (descending) and select top 21
+            scored_docs.sort(key=lambda x: x[0], reverse=True)
+            top_21_docs = [doc for score, doc in scored_docs[:21]]
+
+            # Ensure we have exactly 21 documents
+            # If we have fewer, pad with remaining unique docs
+            if len(top_21_docs) < 21 and len(unique_docs) > len(top_21_docs):
+                remaining_docs = [doc for score, doc in scored_docs[21:]]
+                top_21_docs.extend(remaining_docs[:21 - len(top_21_docs)])
+
+            return dspy.Prediction(retrieved_docs=top_21_docs)

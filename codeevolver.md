@@ -3,13 +3,16 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) fact verification task using DSPy. The system retrieves supporting documents for a given claim through a two-stage retrieval and reranking strategy.
+This program implements a self-reflective multi-hop document retrieval system for the HoVer (Hover-nlp) fact verification task using DSPy. The system retrieves supporting documents for a given claim through a five-stage retrieval, gap analysis, and hybrid scoring strategy.
 
 **Key Modules:**
 
-1. **HoverMultiHopPipeline** (`hover_pipeline.py`): The top-level pipeline that implements a two-stage retrieval strategy:
+1. **HoverMultiHopPipeline** (`hover_pipeline.py`): The top-level pipeline that implements a five-stage retrieval strategy:
    - **Stage 1 - Initial Retrieval**: Generates 2 diverse queries from the claim (entity-focused via `GenerateEntityQuery` and relationship-focused via `GenerateRelationshipQuery`), retrieving k=25 documents per query for 50 total documents
-   - **Stage 2 - Coverage-based Reranking**: Uses a `RerankForCoverage` signature to analyze all 50 documents and select 21 documents that provide the best coverage of entities, relationships, and facts in the claim, preserving multi-hop reasoning chains
+   - **Stage 2 - Gap Analysis**: Uses `AnalyzeRetrievalGaps` with `ChainOfThought` to analyze the initial 50 documents and identify which key entities/facts are well-covered vs. missing or poorly covered, then generates a targeted gap-filling query
+   - **Stage 3 - Targeted Retrieval**: Executes the gap-filling query with k=10 to retrieve additional documents, bringing total raw retrieval to 60 documents
+   - **Stage 4 - Deduplication**: Performs deterministic deduplication by normalized title (lowercase, stripped) to remove duplicate documents from the pool
+   - **Stage 5 - Hybrid Scoring**: Uses `ScoreDocumentRelevance` signature to score each unique document (0-10) with justification, then selects top 21 documents by score
    - Initializes the ColBERTv2 retriever with a remote API endpoint
 
 2. **HoverMultiHop** (`hover_program.py`): The legacy multi-hop retrieval program (not currently used by HoverMultiHopPipeline) that performs three sequential retrieval hops with summaries.
@@ -19,7 +22,7 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 4. **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` which checks if all gold supporting document titles are present in the retrieved documents (subset match).
 
 **Data Flow:**
-Claim → Generate Entity Query → Retrieve 25 Docs → Generate Relationship Query → Retrieve 25 Docs → Combine 50 Docs → Coverage-based Reranking → Select Top 21 Documents
+Claim → Generate Entity Query → Retrieve 25 Docs → Generate Relationship Query → Retrieve 25 Docs → Combine 50 Docs → Gap Analysis (CoT) → Generate Gap-Filling Query → Retrieve 10 Docs → Combine 60 Docs → Deduplicate by Title → Score All Unique Docs → Select Top 21 by Score
 
 **Metric:** The `discrete_retrieval_eval` metric returns True if all gold standard supporting document titles are found within the predicted retrieved documents (max 21), using normalized text matching.
 
