@@ -3,24 +3,23 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) fact verification task using DSPy. The system retrieves supporting documents for a given claim through iterative retrieval and summarization.
+This program implements a multi-hop document retrieval system for the HoVer (Hover-nlp) fact verification task using DSPy. The system retrieves supporting documents for a given claim through a two-stage retrieval and reranking strategy.
 
 **Key Modules:**
 
-1. **HoverMultiHopPipeline** (`hover_pipeline.py`): The top-level pipeline wrapper that initializes the ColBERTv2 retriever with a remote API endpoint and orchestrates the overall execution flow.
+1. **HoverMultiHopPipeline** (`hover_pipeline.py`): The top-level pipeline that implements a two-stage retrieval strategy:
+   - **Stage 1 - Initial Retrieval**: Generates 2 diverse queries from the claim (entity-focused via `GenerateEntityQuery` and relationship-focused via `GenerateRelationshipQuery`), retrieving k=25 documents per query for 50 total documents
+   - **Stage 2 - Coverage-based Reranking**: Uses a `RerankForCoverage` signature to analyze all 50 documents and select 21 documents that provide the best coverage of entities, relationships, and facts in the claim, preserving multi-hop reasoning chains
+   - Initializes the ColBERTv2 retriever with a remote API endpoint
 
-2. **HoverMultiHop** (`hover_program.py`): The core multi-hop retrieval program that performs three sequential retrieval hops:
-   - Hop 1: Retrieves k=7 documents directly from the claim
-   - Hop 2: Generates a refined query using claim + summary from hop 1, retrieves k=7 more documents
-   - Hop 3: Generates another query using claim + both previous summaries, retrieves k=7 additional documents
-   - Returns all 21 documents (3 hops × 7 documents each)
+2. **HoverMultiHop** (`hover_program.py`): The legacy multi-hop retrieval program (not currently used by HoverMultiHopPipeline) that performs three sequential retrieval hops with summaries.
 
 3. **hover_data.py**: Manages dataset loading from the HoVer benchmark, filtering for 3-hop examples and creating DSPy Example objects.
 
 4. **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` which checks if all gold supporting document titles are present in the retrieved documents (subset match).
 
 **Data Flow:**
-Claim → Hop1 Retrieve → Summarize → Hop2 Query Generation → Hop2 Retrieve → Summarize → Hop3 Query Generation → Hop3 Retrieve → Combined 21 Documents
+Claim → Generate Entity Query → Retrieve 25 Docs → Generate Relationship Query → Retrieve 25 Docs → Combine 50 Docs → Coverage-based Reranking → Select Top 21 Documents
 
 **Metric:** The `discrete_retrieval_eval` metric returns True if all gold standard supporting document titles are found within the predicted retrieved documents (max 21), using normalized text matching.
 
