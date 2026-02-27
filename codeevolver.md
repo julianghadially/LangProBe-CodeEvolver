@@ -9,10 +9,11 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 
 1. **HoverMultiHopPipeline** (`hover_pipeline.py`): The top-level pipeline wrapper that initializes the ColBERTv2 retriever with a remote API endpoint and orchestrates the overall execution flow.
 
-2. **HoverMultiHop** (`hover_program.py`): The core multi-hop retrieval program that performs three sequential retrieval hops:
-   - Hop 1: Retrieves k=7 documents directly from the claim
-   - Hop 2: Generates a refined query using claim + summary from hop 1, retrieves k=7 more documents
-   - Hop 3: Generates another query using claim + both previous summaries, retrieves k=7 additional documents
+2. **HoverMultiHop** (`hover_program.py`): The core multi-hop retrieval program that performs three sequential retrieval hops with gap analysis:
+   - Gap Analysis: Analyzes the claim upfront to identify key entities, information needs, and search strategy
+   - Hop 1: Generates a targeted query using gap analysis outputs (key_entities, information_needed, search_strategy), retrieves k=7 documents
+   - Hop 2: Generates a refined query using claim + gap analysis + summary from hop 1, retrieves k=7 more documents
+   - Hop 3: Generates another query using claim + gap analysis + both previous summaries, retrieves k=7 additional documents
    - Returns all 21 documents (3 hops × 7 documents each)
 
 3. **hover_data.py**: Manages dataset loading from the HoVer benchmark, filtering for 3-hop examples and creating DSPy Example objects.
@@ -20,7 +21,7 @@ This program implements a multi-hop document retrieval system for the HoVer (Hov
 4. **hover_utils.py**: Contains the evaluation metric `discrete_retrieval_eval` which checks if all gold supporting document titles are present in the retrieved documents (subset match).
 
 **Data Flow:**
-Claim → Hop1 Retrieve → Summarize → Hop2 Query Generation → Hop2 Retrieve → Summarize → Hop3 Query Generation → Hop3 Retrieve → Combined 21 Documents
+Claim → Gap Analysis (key_entities, information_needed, search_strategy) → Hop1 Query Generation (with analysis) → Hop1 Retrieve → Summarize → Hop2 Query Generation (with analysis + summary_1) → Hop2 Retrieve → Summarize → Hop3 Query Generation (with analysis + summary_1 + summary_2) → Hop3 Retrieve → Combined 21 Documents
 
 **Metric:** The `discrete_retrieval_eval` metric returns True if all gold standard supporting document titles are found within the predicted retrieved documents (max 21), using normalized text matching.
 
