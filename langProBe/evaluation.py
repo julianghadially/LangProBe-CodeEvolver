@@ -134,6 +134,16 @@ program_class_mapping = {
 }
 
 
+def load_program_from_path(program_template: dspy.Module, path: str) -> dspy.Module:
+    """Load program state from a JSON file into a new instance of the same class."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Program path not found: {path}")
+    program = copy.deepcopy(program_template)
+    program.load(str(path))
+    return program
+
+
 def evaluate(
     benchmark_meta: BenchmarkMeta,
     lm,
@@ -146,6 +156,7 @@ def evaluate(
     missing_mode=False,
     program_class="all",
     program_name_filter=None,
+    program_path=None,
     api_key=None,
     api_base=None,
     skip_optimizers=True,
@@ -158,6 +169,9 @@ def evaluate(
     missing_mode: only evaluate experiments without a result file
     program_class: the program class to evaluate
     program_name_filter: if provided, only evaluate the program with this name
+    program_path: if provided, load program state from this JSON file (e.g. codeevolver/results/optimized_program.json)
+        and use it for evaluation. When set, only the baseline (loaded program) is evaluated; optimizers are skipped.
+        Requires --program to be specified so the loader knows which program class to use.
     """
     dataset_mode = dataset_mode or benchmark_meta.dataset_mode
     benchmark = benchmark_meta.benchmark(dataset_mode=dataset_mode)
@@ -202,8 +216,12 @@ def evaluate(
         if program_name_filter is not None and program_name != program_name_filter:
             continue
 
+        if program_path is not None:
+            program = load_program_from_path(program, program_path)
+            print(f"Loaded program state from {program_path}")
+
         evaluate_baseline_flag = True
-        optimizers = [] if skip_optimizers else copy.deepcopy(benchmark_meta.optimizers)
+        optimizers = [] if skip_optimizers or program_path is not None else copy.deepcopy(benchmark_meta.optimizers)
         if missing_mode:
             # Only run missing experiments
             for optimizer in benchmark_meta.optimizers:
@@ -286,6 +304,7 @@ def evaluate_all(
     missing_mode=False,
     program_class="all",
     program_name_filter=None,
+    program_path=None,
     api_key=None,
     api_base=None,
     skip_optimizers=True,
@@ -312,6 +331,7 @@ def evaluate_all(
             missing_mode,
             program_class,
             program_name_filter=program_name_filter,
+            program_path=program_path,
             api_key=api_key,
             api_base=api_base,
             skip_optimizers=skip_optimizers,
@@ -437,7 +457,19 @@ if __name__ == "__main__":
         default=None,
     )
 
+    parser.add_argument(
+        "--program_path",
+        help="Path to a saved program JSON file to load for evaluation (e.g. codeevolver/results/optimized_program.json). "
+        "When set, the program state is loaded from this file and used instead of the baseline. Requires --program to be set. "
+        "Optimizers are skipped when using a loaded program.",
+        type=str,
+        default=None,
+    )
+
     args = parser.parse_args()
+
+    if args.program_path is not None and args.program is None:
+        parser.error("--program_path requires --program to be specified (the program name must match the saved program class).")
 
     suppress_dspy_output = args.suppress_dspy_output
     dataset_mode = args.dataset_mode
@@ -503,6 +535,7 @@ if __name__ == "__main__":
         missing_mode=args.missing_mode,
         program_class=args.program_class,
         program_name_filter=args.program,
+        program_path=args.program_path,
         api_key=args.lm_api_key,
         api_base=args.lm_api_base,
         skip_optimizers=args.skip_optimizers,
