@@ -3,20 +3,25 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system performs iterative retrieval and summarization to find supporting documents relevant to a given claim through a 3-hop reasoning process.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system performs hybrid literal + generated query retrieval to find supporting documents relevant to a given claim, combining exact phrase matching with semantic bridging queries.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level wrapper that initializes the ColBERTv2 retriever and orchestrates the retrieval pipeline
-- `HoverMultiHop`: Core program implementing 3-hop retrieval logic with query generation and summarization at each hop
+- `HoverMultiHopPipeline`: Top-level pipeline implementing hybrid retrieval strategy with key phrase extraction, bridging queries, and coverage-based reranking
+- `KeyPhraseExtraction`: DSPy signature that extracts 2-3 quoted phrases/entity names from claims for exact matching
+- `BridgingQuery`: DSPy signature that generates queries to find connecting/bridging documents
+- `CoverageReranker`: DSPy signature that reranks documents by exact phrase matches, entity coverage, and claim relevance
+- `HoverMultiHop`: Original 3-hop retrieval program (no longer used by pipeline)
 - `hover_data.py`: Data loader that filters HoVer dataset to 3-hop examples (claim-fact pairs requiring 3 documents)
 - `hover_utils.py`: Evaluation utilities including the `discrete_retrieval_eval` metric
 
 **Data Flow**:
-1. Input claim is used to retrieve k=7 documents (Hop 1)
-2. Documents are summarized, then used to generate a refined query for Hop 2
-3. Hop 2 retrieves k=7 more documents, summarizes with context from Hop 1
-4. Summaries from Hops 1-2 inform the query for Hop 3, retrieving k=7 final documents
-5. All 21 documents (7×3 hops) are returned as `retrieved_docs`
+1. Extract 2-3 key phrases/entity names from the input claim using KeyPhraseExtraction
+2. Query 1: Use first extracted phrase to retrieve k=15 documents (literal matching)
+3. Query 2: Generate bridging query from claim + initial results to retrieve k=10 connecting documents
+4. Query 3: Use second extracted phrase to retrieve k=10 documents (literal matching)
+5. Concatenate all 35 documents (15+10+10)
+6. Rerank using CoverageReranker based on: (a) exact phrase matches, (b) entity coverage, (c) claim relevance
+7. Return top 21 documents from reranking as `retrieved_docs`
 
 **Metric**: `discrete_retrieval_eval` checks if all gold supporting document titles (from `supporting_facts`) are present in the retrieved documents (max 21). Returns True if gold titles are a subset of retrieved titles after normalization.
 
