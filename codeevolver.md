@@ -2,20 +2,22 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-The HoVer (fact verification) system is a multi-hop document retrieval pipeline designed to identify supporting documents for fact-checking claims. It uses an iterative retrieval approach with three sequential "hops" to progressively discover relevant documents across multiple related topics.
+The HoVer (fact verification) system is a parallel multi-path document retrieval pipeline designed to identify supporting documents for fact-checking claims. It uses an entity-aware retrieval approach with parallel queries targeting different entity chains, followed by intelligent score-based reranking to select the most relevant documents.
 
 ## Key Modules
 - **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and executes the program
-- **HoverMultiHop**: Core program implementing the 3-hop retrieval strategy with summarization at each hop
+- **HoverMultiHop**: Core program implementing parallel entity-aware retrieval with score-based reranking
+- **EntityAndGapAnalyzer**: Signature that extracts entity chains from claims and generates 2-3 parallel search queries
+- **DocumentRelevanceScorer**: Signature that scores each document's relevance (0-100) to the claim and entity chains
 - **hoverBench**: Dataset loader filtering HoVer dataset examples to 3-hop cases (26K+ training examples from hover-nlp/hover)
 - **hover_utils**: Contains the evaluation metric and document counting utilities
 
 ## Data Flow
-1. Initial claim is used to retrieve k=7 documents (hop 1)
-2. Hop 1 docs are summarized using ChainOfThought
-3. Summary generates a refined query for hop 2, retrieving k=7 more documents
-4. Both summaries inform hop 3 query generation for final k=7 documents
-5. All retrieved documents (21 total) are concatenated and returned
+1. EntityAndGapAnalyzer extracts entity chains and generates 2-3 parallel queries targeting different aspects of the claim
+2. Each query retrieves k=23 documents using ColBERTv2 (total: 46-69 documents across 2-3 queries)
+3. Documents are deduplicated while preserving order
+4. DocumentRelevanceScorer scores each unique document's relevance (0-100) to the claim and entity chains
+5. Documents are reranked by score and top 21 are returned
 
 ## Optimization Metric
 `discrete_retrieval_eval` checks if all gold supporting documents (from supporting_facts) are present in the retrieved set (max 21 docs). Returns binary score: True if gold_titles ⊆ found_titles, False otherwise. Document titles are normalized and matched using the first segment before " | " delimiter.
