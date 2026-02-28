@@ -3,20 +3,19 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system performs iterative retrieval and summarization to find supporting documents relevant to a given claim through a 3-hop reasoning process.
+**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system uses a targeted three-phase retrieval strategy to identify and retrieve specific documents relevant to a given claim, focusing on concrete entities rather than broad concepts.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level wrapper that initializes the ColBERTv2 retriever and orchestrates the retrieval pipeline
-- `HoverMultiHop`: Core program implementing 3-hop retrieval logic with query generation and summarization at each hop
+- `HoverMultiHopPipeline`: Top-level wrapper that implements a three-phase targeted retrieval strategy with document analysis, precise query generation, and relevance scoring. Initializes the ColBERTv2 retriever and orchestrates the retrieval pipeline.
+- `HoverMultiHop`: Core program implementing original 3-hop retrieval logic with query generation and summarization at each hop (currently not used in the pipeline)
 - `hover_data.py`: Data loader that filters HoVer dataset to 3-hop examples (claim-fact pairs requiring 3 documents)
 - `hover_utils.py`: Evaluation utilities including the `discrete_retrieval_eval` metric
 
-**Data Flow**:
-1. Input claim is used to retrieve k=7 documents (Hop 1)
-2. Documents are summarized, then used to generate a refined query for Hop 2
-3. Hop 2 retrieves k=7 more documents, summarizes with context from Hop 1
-4. Summaries from Hops 1-2 inform the query for Hop 3, retrieving k=7 final documents
-5. All 21 documents (7×3 hops) are returned as `retrieved_docs`
+**Data Flow (Three-Phase Targeted Retrieval)**:
+1. **Phase 1 - Document Analysis**: DSPy signature `RequiredDocumentAnalysis` analyzes the claim to identify 2-4 specific document titles/topics that must be retrieved (e.g., "The Dinner Party artwork", "Sojourner Truth biography"), each with a rationale
+2. **Phase 2 - Precise Query Generation**: DSPy signature `PreciseQueryGeneration` creates up to 3 highly specific queries optimized for Wikipedia title/abstract matching, each targeting a required document
+3. **Phase 3 - Retrieval & Scoring**: Retrieves k=25 documents per query (up to 75 total), then DSPy signature `DocumentRelevanceScoring` scores each document (0-10) based on relevance to the required documents list
+4. The top 21 highest-scoring unique documents are selected and returned as `retrieved_docs`
 
 **Metric**: `discrete_retrieval_eval` checks if all gold supporting document titles (from `supporting_facts`) are present in the retrieved documents (max 21). Returns True if gold titles are a subset of retrieved titles after normalization.
 
