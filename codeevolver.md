@@ -3,20 +3,21 @@ METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Architecture Summary
 
-**Purpose**: This is a multi-hop document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system performs iterative retrieval and summarization to find supporting documents relevant to a given claim through a 3-hop reasoning process.
+**Purpose**: This is an entity-aware document retrieval system for fact-checking claims using the HoVer (Hop Verification) dataset. The system performs systematic entity-based retrieval to ensure all claim components are addressed, using a four-stage pipeline that extracts entities, retrieves documents per entity, analyzes coverage gaps, and selects the most relevant documents.
 
 **Key Modules**:
-- `HoverMultiHopPipeline`: Top-level wrapper that initializes the ColBERTv2 retriever and orchestrates the retrieval pipeline
-- `HoverMultiHop`: Core program implementing 3-hop retrieval logic with query generation and summarization at each hop
+- `HoverMultiHopPipeline`: Top-level module implementing entity-aware retrieval pipeline with four DSPy signatures (EntityExtraction, EntityQueryGenerator, GapAnalysis, FillInQueryGenerator)
+- `HoverMultiHop`: Legacy 3-hop retrieval program (no longer used)
 - `hover_data.py`: Data loader that filters HoVer dataset to 3-hop examples (claim-fact pairs requiring 3 documents)
 - `hover_utils.py`: Evaluation utilities including the `discrete_retrieval_eval` metric
 
 **Data Flow**:
-1. Input claim is used to retrieve k=7 documents (Hop 1)
-2. Documents are summarized, then used to generate a refined query for Hop 2
-3. Hop 2 retrieves k=7 more documents, summarizes with context from Hop 1
-4. Summaries from Hops 1-2 inform the query for Hop 3, retrieving k=7 final documents
-5. All 21 documents (7×3 hops) are returned as `retrieved_docs`
+1. EntityExtraction: Extracts key entities from the claim (people, places, organizations, events, concepts)
+2. Entity Query Generation: Creates one focused query per entity (max 3 entities) and retrieves k=15 documents per query
+3. Gap Analysis: Identifies which entities lack supporting documents in the retrieved set
+4. Fill-in Retrieval: If gaps exist and queries remain available, generates one fill-in query targeting missing entities and retrieves k=15 more documents
+5. Deduplication & Scoring: Deduplicates documents by title, scores each by counting entity mentions, and selects top 21 documents
+6. Final output returns exactly 21 documents as `retrieved_docs`
 
 **Metric**: `discrete_retrieval_eval` checks if all gold supporting document titles (from `supporting_facts`) are present in the retrieved documents (max 21). Returns True if gold titles are a subset of retrieved titles after normalization.
 
