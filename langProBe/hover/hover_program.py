@@ -2,6 +2,55 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class HopChainExtractor(dspy.Signature):
+    """Analyze the claim to identify the logical hop structure and entity bridges needed for multi-hop reasoning.
+
+    A hop is a logical step in the reasoning chain. For example:
+    - Hop 1: Identify the concrete entity (e.g., book title, organization name)
+    - Hop 2: Find the bridge entity (e.g., author of the book, founder of organization)
+    - Hop 3: Verify final fact about the bridge entity (e.g., birth date, nationality)
+
+    Extract the hop chain structure showing what information is needed at each step."""
+
+    claim: str = dspy.InputField(desc="The claim to analyze for multi-hop reasoning structure")
+    hop_chain: str = dspy.OutputField(desc="The logical hop structure as a numbered list (e.g., 'Hop 1: title -> author | Hop 2: author -> birth details')")
+    concrete_entities: str = dspy.OutputField(desc="The most concrete/specific entities mentioned in the claim that should be retrieved first")
+
+
+class HopTargetedQuery(dspy.Signature):
+    """Generate a single highly-focused query for a specific missing hop or bridge entity.
+
+    Based on the claim, hop chain structure, and already-retrieved documents, generate ONE specific query that:
+    - Targets the next missing hop in the reasoning chain
+    - Uses information from previously retrieved documents as context
+    - Focuses on bridging entities that connect different hops
+
+    Generate exactly ONE query."""
+
+    claim: str = dspy.InputField(desc="The claim being verified")
+    hop_chain: str = dspy.InputField(desc="The logical hop structure extracted from the claim")
+    retrieved_context: str = dspy.InputField(desc="Documents already retrieved in previous hops")
+    missing_hop: str = dspy.InputField(desc="The specific hop or bridge entity that needs to be retrieved")
+    query: str = dspy.OutputField(desc="A single highly-focused query targeting the missing hop")
+
+
+class ChainCompletenessEvaluator(dspy.Signature):
+    """Evaluate whether all hops in the reasoning chain have bridging documents retrieved.
+
+    For each hop in the chain, assess whether:
+    - The hop has relevant documents that provide the needed information
+    - Bridge entities connecting hops are present
+    - The chain of reasoning is complete from start to finish
+
+    Output a completeness assessment and identify the next missing hop if incomplete."""
+
+    claim: str = dspy.InputField(desc="The claim being verified")
+    hop_chain: str = dspy.InputField(desc="The logical hop structure extracted from the claim")
+    retrieved_documents: str = dspy.InputField(desc="All documents retrieved so far")
+    is_complete: str = dspy.OutputField(desc="'yes' if all hops are covered by retrieved documents, 'no' if gaps remain")
+    missing_hop: str = dspy.OutputField(desc="Description of the next missing hop or bridge entity, or 'none' if complete")
+
+
 class EntityAndGapAnalyzer(dspy.Signature):
     """Analyze the claim to extract multiple entity chains and identify information gaps that need to be verified.
 
@@ -64,7 +113,7 @@ class TargetedQueryGenerator(dspy.Signature):
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim.
+    '''Multi hop system for retrieving documents for a provided claim using sequential hop-by-hop reasoning.
 
     EVALUATION
     - This system is assessed by retrieving the correct documents that are most relevant.
@@ -72,149 +121,135 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # Parallel retrieval with larger k per query
-        self.k_per_query_round1 = 23  # Retrieve 23 documents per query in round 1
-        self.k_per_query_round2 = 15  # Retrieve 15 documents per query in round 2
+        # Sequential hop retrieval configuration
+        self.k_hop1 = 25  # Retrieve more documents for the first hop (concrete entities)
+        self.k_hop_followup = 20  # Retrieve documents for follow-up hops
         self.max_final_docs = 21  # Final output constraint
-        self.confidence_threshold = 80  # Threshold for triggering round 2
+        self.max_hops = 3  # Maximum number of hops (to stay within query limit)
 
-        # Entity and gap analysis module
-        self.entity_gap_analyzer = dspy.ChainOfThought(EntityAndGapAnalyzer)
+        # Hop chain extraction module
+        self.hop_extractor = dspy.ChainOfThought(HopChainExtractor)
 
-        # Round 1 retrieval module
-        self.retrieve_round1 = dspy.Retrieve(k=self.k_per_query_round1)
+        # Initial retrieval for first hop
+        self.retrieve_hop1 = dspy.Retrieve(k=self.k_hop1)
 
-        # Round 2 retrieval module
-        self.retrieve_round2 = dspy.Retrieve(k=self.k_per_query_round2)
+        # Follow-up retrieval for subsequent hops
+        self.retrieve_followup = dspy.Retrieve(k=self.k_hop_followup)
 
-        # Confidence evaluator for assessing coverage after round 1
-        self.confidence_evaluator = dspy.ChainOfThought(ConfidenceEvaluator)
+        # Chain completeness evaluator
+        self.completeness_evaluator = dspy.ChainOfThought(ChainCompletenessEvaluator)
 
-        # Targeted query generator for round 2
-        self.targeted_query_generator = dspy.ChainOfThought(TargetedQueryGenerator)
+        # Hop-targeted query generator
+        self.hop_query_generator = dspy.ChainOfThought(HopTargetedQuery)
 
-        # Document relevance scorer
+        # Document relevance scorer (kept for backward compatibility)
         self.doc_scorer = dspy.ChainOfThought(DocumentRelevanceScorer)
 
     def forward(self, claim):
-        # ===== ROUND 1: Initial parallel retrieval =====
-        # Step 1: Analyze claim to extract entity chains and generate parallel queries
-        analysis = self.entity_gap_analyzer(claim=claim)
-        entity_chains = analysis.entity_chains
-        queries = analysis.queries
+        # ===== STEP 1: Extract hop chain structure =====
+        # Analyze the claim to identify the logical hop structure and entity bridges
+        try:
+            hop_analysis = self.hop_extractor(claim=claim)
+            hop_chain = hop_analysis.hop_chain
+            concrete_entities = hop_analysis.concrete_entities
+        except Exception:
+            # Fallback if hop extraction fails
+            hop_chain = "Hop 1: Identify entities | Hop 2: Verify relationships | Hop 3: Confirm facts"
+            concrete_entities = claim
 
-        # Ensure we have 2-3 queries (constraint: max 3 queries per claim)
-        if len(queries) < 2:
-            # If only 1 query generated, duplicate with slight variation
-            queries = [queries[0], claim][:3]
-        elif len(queries) > 3:
-            # If more than 3, take top 3
-            queries = queries[:3]
+        # ===== STEP 2: Retrieve documents for first hop (concrete entities) =====
+        # Start with the most concrete entities mentioned in the claim
+        hop1_docs = self.retrieve_hop1(concrete_entities).passages
 
-        # Step 2: Round 1 parallel retrieval - retrieve k documents for each query
-        round1_retrieved_docs = []
-        for query in queries:
-            docs = self.retrieve_round1(query).passages
-            round1_retrieved_docs.extend(docs)
-
-        # Deduplicate round 1 documents while preserving order
+        # Track all retrieved documents and their hop assignments for position-aware reranking
+        all_docs = []
+        doc_hop_map = {}  # Maps doc -> set of hop numbers it covers
         seen = set()
-        round1_unique_docs = []
-        for doc in round1_retrieved_docs:
+
+        for doc in hop1_docs:
             if doc not in seen:
                 seen.add(doc)
-                round1_unique_docs.append(doc)
+                all_docs.append(doc)
+                doc_hop_map[doc] = {1}  # Mark as covering hop 1
 
-        # ===== CONFIDENCE EVALUATION =====
-        # Step 3: Evaluate confidence and identify information gaps
-        # Concatenate round 1 documents for evaluation (limit to reasonable size)
-        retrieved_docs_str = "\n\n".join(round1_unique_docs[:50])  # Limit to 50 docs to avoid token limits
+        # ===== STEP 3: Iterative hop-by-hop retrieval =====
+        # Retrieve documents for remaining hops (max 2 additional hops to stay within 3 query limit)
+        current_hop = 1
 
-        try:
-            confidence_eval = self.confidence_evaluator(
-                claim=claim,
-                entity_chains=entity_chains,
-                retrieved_documents=retrieved_docs_str
-            )
-            confidence_score = confidence_eval.confidence_score
+        while current_hop < self.max_hops:
+            # Evaluate chain completeness
+            retrieved_docs_str = "\n\n".join(all_docs[:50])  # Limit to 50 docs to avoid token limits
 
-            # Ensure confidence score is an integer
-            if isinstance(confidence_score, str):
-                import re
-                match = re.search(r'\d+', confidence_score)
-                confidence_score = int(match.group()) if match else 50
-            else:
-                confidence_score = int(confidence_score)
-
-            missing_information = confidence_eval.missing_information
-        except Exception:
-            # If evaluation fails, assume we need round 2 (conservative approach)
-            confidence_score = 50
-            missing_information = "Unable to evaluate coverage, proceeding with additional retrieval"
-
-        # ===== ROUND 2: Targeted follow-up retrieval (conditional) =====
-        all_unique_docs = round1_unique_docs.copy()
-
-        if confidence_score < self.confidence_threshold:
-            # Step 4: Generate targeted follow-up queries
             try:
-                targeted_query_result = self.targeted_query_generator(
+                completeness_eval = self.completeness_evaluator(
                     claim=claim,
-                    retrieved_documents=retrieved_docs_str,
-                    missing_information=missing_information
+                    hop_chain=hop_chain,
+                    retrieved_documents=retrieved_docs_str
                 )
-                targeted_queries = targeted_query_result.targeted_queries
+                is_complete = completeness_eval.is_complete.lower().strip()
+                missing_hop = completeness_eval.missing_hop
 
-                # Ensure we have 1-2 queries (constraint for round 2)
-                if len(targeted_queries) < 1:
-                    targeted_queries = [claim]
-                elif len(targeted_queries) > 2:
-                    targeted_queries = targeted_queries[:2]
+                # If chain is complete, stop retrieval
+                if is_complete == 'yes' or missing_hop.lower().strip() == 'none':
+                    break
 
-                # Step 5: Round 2 retrieval with targeted queries
-                round2_retrieved_docs = []
-                for query in targeted_queries:
-                    docs = self.retrieve_round2(query).passages
-                    round2_retrieved_docs.extend(docs)
-
-                # Step 6: Deduplicate across both rounds
-                for doc in round2_retrieved_docs:
-                    if doc not in seen:
-                        seen.add(doc)
-                        all_unique_docs.append(doc)
             except Exception:
-                # If round 2 fails, continue with round 1 results
-                pass
+                # If evaluation fails, assume we need more hops (conservative approach)
+                missing_hop = f"Hop {current_hop + 1} information"
 
-        # ===== SCORE-BASED RERANKING =====
-        # Step 7: Apply DocumentRelevanceScorer to all unique documents
-        # If we have fewer than max_final_docs, return all
-        if len(all_unique_docs) <= self.max_final_docs:
-            return dspy.Prediction(retrieved_docs=all_unique_docs)
-
-        # Score each document
-        scored_docs = []
-        for doc in all_unique_docs:
+            # ===== STEP 4: Generate targeted query for missing hop =====
             try:
-                score_result = self.doc_scorer(
+                hop_query_result = self.hop_query_generator(
                     claim=claim,
-                    entity_chains=entity_chains,
-                    document=doc
+                    hop_chain=hop_chain,
+                    retrieved_context=retrieved_docs_str,
+                    missing_hop=missing_hop
                 )
-                score = score_result.relevance_score
-                # Ensure score is an integer
-                if isinstance(score, str):
-                    # Extract first number from string if needed
-                    import re
-                    match = re.search(r'\d+', score)
-                    score = int(match.group()) if match else 50
-                scored_docs.append((doc, int(score)))
+                hop_query = hop_query_result.query
             except Exception:
-                # If scoring fails, assign middle score
-                scored_docs.append((doc, 50))
+                # Fallback query if generation fails
+                hop_query = claim
+
+            # ===== STEP 5: Retrieve documents for this hop =====
+            hop_docs = self.retrieve_followup(hop_query).passages
+
+            # Add new documents and track their hop coverage
+            for doc in hop_docs:
+                if doc not in seen:
+                    seen.add(doc)
+                    all_docs.append(doc)
+                    doc_hop_map[doc] = {current_hop + 1}
+                else:
+                    # Document appears in multiple hops - it's a bridge document
+                    if doc in doc_hop_map:
+                        doc_hop_map[doc].add(current_hop + 1)
+
+            current_hop += 1
+
+        # ===== STEP 6: Position-aware reranking =====
+        # Prioritize documents covering multiple hops (bridge documents)
+        if len(all_docs) <= self.max_final_docs:
+            return dspy.Prediction(retrieved_docs=all_docs)
+
+        # Calculate position-aware scores
+        doc_scores = []
+        for i, doc in enumerate(all_docs):
+            # Base score: inverse position (earlier = higher score)
+            position_score = len(all_docs) - i
+
+            # Multi-hop bonus: documents covering multiple hops get priority
+            hop_coverage = len(doc_hop_map.get(doc, {1}))
+            multi_hop_bonus = hop_coverage * 100
+
+            # Early hop bonus: documents from hop 1 get slight priority (concrete entities)
+            early_hop_bonus = 50 if 1 in doc_hop_map.get(doc, set()) else 0
+
+            # Combined score
+            total_score = position_score + multi_hop_bonus + early_hop_bonus
+            doc_scores.append((doc, total_score))
 
         # Sort by score descending and take top max_final_docs
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-        top_docs = [doc for doc, score in scored_docs[:self.max_final_docs]]
+        doc_scores.sort(key=lambda x: x[1], reverse=True)
+        top_docs = [doc for doc, score in doc_scores[:self.max_final_docs]]
 
         return dspy.Prediction(retrieved_docs=top_docs)

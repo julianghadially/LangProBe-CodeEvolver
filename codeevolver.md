@@ -2,27 +2,29 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-The HoVer (fact verification) system is an iterative multi-round document retrieval pipeline with confidence-based self-verification loops, designed to identify supporting documents for fact-checking claims. It uses an entity-aware retrieval approach with parallel queries targeting different entity chains, confidence evaluation to identify information gaps, conditional targeted follow-up retrieval, and intelligent score-based reranking to select the most relevant documents.
+The HoVer (fact verification) system is a sequential multi-hop chain reasoning architecture designed to identify supporting documents for fact-checking claims. It explicitly models the multi-hop reasoning structure by orchestrating hop-by-hop retrieval, starting with concrete entities and progressively retrieving bridging documents through a logical chain. The system uses hop chain extraction, completeness evaluation, targeted hop-specific queries, and position-aware reranking that prioritizes documents covering multiple hops in the reasoning chain.
 
 ## Key Modules
 - **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and executes the program
-- **HoverMultiHop**: Core program implementing 2-round iterative retrieval with confidence-based self-verification loops
-- **EntityAndGapAnalyzer**: Signature that extracts entity chains from claims and generates 2-3 parallel search queries
-- **ConfidenceEvaluator**: Signature that assesses whether retrieved documents provide sufficient evidence to verify the claim, outputs confidence score (0-100) and identifies missing information gaps
-- **TargetedQueryGenerator**: Signature that generates 1-2 highly targeted follow-up queries to address identified information gaps
+- **HoverMultiHop**: Core program implementing sequential hop-by-hop retrieval with chain completeness evaluation
+- **HopChainExtractor**: Signature that analyzes the claim to identify the logical hop structure and entity bridges (e.g., "Hop 1: author of book → Hop 2: birth details of author")
+- **HopTargetedQuery**: Signature that generates a single highly-focused query for a specific missing hop/bridge using previously retrieved documents as context
+- **ChainCompletenessEvaluator**: Signature that evaluates whether all hops in the reasoning chain have bridging documents retrieved
 - **DocumentRelevanceScorer**: Signature that scores each document's relevance (0-100) to the claim and entity chains
 - **hoverBench**: Dataset loader filtering HoVer dataset examples to 3-hop cases (26K+ training examples from hover-nlp/hover)
 - **hover_utils**: Contains the evaluation metric and document counting utilities
 
 ## Data Flow
-1. **Round 1**: EntityAndGapAnalyzer extracts entity chains and generates 2-3 parallel queries targeting different aspects of the claim
-2. Each query retrieves k=23 documents using ColBERTv2 (total: 46-69 documents across 2-3 queries)
-3. Documents are deduplicated while preserving order
-4. **Confidence Evaluation**: ConfidenceEvaluator assesses coverage and identifies missing entity chains, bridging entities, or factual gaps
-5. **Round 2 (conditional)**: If confidence < 80, TargetedQueryGenerator creates 1-2 targeted follow-up queries addressing the gaps, each retrieving k=15 additional documents
-6. All documents from both rounds are deduplicated
-7. DocumentRelevanceScorer scores each unique document's relevance (0-100) to the claim and entity chains
-8. Documents are reranked by score and top 21 are returned
+1. **Hop Chain Extraction**: HopChainExtractor analyzes the claim to identify the logical hop structure and concrete entities that should be retrieved first
+2. **Hop 1 Retrieval**: Retrieve k=25 documents for the most concrete entities mentioned in the claim using ColBERTv2
+3. **Iterative Hop-by-Hop Retrieval** (max 2 additional hops for total of 3 queries):
+   - ChainCompletenessEvaluator assesses whether all hops in the chain have bridging documents
+   - If incomplete, HopTargetedQuery generates a single highly-focused query for the missing hop using previously retrieved documents as context
+   - Retrieve k=20 documents for the targeted hop
+   - Track which documents appear in multiple hops (bridge documents)
+   - Repeat until chain is complete or max hops reached (3 total queries)
+4. **Position-Aware Reranking**: Documents are scored using position (earlier = higher), multi-hop coverage bonus (documents covering multiple hops get +100 per hop), and early hop bonus (+50 for hop 1 documents with concrete entities)
+5. Top 21 documents are returned based on combined scores
 
 ## Optimization Metric
 `discrete_retrieval_eval` checks if all gold supporting documents (from supporting_facts) are present in the retrieved set (max 21 docs). Returns binary score: True if gold_titles ⊆ found_titles, False otherwise. Document titles are normalized and matched using the first segment before " | " delimiter.
