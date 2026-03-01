@@ -63,6 +63,24 @@ class TargetedQueryGenerator(dspy.Signature):
     targeted_queries: list[str] = dspy.OutputField(desc="1-2 highly targeted follow-up queries addressing the missing information (must be 1-2 queries)")
 
 
+class ListwiseDocumentReranker(dspy.Signature):
+    """Rerank all retrieved documents by evaluating them together to identify multi-hop relationships and document interdependencies.
+
+    Unlike scoring documents independently, this listwise approach considers:
+    - Multi-hop relationships between documents (e.g., bridging entities connecting two facts)
+    - Document interdependencies where one document provides context for another
+    - Complementary information across documents that jointly support the claim
+    - Coverage of all entity chains mentioned in the claim
+
+    Return a ranked list of document indices representing the optimal ordering, where documents that form multi-hop chains
+    or have strong interdependencies are ranked higher."""
+
+    claim: str = dspy.InputField(desc="The claim being verified")
+    entity_chains: str = dspy.InputField(desc="The entity chains extracted from the claim")
+    all_documents: str = dspy.InputField(desc="All retrieved documents concatenated with separators '---DOCUMENT {i}---'")
+    ranked_indices: str = dspy.OutputField(desc="Comma-separated list of document indices in ranked order (e.g., '0,5,12,3,8,...') representing the optimal ordering based on multi-hop relationships and relevance")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -93,8 +111,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Targeted query generator for round 2
         self.targeted_query_generator = dspy.ChainOfThought(TargetedQueryGenerator)
 
-        # Document relevance scorer
-        self.doc_scorer = dspy.ChainOfThought(DocumentRelevanceScorer)
+        # Listwise document reranker (replaces individual scoring)
+        self.listwise_reranker = dspy.ChainOfThought(ListwiseDocumentReranker)
 
     def forward(self, claim):
         # ===== ROUND 1: Initial parallel retrieval =====
@@ -186,35 +204,58 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 # If round 2 fails, continue with round 1 results
                 pass
 
-        # ===== SCORE-BASED RERANKING =====
-        # Step 7: Apply DocumentRelevanceScorer to all unique documents
+        # ===== LISTWISE RERANKING =====
+        # Step 7: Apply ListwiseDocumentReranker to all unique documents together
         # If we have fewer than max_final_docs, return all
         if len(all_unique_docs) <= self.max_final_docs:
             return dspy.Prediction(retrieved_docs=all_unique_docs)
 
-        # Score each document
-        scored_docs = []
-        for doc in all_unique_docs:
-            try:
-                score_result = self.doc_scorer(
-                    claim=claim,
-                    entity_chains=entity_chains,
-                    document=doc
-                )
-                score = score_result.relevance_score
-                # Ensure score is an integer
-                if isinstance(score, str):
-                    # Extract first number from string if needed
-                    import re
-                    match = re.search(r'\d+', score)
-                    score = int(match.group()) if match else 50
-                scored_docs.append((doc, int(score)))
-            except Exception:
-                # If scoring fails, assign middle score
-                scored_docs.append((doc, 50))
+        # Concatenate all documents with clear separators
+        concatenated_docs = "\n\n".join([
+            f"---DOCUMENT {i}---\n{doc}"
+            for i, doc in enumerate(all_unique_docs)
+        ])
 
-        # Sort by score descending and take top max_final_docs
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-        top_docs = [doc for doc, score in scored_docs[:self.max_final_docs]]
+        # Call the listwise reranker
+        try:
+            rerank_result = self.listwise_reranker(
+                claim=claim,
+                entity_chains=entity_chains,
+                all_documents=concatenated_docs
+            )
+            ranked_indices_str = rerank_result.ranked_indices
+
+            # Parse the returned indices string (e.g., "0,5,12,3,8,...")
+            import re
+            # Extract all numbers from the string
+            indices = re.findall(r'\d+', ranked_indices_str)
+            # Convert to integers and filter valid indices
+            valid_indices = [
+                int(idx) for idx in indices
+                if idx.isdigit() and 0 <= int(idx) < len(all_unique_docs)
+            ]
+
+            # Remove duplicates while preserving order
+            seen_indices = set()
+            unique_indices = []
+            for idx in valid_indices:
+                if idx not in seen_indices:
+                    seen_indices.add(idx)
+                    unique_indices.append(idx)
+
+            # Select top max_final_docs documents in the specified order
+            top_docs = [all_unique_docs[idx] for idx in unique_indices[:self.max_final_docs]]
+
+            # If we didn't get enough documents from the reranker, fill with remaining docs
+            if len(top_docs) < self.max_final_docs:
+                remaining_docs = [
+                    doc for i, doc in enumerate(all_unique_docs)
+                    if i not in seen_indices
+                ]
+                top_docs.extend(remaining_docs[:self.max_final_docs - len(top_docs)])
+
+        except Exception:
+            # If listwise reranking fails, fall back to returning first max_final_docs
+            top_docs = all_unique_docs[:self.max_final_docs]
 
         return dspy.Prediction(retrieved_docs=top_docs)

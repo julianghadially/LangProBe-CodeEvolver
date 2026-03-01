@@ -19,10 +19,11 @@ Step 2: Parallel Retrieval (dspy.Retrieve)
   - Retrieves k=23 documents per query
   - Total pool: 46-69 documents (with duplicates)
   ↓
-Step 3: Deduplication & Reranking (DocumentRelevanceScorer)
+Step 3: Deduplication & Listwise Reranking (ListwiseDocumentReranker)
   - Removes duplicate documents
-  - Scores each document for relevance (0-100 scale)
-  - Returns top 21 documents
+  - Evaluates all documents together to identify multi-hop relationships
+  - Outputs ranked list of document indices based on interdependencies
+  - Returns top 21 documents in optimal order
   ↓
 Output: retrieved_docs (max 21)
 ```

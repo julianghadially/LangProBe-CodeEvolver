@@ -10,7 +10,7 @@ The HoVer (fact verification) system is an iterative multi-round document retrie
 - **EntityAndGapAnalyzer**: Signature that extracts entity chains from claims and generates 2-3 parallel search queries
 - **ConfidenceEvaluator**: Signature that assesses whether retrieved documents provide sufficient evidence to verify the claim, outputs confidence score (0-100) and identifies missing information gaps
 - **TargetedQueryGenerator**: Signature that generates 1-2 highly targeted follow-up queries to address identified information gaps
-- **DocumentRelevanceScorer**: Signature that scores each document's relevance (0-100) to the claim and entity chains
+- **ListwiseDocumentReranker**: Signature that evaluates all retrieved documents together to identify multi-hop relationships and document interdependencies, outputs ranked list of document indices
 - **hoverBench**: Dataset loader filtering HoVer dataset examples to 3-hop cases (26K+ training examples from hover-nlp/hover)
 - **hover_utils**: Contains the evaluation metric and document counting utilities
 
@@ -21,8 +21,8 @@ The HoVer (fact verification) system is an iterative multi-round document retrie
 4. **Confidence Evaluation**: ConfidenceEvaluator assesses coverage and identifies missing entity chains, bridging entities, or factual gaps
 5. **Round 2 (conditional)**: If confidence < 80, TargetedQueryGenerator creates 1-2 targeted follow-up queries addressing the gaps, each retrieving k=15 additional documents
 6. All documents from both rounds are deduplicated
-7. DocumentRelevanceScorer scores each unique document's relevance (0-100) to the claim and entity chains
-8. Documents are reranked by score and top 21 are returned
+7. **Listwise Reranking**: ListwiseDocumentReranker evaluates all documents together (concatenated with separators) to identify multi-hop relationships and document interdependencies, outputting a ranked list of document indices
+8. Documents are reordered based on the ranked indices and top 21 are returned
 
 ## Optimization Metric
 `discrete_retrieval_eval` checks if all gold supporting documents (from supporting_facts) are present in the retrieved set (max 21 docs). Returns binary score: True if gold_titles ⊆ found_titles, False otherwise. Document titles are normalized and matched using the first segment before " | " delimiter.
