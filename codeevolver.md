@@ -2,22 +2,27 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-The HoVer (fact verification) system is a parallel multi-path document retrieval pipeline designed to identify supporting documents for fact-checking claims. It uses an entity-aware retrieval approach with parallel queries targeting different entity chains, followed by intelligent score-based reranking to select the most relevant documents.
+The HoVer (fact verification) system is an iterative multi-round document retrieval pipeline with confidence-based self-verification loops, designed to identify supporting documents for fact-checking claims. It uses an entity-aware retrieval approach with parallel queries targeting different entity chains, confidence evaluation to identify information gaps, conditional targeted follow-up retrieval, and intelligent score-based reranking to select the most relevant documents.
 
 ## Key Modules
 - **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and executes the program
-- **HoverMultiHop**: Core program implementing parallel entity-aware retrieval with score-based reranking
+- **HoverMultiHop**: Core program implementing 2-round iterative retrieval with confidence-based self-verification loops
 - **EntityAndGapAnalyzer**: Signature that extracts entity chains from claims and generates 2-3 parallel search queries
+- **ConfidenceEvaluator**: Signature that assesses whether retrieved documents provide sufficient evidence to verify the claim, outputs confidence score (0-100) and identifies missing information gaps
+- **TargetedQueryGenerator**: Signature that generates 1-2 highly targeted follow-up queries to address identified information gaps
 - **DocumentRelevanceScorer**: Signature that scores each document's relevance (0-100) to the claim and entity chains
 - **hoverBench**: Dataset loader filtering HoVer dataset examples to 3-hop cases (26K+ training examples from hover-nlp/hover)
 - **hover_utils**: Contains the evaluation metric and document counting utilities
 
 ## Data Flow
-1. EntityAndGapAnalyzer extracts entity chains and generates 2-3 parallel queries targeting different aspects of the claim
+1. **Round 1**: EntityAndGapAnalyzer extracts entity chains and generates 2-3 parallel queries targeting different aspects of the claim
 2. Each query retrieves k=23 documents using ColBERTv2 (total: 46-69 documents across 2-3 queries)
 3. Documents are deduplicated while preserving order
-4. DocumentRelevanceScorer scores each unique document's relevance (0-100) to the claim and entity chains
-5. Documents are reranked by score and top 21 are returned
+4. **Confidence Evaluation**: ConfidenceEvaluator assesses coverage and identifies missing entity chains, bridging entities, or factual gaps
+5. **Round 2 (conditional)**: If confidence < 80, TargetedQueryGenerator creates 1-2 targeted follow-up queries addressing the gaps, each retrieving k=15 additional documents
+6. All documents from both rounds are deduplicated
+7. DocumentRelevanceScorer scores each unique document's relevance (0-100) to the claim and entity chains
+8. Documents are reranked by score and top 21 are returned
 
 ## Optimization Metric
 `discrete_retrieval_eval` checks if all gold supporting documents (from supporting_facts) are present in the retrieved set (max 21 docs). Returns binary score: True if gold_titles ⊆ found_titles, False otherwise. Document titles are normalized and matched using the first segment before " | " delimiter.
