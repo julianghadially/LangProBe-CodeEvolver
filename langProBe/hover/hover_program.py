@@ -30,6 +30,24 @@ class DocumentRelevanceScorer(dspy.Signature):
     relevance_score: int = dspy.OutputField(desc="Relevance score from 0-100 indicating how relevant this document is to verifying the claim")
 
 
+class ListwiseDocumentRanker(dspy.Signature):
+    """Rank all retrieved documents by relevance to the claim using comparative judgment across all documents simultaneously.
+
+    This listwise ranking approach allows you to make direct comparisons between documents to identify the most relevant ones.
+    Prioritize documents that:
+    - Directly address and help verify the claim
+    - Cover different entity chains mentioned in the claim (ensure multi-hop coverage across entity chains)
+    - Provide complementary information that together supports comprehensive fact verification
+    - Contain factual evidence rather than tangential information
+
+    Return a ranked list of document indices (0 to len(documents)-1) ordered from most to least relevant."""
+
+    claim: str = dspy.InputField(desc="The original claim being verified")
+    entity_chains: str = dspy.InputField(desc="The entity chains extracted from the claim that need coverage")
+    documents: list[str] = dspy.InputField(desc="All retrieved documents to rank (indexed 0 to len-1)")
+    ranked_indices: list[int] = dspy.OutputField(desc="Ranked list of document indices from most to least relevant (e.g., [5, 2, 8, 0, ...])")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -49,8 +67,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Retrieval module
         self.retrieve_k = dspy.Retrieve(k=self.k_per_query)
 
-        # Document relevance scorer
-        self.doc_scorer = dspy.ChainOfThought(DocumentRelevanceScorer)
+        # Listwise document ranker (replaces individual scoring)
+        self.listwise_ranker = dspy.Predict(ListwiseDocumentRanker)
 
     def forward(self, claim):
         # Step 1: Analyze claim to extract entity chains and generate parallel queries
@@ -80,34 +98,46 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 seen.add(doc)
                 unique_docs.append(doc)
 
-        # Step 3: Score-based reranking
+        # Step 3: Listwise reranking
         # If we have fewer than max_final_docs, return all
         if len(unique_docs) <= self.max_final_docs:
             return dspy.Prediction(retrieved_docs=unique_docs)
 
-        # Score each document
-        scored_docs = []
-        for doc in unique_docs:
-            try:
-                score_result = self.doc_scorer(
-                    claim=claim,
-                    entity_chains=entity_chains,
-                    document=doc
-                )
-                score = score_result.relevance_score
-                # Ensure score is an integer
-                if isinstance(score, str):
-                    # Extract first number from string if needed
-                    import re
-                    match = re.search(r'\d+', score)
-                    score = int(match.group()) if match else 50
-                scored_docs.append((doc, int(score)))
-            except Exception:
-                # If scoring fails, assign middle score
-                scored_docs.append((doc, 50))
+        # Use listwise ranker to rank all documents in a single pass
+        try:
+            ranking_result = self.listwise_ranker(
+                claim=claim,
+                entity_chains=entity_chains,
+                documents=unique_docs
+            )
+            ranked_indices = ranking_result.ranked_indices
 
-        # Sort by score descending and take top max_final_docs
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-        top_docs = [doc for doc, score in scored_docs[:self.max_final_docs]]
+            # Validate and sanitize indices
+            valid_indices = []
+            for idx in ranked_indices:
+                try:
+                    # Convert to int if string
+                    if isinstance(idx, str):
+                        idx = int(idx)
+                    # Check if index is within valid range
+                    if 0 <= idx < len(unique_docs):
+                        # Avoid duplicates
+                        if idx not in valid_indices:
+                            valid_indices.append(idx)
+                except (ValueError, TypeError):
+                    continue
+
+            # If we got valid indices, use them to reorder documents
+            if valid_indices:
+                reranked_docs = [unique_docs[i] for i in valid_indices]
+                # Take top max_final_docs
+                top_docs = reranked_docs[:self.max_final_docs]
+            else:
+                # Fallback: if ranking failed, return first max_final_docs
+                top_docs = unique_docs[:self.max_final_docs]
+
+        except Exception:
+            # Fallback: if ranking fails entirely, return first max_final_docs
+            top_docs = unique_docs[:self.max_final_docs]
 
         return dspy.Prediction(retrieved_docs=top_docs)
