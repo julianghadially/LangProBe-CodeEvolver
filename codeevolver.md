@@ -2,20 +2,26 @@ PARENT_MODULE_PATH: langProBe.hover.hover_pipeline.HoverMultiHopPipeline
 METRIC_MODULE_PATH: langProBe.hover.hover_utils.discrete_retrieval_eval
 
 ## Overview
-The HoVer (fact verification) system is a multi-hop document retrieval pipeline designed to identify supporting documents for fact-checking claims. It uses an iterative retrieval approach with three sequential "hops" to progressively discover relevant documents across multiple related topics.
+The HoVer (fact verification) system is a multi-hop document retrieval pipeline with LLM-powered listwise reranking, designed to identify supporting documents for fact-checking claims. It uses an iterative retrieval approach with three sequential "hops" to progressively discover relevant documents, followed by a sophisticated sliding-window reranking phase that uses chain-of-thought reasoning to select the most relevant documents.
 
 ## Key Modules
-- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model and executes the program
-- **HoverMultiHop**: Core program implementing the 3-hop retrieval strategy with summarization at each hop
+- **HoverMultiHopPipeline**: Top-level wrapper that initializes the ColBERTv2 retrieval model, executes the multi-hop program, and applies listwise reranking
+- **ListwiseReranker**: DSPy Signature that uses chain-of-thought reasoning to evaluate and rank documents by relevance to the claim
+- **HoverMultiHop**: Core program implementing the 3-hop retrieval strategy with summarization at each hop (configurable k parameter)
 - **hoverBench**: Dataset loader filtering HoVer dataset examples to 3-hop cases (26K+ training examples from hover-nlp/hover)
 - **hover_utils**: Contains the evaluation metric and document counting utilities
 
 ## Data Flow
-1. Initial claim is used to retrieve k=7 documents (hop 1)
+1. Initial claim is used to retrieve k=21 documents (hop 1)
 2. Hop 1 docs are summarized using ChainOfThought
-3. Summary generates a refined query for hop 2, retrieving k=7 more documents
-4. Both summaries inform hop 3 query generation for final k=7 documents
-5. All retrieved documents (21 total) are concatenated and returned
+3. Summary generates a refined query for hop 2, retrieving k=21 more documents
+4. Both summaries inform hop 3 query generation for final k=21 documents
+5. All retrieved documents (63 total) are collected
+6. Sliding-window listwise reranking is applied:
+   - Documents are split into overlapping windows of 30 documents each (stride=15)
+   - Each window is reranked using ListwiseReranker with ChainOfThought reasoning
+   - Scores are aggregated across windows using reciprocal rank scoring
+   - Top 21 documents are selected based on averaged scores and returned
 
 ## Optimization Metric
 `discrete_retrieval_eval` checks if all gold supporting documents (from supporting_facts) are present in the retrieved set (max 21 docs). Returns binary score: True if gold_titles ⊆ found_titles, False otherwise. Document titles are normalized and matched using the first segment before " | " delimiter.
