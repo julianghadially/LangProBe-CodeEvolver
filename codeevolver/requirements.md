@@ -68,5 +68,22 @@ We use the same LangProbe training, validation, and testing sets.
 
 
 
+## simple_eval Pipeline
+
+`simple_eval/evaluate.py` is a transparent, single-file evaluation pipeline for HotpotQA with per-example logging and optional MLflow tracing.
+
+### Diagnostic Workflow
+
+```bash
+# Baseline on test set
+python -m simple_eval.evaluate --split test
+
+# GEPA-optimized on test set
+python -m simple_eval.evaluate --split test \
+    --program_path gepa_optimize/output_promptonly_gepa/gepa_optimized_program.json
+```
+
+Results are saved to `simple_eval/results/<label>_<split>_<timestamp>/`.
+
 ## Additional Programs
 Additional programs are added to /langProPlus and their requirements files are mapped in codeevolver/LangProPlus.md

@@ -17,3 +17,8 @@ langProBe/AppWorld/.conda/
 
 .dspy_cache/
 .evaluation_*/
+mlflow.db
+simple_eval/results/gepa*
+mlruns/*
+mlartifacts/*
+*/gepa_logs/*
