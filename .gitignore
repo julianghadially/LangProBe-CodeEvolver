@@ -21,4 +21,4 @@ mlflow.db
 simple_eval/results/gepa*
 mlruns/*
 mlartifacts/*
-*/gepa_logs/*
+gepa_optimize/output_promptonly_gepa/gepa_logs/
