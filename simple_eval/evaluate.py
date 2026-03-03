@@ -273,17 +273,24 @@ def main():
                         help="Disable MLflow tracing")
     parser.add_argument("--seed", type=int, default=None,
                         help="Shuffle seed; with --n, uses random.Random(seed).sample()")
-    parser.add_argument("--resource_metric", action="store_true",
-                        help="Use composite accuracy + retrieval penalty metric (0.02/query)")
+    parser.add_argument("--metric", type=str, default=None,
+                        choices=["exact_match", "resource_penalty", "llm_judge"],
+                        help="Metric to use: exact_match (default), resource_penalty, or llm_judge")
     args = parser.parse_args()
 
     # Select metric
-    if args.resource_metric:
+    if args.metric == "resource_penalty":
         from langProPlus.hotpotGEPA.hotpot_metric_resource import (
             hotpot_accuracy_with_resource_penalty_feedback,
         )
         metric = hotpot_accuracy_with_resource_penalty_feedback
         metric_name = "accuracy_with_resource_penalty"
+    elif args.metric == "llm_judge":
+        from langProPlus.hotpotGEPA.hotpot_metric_resource import (
+            hotpot_llm_judge_feedback,
+        )
+        metric = hotpot_llm_judge_feedback
+        metric_name = "llm_judge"
     else:
         metric = answer_exact_match
         metric_name = "answer_exact_match"
