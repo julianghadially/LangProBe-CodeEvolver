@@ -68,22 +68,54 @@ We use the same LangProbe training, validation, and testing sets.
 
 
 
-## simple_eval Pipeline
+## simple_eval Pipelines
 
-`simple_eval/evaluate.py` is a transparent, single-file evaluation pipeline for HotpotQA with per-example logging and optional MLflow tracing.
+`simple_eval` provides transparent, per-example evaluation entrypoints for LangProBe programs, with optional MLflow tracing.
 
-### Diagnostic Workflow
+### HotpotQA
+
+`simple_eval/evaluate_hover.py` evaluates the Hotpot multi-hop QA pipeline in a transparent evaluation pipeline for HotpotQA with per-example logging and optional MLflow tracing
+
+#### Usage
 
 ```bash
 # Baseline on test set
-python -m simple_eval.evaluate --split test
+python -m simple_eval.evaluate_hotpot --split test
 
 # GEPA-optimized on test set
-python -m simple_eval.evaluate --split test \
+python -m simple_eval.evaluate_hotpot --split test \
     --program_path gepa_optimize/output_promptonly_gepa/gepa_optimized_program.json
 ```
+
+Hotpot uses the following components:
+
+- **Module path (program)**: `langProPlus.hotpotGEPA.hotpot_pipeline.HotpotMultiHopPipeline`
+- **Metric paths**:
+  - Exact match: `dspy.evaluate.answer_exact_match`
+  - Resource-penalty metric: `langProPlus.hotpotGEPA.hotpot_metric_resource.hotpot_accuracy_with_resource_penalty_feedback`
+  - LLM judge metric: `langProPlus.hotpotGEPA.hotpot_metric_resource.hotpot_llm_judge_feedback`
+- **Dataset**: JSON files in `data/HotpotQABench_<split>.json` (train/dev/val/test).
+
+Results are saved to `simple_eval/results/<label>_<split>_<timestamp>/`.
+
+### Hover
+
+`simple_eval/evaluate_hover.py` evaluates the Hover multi-hop fact-checking retrieval pipeline.
+
+#### Usage
+
+```bash
+# Baseline Hover retrieval on validation-as-test split
+python -m simple_eval.evaluate_hover --split test
+```
+
+Hover uses the following components:
+
+- **Module path (program)**: `langProBe.hover.hover_pipeline.HoverMultiHopPipeline`
+- **Metric path (document retrieval)**: `simple_eval.programs.hover.hover_doc_retrieval`
+- **Dataset**: HuggingFace `hover-nlp/hover` (train and validation) with 3-hop filtering, as in `langProBe.hover.hover_data.hoverBench`.
 
 Results are saved to `simple_eval/results/<label>_<split>_<timestamp>/`.
 
 ## Additional Programs
-Additional programs are added to /langProPlus and their requirements files are mapped in codeevolver/LangProPlus.md
+Additional programs are added to `/langProPlus` and their requirements files are mapped in `codeevolver/LangProPlus.md`.
