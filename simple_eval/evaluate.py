@@ -89,20 +89,31 @@ def load_program(program_path: str | None) -> dspy.Module:
 # Evaluation
 # ---------------------------------------------------------------------------
 
+def _extract_score(score) -> float:
+    """Extract a float from a metric return value (handles ScoreWithFeedback)."""
+    if hasattr(score, "score"):
+        return float(score.score)
+    return float(score)
+
+
 def run_evaluation(
     program: dspy.Module,
     dataset: list[dspy.Example],
     num_threads: int,
+    metric=None,
 ) -> tuple[float, list[dict]]:
     """Run dspy.evaluate.Evaluate and extract per-example results.
 
     Returns (overall_score, per_example_list) where each entry in
     per_example_list is a dict with idx, question, gold_answer,
-    predicted_answer, score, gold_titles.
+    predicted_answer, score, gold_titles, and optionally retrieval_count.
     """
+    if metric is None:
+        metric = answer_exact_match
+
     evaluator = Evaluate(
         devset=dataset,
-        metric=answer_exact_match,
+        metric=metric,
         num_threads=num_threads,
         display_progress=True,
         max_errors=5000,
@@ -111,18 +122,24 @@ def run_evaluation(
 
     # EvaluationResult has .score (float) and .results (list of (example, prediction, score))
     overall_score = eval_result.score
+    if hasattr(overall_score, "score"):
+        overall_score = overall_score.score
     results_list = eval_result.results
 
     per_example = []
     for idx, (example, prediction, score) in enumerate(results_list):
-        per_example.append({
+        row = {
             "idx": idx,
             "question": example.question,
             "gold_answer": example.answer,
             "predicted_answer": getattr(prediction, "answer", str(prediction)),
-            "score": float(score),
+            "score": _extract_score(score),
             "gold_titles": json.dumps(example.get("gold_titles", [])),
-        })
+        }
+        retrieval_count = getattr(prediction, "retrieval_count", None)
+        if retrieval_count is not None:
+            row["retrieval_count"] = int(retrieval_count)
+        per_example.append(row)
 
     return overall_score, per_example
 
@@ -143,6 +160,8 @@ def save_results(
     # CSV
     csv_path = output_dir / "per_example_results.csv"
     fieldnames = ["idx", "question", "gold_answer", "predicted_answer", "score", "gold_titles"]
+    if per_example and "retrieval_count" in per_example[0]:
+        fieldnames.append("retrieval_count")
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -254,7 +273,20 @@ def main():
                         help="Disable MLflow tracing")
     parser.add_argument("--seed", type=int, default=None,
                         help="Shuffle seed; with --n, uses random.Random(seed).sample()")
+    parser.add_argument("--resource_metric", action="store_true",
+                        help="Use composite accuracy + retrieval penalty metric (0.02/query)")
     args = parser.parse_args()
+
+    # Select metric
+    if args.resource_metric:
+        from langProPlus.hotpotGEPA.hotpot_metric_resource import (
+            hotpot_accuracy_with_resource_penalty_feedback,
+        )
+        metric = hotpot_accuracy_with_resource_penalty_feedback
+        metric_name = "accuracy_with_resource_penalty"
+    else:
+        metric = answer_exact_match
+        metric_name = "answer_exact_match"
 
     # Build config dict for logging
     config = {
@@ -264,6 +296,7 @@ def main():
         "seed": args.seed,
         "lm": args.lm,
         "num_threads": args.num_threads,
+        "metric": metric_name,
     }
 
     # Output directory
@@ -278,6 +311,7 @@ def main():
     print(f"=== simple_eval ===")
     print(f"Split: {args.split}, N: {args.n}, Seed: {args.seed}")
     print(f"Program: {args.program_path or 'baseline'}")
+    print(f"Metric: {metric_name}")
     print(f"LM: {args.lm}")
     print(f"Output: {output_dir}")
     print()
@@ -311,7 +345,7 @@ def main():
 
     # Run evaluation
     print(f"\nRunning evaluation ({args.num_threads} threads)...")
-    overall_score, per_example = run_evaluation(program, dataset, args.num_threads)
+    overall_score, per_example = run_evaluation(program, dataset, args.num_threads, metric=metric)
     print(f"\n{'='*40}")
     print(f"Overall score: {overall_score:.2f}%")
     print(f"{'='*40}")
