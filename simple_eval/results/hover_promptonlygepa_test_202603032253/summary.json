@@ -1,0 +1,16 @@
+{
+  "overall_score": 52.0,
+  "correct": 156,
+  "total": 300,
+  "accuracy": 0.52,
+  "config": {
+    "program_path": "gepa_optimize/output_hover_CE_202603032032/gepa_optimized_program.json",
+    "split": "test",
+    "n": null,
+    "seed": null,
+    "lm": "openai/gpt-4.1-mini",
+    "num_threads": 8,
+    "metric": "hover_doc_retrieval"
+  },
+  "timestamp": "2026-03-03T23:03:31.916401"
+}

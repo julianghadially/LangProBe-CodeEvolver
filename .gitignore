@@ -19,6 +19,7 @@ langProBe/AppWorld/.conda/
 .evaluation_*/
 mlflow.db
 simple_eval/results/gepa*
-mlruns/*
-mlartifacts/*
+mlruns
+mlartifacts
 gepa_optimize/output_promptonly_gepa/gepa_logs/
+gepa_optimize/output_hover_CE_202603032032/gepa_logs

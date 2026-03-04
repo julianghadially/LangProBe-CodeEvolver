@@ -117,5 +117,26 @@ Hover uses the following components:
 
 Results are saved to `simple_eval/results/<label>_<split>_<timestamp>/`.
 
+## GEPA optimization
+
+`gepa_optimize/run_gepa.py` runs GEPA prompt optimization for Hotpot or Hover. One entrypoint supports multiple programs via `--program`.
+
+- **Hotpot** (default): metric is answer exact match with textual feedback (`ScoreWithFeedback`) for GEPA reflection. Data: `data/HotpotQABench_train.json`, `data/HotpotQABench_val.json`.
+- **Hover**: metric is document retrieval (all gold supporting docs in top-21); wrapped as `ScoreWithFeedback` for GEPA. Data: `data/hoverBench_train.json`, `data/hoverBench_val.json`.
+
+### Usage
+
+```bash
+# Hotpot (default)
+python -m gepa_optimize.run_gepa --program hotpot --seed 7 --auto heavy \
+    --lm openai/gpt-4.1-mini --reflection_lm openai/gpt-4.1
+
+# Hover
+python -m gepa_optimize.run_gepa --program hover --seed 7 --auto heavy \
+    --lm openai/gpt-4.1-mini --reflection_lm openai/gpt-4.1
+```
+
+Shared core lives in `gepa_optimize/gepa_core.py`; program-specific loaders, metrics, and preflight live in `gepa_optimize/programs/hotpot.py` and `gepa_optimize/programs/hover.py`.
+
 ## Additional Programs
 Additional programs are added to `/langProPlus` and their requirements files are mapped in `codeevolver/LangProPlus.md`.

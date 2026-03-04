@@ -1,0 +1,17 @@
+{
+  "val_score": 49.33,
+  "args": {
+    "program": "hover",
+    "program_path": null,
+    "seed": 7,
+    "lm": "openai/gpt-4.1-mini",
+    "reflection_lm": "openai/gpt-4.1-mini",
+    "auto": "heavy",
+    "num_threads": 8,
+    "val_size": 150,
+    "output_dir": null
+  },
+  "train_size": 150,
+  "val_size": 150,
+  "timestamp": "2026-03-03T22:42:59.802113"
+}
