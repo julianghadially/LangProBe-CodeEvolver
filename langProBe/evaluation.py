@@ -475,7 +475,7 @@ if __name__ == "__main__":
     dataset_mode = args.dataset_mode
 
     lm = args.lm
-    rm = dspy.ColBERTv2(url="https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search")
+    rm = dspy.ColBERTv2(url="https://julianghadially--colbert-server-wiki-colbertservice-serve.modal.run/api/search")
 
     agent_benchmarks = [
         # ".AlfWorld",
