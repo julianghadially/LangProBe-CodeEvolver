@@ -13,7 +13,7 @@ Two variants:
 import dspy
 from dspy.teleprompt.gepa.gepa import ScoreWithFeedback
 
-PENALTY_PER_RETRIEVAL = 0.02
+PENALTY_PER_RETRIEVAL = 0.0025
 
 def calculate_penalty(retrieval_count):
     return PENALTY_PER_RETRIEVAL * max(0.0, retrieval_count - 2)
