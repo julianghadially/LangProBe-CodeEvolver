@@ -1,0 +1,97 @@
+{
+  "program.create_query_hop2.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Given the fields `question`, `summary_1`, produce the fields `query`.",
+      "fields": [
+        {
+          "prefix": "Question:",
+          "description": "${question}"
+        },
+        {
+          "prefix": "Summary 1:",
+          "description": "${summary_1}"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Query:",
+          "description": "${query}"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "program.retrieve_k": {
+    "k": 10
+  },
+  "program.summarize1.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "Given the fields `question`, `passages`, produce the fields `summary`.",
+      "fields": [
+        {
+          "prefix": "Question:",
+          "description": "${question}"
+        },
+        {
+          "prefix": "Passages:",
+          "description": "${passages}"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Summary:",
+          "description": "${summary}"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "program.generate_answer.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [],
+    "signature": {
+      "instructions": "You will be given a question along with two concise text summaries containing relevant factual information that answers the question. Your task is to provide a direct, short factoid answer to the question. \n\nInstructions for generating the answer:\n- The answer should be brief and precise, ideally a phrase or a few words, directly responding to the question.\n- Do not add explanation, reasoning, or additional commentary in the final answer.\n- Use the most specific, canonical form of the answer possible (e.g., \"yes\" instead of \"yes — both have five acts\"; \"BAFTA TV Award\" instead of the full formal name).\n- Avoid unnecessary qualifiers or clarifications unless they are indispensable to disambiguate the answer.\n- When the question is a yes/no question, respond simply with \"yes\" or \"no\" in lowercase without extra text.\n- When an entity with a known full or exact formal name is expected (for example a person's full name, an official organization name, or a specific title), provide the complete proper name or recognized title.\n- Omit dates or extra formatting units (like years or parentheses) from answers unless explicitly required to answer the question correctly.\n- If the question refers to a specific named item (e.g., a song, a place, an event), name it exactly as recognized in common usage or title form.\n- Use the context from both summaries to ensure accuracy and specificity, but do not repeat or reference the reasoning or source in your answer.\n\nIn summary, read the question and summaries, understand the fact being asked, then produce a short, clear, canonical answer phrase or word that directly responds to the question without added explanation or reasoning.",
+      "fields": [
+        {
+          "prefix": "Question:",
+          "description": "${question}"
+        },
+        {
+          "prefix": "Hop 1 Passages:",
+          "description": "Raw retrieved passages from the first retrieval hop"
+        },
+        {
+          "prefix": "Hop 2 Passages:",
+          "description": "Raw retrieved passages from the second retrieval hop"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Answer:",
+          "description": "The answer itself and nothing else — output only the minimal exact answer (a name, number, short phrase, yes, or no) with no extra qualifiers, year suffixes, or explanatory text"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.11",
+      "dspy": "3.1.3",
+      "cloudpickle": "3.1"
+    }
+  }
+}
