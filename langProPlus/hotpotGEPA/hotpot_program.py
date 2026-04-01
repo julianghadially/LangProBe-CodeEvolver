@@ -5,8 +5,8 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 class GenerateAnswer(dspy.Signature):
     """Answer questions with a short factoid answer."""
     question = dspy.InputField()
-    context = dspy.InputField(desc="Summary of information gathered in the first retrieval hop")
-    passages = dspy.InputField(desc="Raw retrieved passages from the second retrieval hop")
+    hop1_passages = dspy.InputField(desc="Raw retrieved passages from the first retrieval hop")
+    hop2_passages = dspy.InputField(desc="Raw retrieved passages from the second retrieval hop")
     answer = dspy.OutputField(desc="The answer itself and nothing else — output only the minimal exact answer (a name, number, short phrase, yes, or no) with no extra qualifiers, year suffixes, or explanatory text")
 
 
@@ -30,9 +30,9 @@ class HotpotMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop2_query = self.create_query_hop2(question=question, summary_1=summary_1).query
         hop2_docs = self.retrieve_k(hop2_query).passages
 
-        # ANSWER: use summary_1 as condensed context + raw hop2 passages for precision
+        # ANSWER: pass raw hop1 and hop2 passages directly for lossless evidence access
         answer = self.generate_answer(
-            question=question, context=summary_1, passages=hop2_docs
+            question=question, hop1_passages=hop1_docs, hop2_passages=hop2_docs
         ).answer
 
         return dspy.Prediction(answer=answer)
