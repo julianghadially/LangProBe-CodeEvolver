@@ -2,7 +2,7 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from .hover_program import HoverMultiHopPredict, HoverMultiHop
 
-COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
+COLBERT_URL = "https://julianghadially--colbert-server-wiki-colbertservice-serve.modal.run/api/search"
 
 
 class HoverMultiHopPredictPipeline(LangProBeDSPyMetaProgram, dspy.Module):

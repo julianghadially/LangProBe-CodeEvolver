@@ -3,7 +3,7 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from .counting_rm import CountingRM
 from .hotpot_program import HotpotMultiHop, HotpotMultiHopPredict
 
-COLBERT_URL = "https://julianghadially--colbert-server-colbertservice-serve.modal.run/api/search"
+COLBERT_URL = "https://julianghadially--colbert-server-wiki-colbertservice-serve.modal.run/api/search"
 
 
 class HotpotMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
