@@ -23,3 +23,6 @@ mlruns/*
 mlartifacts/*
 gepa_optimize/output_promptonly_gepa/gepa_logs/
 gepa_optimize/output_hover_CE_202603032032
+.venv
+.env
+.venv
