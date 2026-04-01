@@ -1,12 +1,12 @@
 PARENT_MODULE_PATH: langProPlus.hotpotGEPA.hotpot_pipeline.HotpotMultiHopPipeline
 METRIC_MODULE_PATH: langProPlus.hotpotGEPA.hotpot_metric_resource.hotpot_accuracy_with_resource_penalty_feedback
 
-## ARCHITECTURE TITLE: DSPy Two-Hop Retrieval-Augmented QA Pipeline with GEPA Resource-Penalized Metric
+## ARCHITECTURE TITLE: DSPy Two-Hop Retrieval-Augmented QA Pipeline with Direct Raw-Passage Answer Generation and GEPA Resource-Penalized Metric
 
 ## ARCHITECTURE SUMMARY:
 The system is a DSPy-based multi-hop question answering pipeline over the HotpotQA "fullwiki" benchmark. The top-level entry point, `HotpotMultiHopPipeline`, wraps the core reasoning module (`HotpotMultiHop`) with a thread-safe retrieval counter (`CountingRM`) so that each forward pass records exactly how many retrieval queries were issued. The data layer (`HotpotQABench`) sources examples from HuggingFace's HotpotQA dataset, providing questions, gold answers, and supporting document titles.
 
-The core reasoning module performs two retrieval hops followed by a direct answer generation step: the first hop retrieves passages for the raw question, summarizes them, then the second hop generates a refined query from the question and first summary, retrieves again, and produces a second summary. A final ChainOfThought step synthesizes both summaries into a short factoid answer. A `HotpotMultiHopPredict` variant substitutes `dspy.Predict` for `dspy.ChainOfThought` at every step, disabling intermediate reasoning traces.
+The core reasoning module performs two retrieval hops followed by a direct answer generation step: the first hop retrieves passages (k=10) for the raw question and summarizes them into `summary_1`, which is used both to generate a refined hop-2 query and as condensed context for answer generation. The second hop retrieves raw passages using the refined query; these raw passages are passed directly (without a lossy summarization step) alongside `summary_1` to `GenerateAnswer`, which extracts a precise minimal factoid answer. A `HotpotMultiHopPredict` variant substitutes `dspy.Predict` for `dspy.ChainOfThought` at every step, disabling intermediate reasoning traces.
 
 The optimization target is `hotpot_accuracy_with_resource_penalty_feedback`, a GEPA-compatible metric that combines exact-match accuracy with a retrieval-cost penalty. It returns a `ScoreWithFeedback` object carrying both a numeric composite score and natural-language feedback, enabling gradient-free prompt optimization that simultaneously rewards correctness and discourages unnecessary retrieval calls.
 
@@ -15,11 +15,11 @@ The optimization target is `hotpot_accuracy_with_resource_penalty_feedback`, a G
 Inherits from both `LangProBeDSPyMetaProgram` and `dspy.Module`. On each `forward(question)` call it (1) resets the per-thread retrieval counter, (2) executes `HotpotMultiHop` inside a `dspy.context(rm=self.rm)` block so all retrieval calls are intercepted by `CountingRM`, and (3) attaches `result.retrieval_count` to the prediction before returning it.
 
 **Core reasoning — `HotpotMultiHop` (`hotpot_program.py`):**
-Implements a three-stage pipeline:
-- *Hop 1*: `dspy.Retrieve(k=7)` fetches passages for the raw question; `ChainOfThought("question,passages->summary")` condenses them into `summary_1`.
-- *Hop 2*: `ChainOfThought("question,summary_1->query")` generates a targeted follow-up query; a second `Retrieve` call fetches additional passages; `ChainOfThought("question,context,passages->summary")` yields `summary_2`.
-- *Hop 3*: `ChainOfThought(GenerateAnswer)` synthesizes `summary_1` and `summary_2` to produce a short factoid `answer`.
-The `HotpotMultiHopPredict` variant mirrors this flow with `dspy.Predict` modules (no chain-of-thought scratchpad).
+Implements a two-hop retrieval pipeline with direct answer extraction:
+- *Hop 1*: `dspy.Retrieve(k=10)` fetches passages for the raw question; `ChainOfThought("question,passages->summary")` condenses them into `summary_1`.
+- *Hop 2*: `ChainOfThought("question,summary_1->query")` generates a targeted follow-up query; a second `Retrieve(k=10)` call fetches raw hop-2 passages.
+- *Answer*: `ChainOfThought(GenerateAnswer)` takes the question, `summary_1` as condensed context, and raw hop-2 passages directly to produce a minimal exact factoid `answer`. Eliminating the intermediate `summarize2` step preserves qualifiers and fine-grained details that a summarization step may drop.
+The `HotpotMultiHopPredict` variant mirrors the original flow with `dspy.Predict` modules (no chain-of-thought scratchpad).
 
 **Retrieval instrumentation — `CountingRM` (`counting_rm.py`):**
 A lightweight decorator around any DSPy retrieval model (here, `dspy.ColBERTv2` pointing to a hosted Modal endpoint). Uses `threading.local()` so concurrent evaluation threads each maintain independent counts. Exposes `reset_count()` / `get_count()` for lifecycle management by the pipeline.
