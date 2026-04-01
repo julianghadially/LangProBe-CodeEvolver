@@ -17,6 +17,7 @@ Usage:
 import argparse
 import csv
 import json
+import logging
 import random
 import sys
 from datetime import datetime
@@ -28,6 +29,52 @@ import dspy
 from dspy.evaluate import Evaluate, answer_exact_match
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Program inspection
+# ---------------------------------------------------------------------------
+
+def log_program_prompts(program: dspy.Module) -> None:
+    """Log the instructions and field descriptions for every predictor in the program."""
+    print("\n=== Program Prompts ===")
+    for name, predictor in program.named_predictors():
+        sig = predictor.signature
+        print(f"\n--- {name} ---")
+        print(f"  Instructions: {sig.instructions}")
+        for field_name, field_info in sig.fields.items():
+            desc = field_info.json_schema_extra.get("desc", "") if hasattr(field_info, "json_schema_extra") and field_info.json_schema_extra else ""
+            prefix = field_info.json_schema_extra.get("prefix", "") if hasattr(field_info, "json_schema_extra") and field_info.json_schema_extra else ""
+            print(f"  Field '{field_name}': prefix={prefix!r}  desc={desc!r}")
+    print("=== End Program Prompts ===\n")
+
+
+# ---------------------------------------------------------------------------
+# Retrieval error logging (monkey-patch)
+# ---------------------------------------------------------------------------
+
+def patch_retriever_error_logging(program: dspy.Module) -> None:
+    """Monkey-patch the CountingRM on the pipeline so retrieval errors are logged."""
+    rm = getattr(program, "rm", None)
+    if rm is None:
+        print("WARNING: No 'rm' attribute found on program; retrieval error logging not installed.")
+        return
+
+    original_call = rm.__class__.__call__
+
+    def _logging_call(self, *args, **kwargs):
+        try:
+            return original_call(self, *args, **kwargs)
+        except Exception as e:
+            query = args[0] if args else kwargs.get("query", "<unknown>")
+            logger.error(f"Retrieval error for query={query!r}: {type(e).__name__}: {e}")
+            print(f"RETRIEVAL ERROR: query={query!r} -> {type(e).__name__}: {e}", file=sys.stderr)
+            raise
+
+    rm.__class__.__call__ = _logging_call
+    print("Installed retrieval error logging on CountingRM.")
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +384,12 @@ def main():
     # Load program
     print(f"\nLoading program...")
     program = load_program(args.program_path)
+
+    # Log loaded program prompts to verify correct loading
+    log_program_prompts(program)
+
+    # Install retrieval error logging
+    patch_retriever_error_logging(program)
 
     # MLflow setup
     mlflow_run = None
