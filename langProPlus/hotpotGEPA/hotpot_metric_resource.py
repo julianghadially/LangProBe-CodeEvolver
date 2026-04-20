@@ -28,23 +28,23 @@ def hotpot_accuracy_with_resource_penalty(gold, pred, trace=None):
 
 
 def hotpot_accuracy_with_resource_penalty_feedback(
-    gold, output, trace=None, pred_name=None, pred_trace=None
+    output=None, answer=None, gold_titles=None, trace=None, pred_name=None, pred_trace=None
 ):
     """Accuracy penalized by retrieval count, with textual feedback for GEPA."""
     pred = output
+    gold = answer
     accuracy = float(dspy.evaluate.answer_exact_match(gold, pred))
     retrieval_count = getattr(pred, "retrieval_count", 0)
     penalty = calculate_penalty(retrieval_count)
     composite = max(0.0, accuracy - penalty)
 
-    feedback = f"Gold answer: '{gold.answer}'. Predicted: '{pred.answer}'. "
+    feedback = f"Gold answer: '{gold}'. Predicted: '{pred.answer}'. "
     feedback += "CORRECT. " if accuracy else "INCORRECT. "
     feedback += (
         f"Queries used: {retrieval_count}, "
         f"Penalty: {penalty:.2f} (Using more queries may improve accuracy but carries a small penalty), "
         f"composite: {composite:.2f}. "
     )
-    gold_titles = gold.get("gold_titles", [])
     if gold_titles:
         feedback += f"Supporting documents needed: {gold_titles}."
 
