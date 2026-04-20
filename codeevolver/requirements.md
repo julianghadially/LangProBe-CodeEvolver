@@ -24,7 +24,16 @@ This combines several mechanisms:
 
 CodeEvolver and the optimizer lives in its own separate repository. 
 CodeEvolver repository: https://github.com/julianghadially/CodeEvolver
-CodeEvolver requirements: github repo with module path, metric path, and dataset. No main function required. 
+CodeEvolver requirements: GitHub repo with module path, metric path, and dataset. No standalone `main` entry point is required.
+
+### Program entry contract (DSPy / OpenTelemetry)
+
+CodeEvolver invokes your program as a **callable** that must emit OpenTelemetry traces compatible with DSPy instrumentation.
+
+- **Plain function:** Configure OTEL for DSPy before the function runs. Call `DSPyInstrumentor().instrument()` from `openinference.instrumentation.dspy` at import time (or equivalent), then use `dspy.configure(lm=...)` so the LM is set for that callable’s execution.
+- **Class:** The class must implement `__call__(self, ...)`. Perform one-time setup in `__init__` (including `DSPyInstrumentor().instrument()` if not already done at module import, `dspy.LM(...)`, and `dspy.configure(lm=self.lm)`). Each `__call__` should return the same kind of outcome your metric expects—for LangProBe DSPy programs that is typically a `dspy.Prediction` (optionally with extra attributes such as `retrieval_count`), matching `forward` on the corresponding `dspy.Module` pipeline class.
+
+Example in this repo: `langProPlus/hotpotGEPA/hotpot_pipeline.py` defines `HotpotMultiHopProgram`, which mirrors `HotpotMultiHopPipeline.forward`: it returns the program’s `Prediction` with `retrieval_count` set, not a separate dict wrapper.
 
 Users connect their code with the CodeEvolver GitHub app, which allows CodeEvolver to add and run code in new branches.
 
