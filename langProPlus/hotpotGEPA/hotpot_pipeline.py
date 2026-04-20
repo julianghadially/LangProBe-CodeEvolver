@@ -33,6 +33,7 @@ class HotpotMultiHopProgram:
         with dspy.context(rm=self.rm):
             result = self.program(question=question)
         result.retrieval_count = self.rm.get_count()
+        result.output = result.answer
         return result
 
 

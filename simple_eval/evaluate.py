@@ -71,16 +71,21 @@ def load_dataset(split: str, n: int | None, seed: int | None) -> list[dspy.Examp
 # Program
 # ---------------------------------------------------------------------------
 
-def load_program(program_path: str | None) -> dspy.Module:
-    """Create HotpotMultiHopPipeline, optionally loading saved state."""
-    from langProPlus.hotpotGEPA.hotpot_pipeline import HotpotMultiHopPipeline
+def load_program(program_path: str | None):
+    """Create HotpotMultiHopProgram, optionally loading saved state.
 
-    program = HotpotMultiHopPipeline()
+    HotpotMultiHopProgram is the CodeEvolver-compatible callable. Saved state
+    from GEPA is a dspy.Module checkpoint for the inner HotpotMultiHop module,
+    so we load it onto ``program.program``.
+    """
+    from langProPlus.hotpotGEPA.hotpot_pipeline import HotpotMultiHopProgram
+
+    program = HotpotMultiHopProgram()
     if program_path:
         path = Path(program_path)
         if not path.exists():
             raise FileNotFoundError(f"Program path not found: {path}")
-        program.load(str(path))
+        program.program.load(str(path))
         print(f"Loaded program state from {path}")
     return program
 
@@ -97,7 +102,7 @@ def _extract_score(score) -> float:
 
 
 def run_evaluation(
-    program: dspy.Module,
+    program,
     dataset: list[dspy.Example],
     num_threads: int,
     metric=None,
