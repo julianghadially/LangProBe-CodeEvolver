@@ -224,7 +224,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 5 (conditional): Only execute if IdentifyNextTarget identifies a genuinely new entity.
         # Context shows all docs retrieved so far (generous view for best coverage decision).
         # If hop5 fires, we use 5-way round-robin; if not, preserve 4-way round-robin (no regression).
-        context5_docs = hop1_new[:6] + hop2_new[:5] + hop3_new[:5] + hop4_new[:4]
+        context5_docs = hop1_new[:6] + hop2_new[:4] + hop3_new[:4] + hop4_new[:4]
         context5 = "\n---\n".join(context5_docs) if context5_docs else "No passages retrieved yet."
 
         # Compute set of all normalized queries issued so far (used to determine if hop5 is genuinely new)
@@ -240,20 +240,30 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
             # Genuinely new entity identified — execute hop 5 retrieval
             hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
-            all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new, hop5_new]
-        else:
-            # No new target found — skip hop 5, preserve 4-hop round-robin (no slot displacement)
-            all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
 
-        # Round-robin interleaving across all hops ensures each hop gets proportional
-        # slots rather than being starved when earlier hops exhaust the 21-doc budget.
-        # Takes doc-1 from each hop, then doc-2, etc. No docs are dropped unless
-        # all candidates are unique (7 per hop × number of hops).
-        interleaved = []
-        max_len = max((len(h) for h in all_hop_docs), default=0)
-        for i in range(max_len):
-            for hop_docs in all_hop_docs:
-                if i < len(hop_docs):
-                    interleaved.append(hop_docs[i])
+        if hop5_new:
+            # Priority interleaving: hop1 gets its full 6 slots first (positions 1-6),
+            # then hops 2-5 do a 4-way round-robin for positions 7-21.
+            # Slot allocation: hop1→6, hop2→4 (pos 7,11,15,19), hop3→4 (pos 8,12,16,20),
+            #                  hop4→4 (pos 9,13,17,21), hop5→3 (pos 10,14,18).
+            # This preserves hop1's 6-slot allocation from the 4-hop design, eliminating
+            # the false-coverage bug where hop1 rank-6 docs appear in context but are
+            # excluded from the final output.
+            interleaved = list(hop1_new[:6])
+            secondary_hops = [hop2_new, hop3_new, hop4_new, hop5_new]
+            max_secondary = max((len(h) for h in secondary_hops), default=0)
+            for i in range(max_secondary):
+                for hop_docs in secondary_hops:
+                    if i < len(hop_docs):
+                        interleaved.append(hop_docs[i])
+        else:
+            # No hop5 results — use standard 4-hop equal round-robin (unchanged from baseline).
+            all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
+            interleaved = []
+            max_len = max((len(h) for h in all_hop_docs), default=0)
+            for i in range(max_len):
+                for hop_docs in all_hop_docs:
+                    if i < len(hop_docs):
+                        interleaved.append(hop_docs[i])
 
         return dspy.Prediction(retrieved_docs=interleaved[:21])
