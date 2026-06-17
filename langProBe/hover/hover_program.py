@@ -75,19 +75,32 @@ class IdentifyNextTarget(dspy.Signature):
          in a botanist's article describing their primary research genus (prefer this over
          co-authors or collaborators from the same article)
        - The partner, opponent, or co-participant of an athlete/performer named in a retrieved
-         tournament or event article — e.g., if the claim asks about X's doubles partner and
-         the match article names two players, output the one who is NOT X and NOT already
-         retrieved
+         tournament or event article — e.g., if the claim asks about "the partner of X in event Y"
+         and the event article lists pairs or participants, output the participant who is directly
+         listed as PAIRED WITH the claim's subject X (not the tournament winner or most famous
+         participant in the event)
        - The film, TV show, or production in which a person performed stunt work or appeared
        - The company that produced a film, the co-winner of an award, the co-author of a work
        - The broader topic article (the religion, county, or country) that sub-articles describe
          (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
          article; if retrieved articles discuss Cork schools, the "County Cork" article)
+       - A specific individual described in the claim by their involvement in MULTIPLE named
+         organizations or groups (e.g., "former member of Band A, Band B, and Band C", or
+         "former bassist/vocalist of X, Y, and Z") — when articles for some of those
+         organizations are already retrieved, scan each article for the person listed as a
+         member across ALL the named organizations; that person is the implied entity whose own
+         article has not yet been retrieved
        PRIORITY: Choose the entity that DIRECTLY satisfies the claim's core relationship (the
        song referenced, the show hosted, the genus studied, the adaptation cited) — NOT peripheral
        mentions like co-authors, technical subcomponents, or historical peoples mentioned only
        as descriptors in a title (e.g., "a dance named after the Cumans" → querying the Cumans
        article is wrong; the required article is the dance or its musical adaptation).
+       ANTI-FAME BIAS: When a retrieved article lists multiple people (cast members, participants,
+       collaborators), do NOT default to the most famous or prominent name. Instead, identify the
+       entity that fills the SPECIFIC ROLE described by the claim — e.g., the person listed as
+       X's direct partner (not the tournament winner), the lead star of the SPECIFIC film version
+       (not the most famous actor in the list), the cast member who appeared in the SPECIFIC
+       other work referenced by the claim.
        Output the most important such implied entity not yet retrieved.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
