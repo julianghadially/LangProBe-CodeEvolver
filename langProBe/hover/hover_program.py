@@ -23,7 +23,8 @@ class IdentifyNextTarget(dspy.Signature):
        - Named venues, artworks, or institutions the claim describes only obliquely ("the nightclub", "the art installation") — find their proper name in retrieved text and search for it directly
 
     4. **Select best next query**: From BOTH (a) uncovered claim entities AND (b) second-hop entities from Step 3, choose the SINGLE most important article:
-       - If a retrieved passage explicitly names an entity strongly implied by the claim (e.g., a stunt performer's article names the film she worked on; a co-founder's article names their partner), PRIORITIZE that second-hop entity over remaining claim entities that are less critical to verification
+       - ALWAYS prioritize named main subjects (films, games, books, people, organizations) over technical sub-components (engines, concepts, sub-systems). If a game, film, or person AND an engine/concept are both uncovered, retrieve the game/film/person first.
+       - If a retrieved passage explicitly names an entity strongly implied by the claim (e.g., a stunt performer's article names the film she worked on; a co-founder's article names their partner), PRIORITIZE that second-hop main entity over remaining claim entities that are less critical to verification
        - Avoid querying specific sub-concepts stated in the claim (e.g., named concepts or sub-events) when a broader parent article is more likely to be a required supporting document
        - Use disambiguation suffixes when needed: "Skittles (confectionery)", "Stranger in Paradise (song)", "Guy Davis (comics)"
        - NEVER repeat a query from previous_queries — ColBERT is deterministic; repeating cannot retrieve new documents. If tempted to repeat, find a DIFFERENT uncovered entity instead.
