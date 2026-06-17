@@ -98,7 +98,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _normalize_query(q: str) -> str:
         """Normalize a query string for duplicate detection."""
         q = q.strip().lower()
-        q = q.replace('–', '-').replace('—', '-')
+        # Normalize all dash/hyphen variants to spaces so that e.g.
+        # "Conroe-North Houston Regional Airport" and
+        # "Conroe North Houston Regional Airport" are treated as duplicates.
+        q = q.replace('–', ' ').replace('—', ' ').replace('-', ' ')
+        q = ' '.join(q.split())  # collapse multiple spaces
         q = unicodedata.normalize('NFC', q)
         return q
 
@@ -152,24 +156,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
 
-        # HOP 2: Identify the next most important missing entity
-        context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
+        # HOP 2: context uses top-6 from hop1.
+        # With k=7 and 4 hops (28 total candidates for 21 slots), round-robin interleaving
+        # guarantees exactly 6 slots to hop1 (ranks 1-6) and 5 to hops 2-4 (ranks 1-5 each).
+        # Rank-7 docs from hop1 land at position 25 in round-robin and are evicted.
+        # Excluding them from the LM's coverage check prevents the LM from falsely marking
+        # rank-7 entities as "covered" when they will be evicted from the final 21.
+        context2 = "\n---\n".join(hop1_new[:6]) if hop1_new else "No passages retrieved yet."
         hop2_query = self._get_query_with_retry(
             self.identify_hop2_target, claim, context2, prev_queries_str()
         )
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
-        # HOP 3: Identify another missing entity (aware of hops 1+2)
-        early_docs = hop1_new + hop2_new
-        context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
+        # HOP 3: context uses top-6 from hop1 + top-5 from hop2 (guaranteed round-robin slots)
+        early_docs_ctx = hop1_new[:6] + hop2_new[:5]
+        context3 = "\n---\n".join(early_docs_ctx) if early_docs_ctx else "No passages retrieved yet."
         hop3_query = self._get_query_with_retry(
             self.identify_hop3_target, claim, context3, prev_queries_str()
         )
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
-        # HOP 4: Final targeted sweep
-        early_docs = hop1_new + hop2_new + hop3_new
-        context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
+        # HOP 4: Final targeted sweep — context uses top-6/5/5 from hops 1/2/3
+        early_docs_ctx = hop1_new[:6] + hop2_new[:5] + hop3_new[:5]
+        context4 = "\n---\n".join(early_docs_ctx) if early_docs_ctx else "No passages retrieved yet."
         hop4_query = self._get_query_with_retry(
             self.identify_hop4_target, claim, context4, prev_queries_str()
         )
