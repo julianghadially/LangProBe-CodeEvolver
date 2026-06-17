@@ -75,6 +75,12 @@ class IdentifyNextTarget(dspy.Signature):
     4. If ALL named entities in the claim already have their own article title retrieved or are
        in fruitless_queries, scan the body text of EACH retrieved passage for the most important
        named entity not yet retrieved as its own standalone article. Look for:
+       - The COMPOSER, PLAYWRIGHT, SONGWRITER, or CREATOR of a specific musical, theatrical, or
+         artistic work named in a retrieved article about a performer, cast member, or collaborator
+         — e.g., if a retrieved article for a performer names the specific composer or playwright
+         who wrote the show they appeared in, query that creator's Wikipedia article directly
+         (e.g., 'Adam Guettel' from an article identifying him as composer of 'The Light in the
+         Piazza' that the performer appeared in)
        - A NAMED SONG, TV SHOW, FILM, OR MUSICAL WORK specifically mentioned in a retrieved
          article as the direct subject of the claim relationship — e.g., the specific song
          title ("A World Without Love") in a band's article as their biggest hit; the specific
@@ -91,10 +97,20 @@ class IdentifyNextTarget(dspy.Signature):
          listed as PAIRED WITH the claim's subject X (not the tournament winner or most famous
          participant in the event)
        - The film, TV show, or production in which a person performed stunt work or appeared
+       - The MAIN CAST MEMBER, STAR, HOST, or PRESENTER explicitly named in a retrieved article
+         about a TV show, game show, film, or entertainment series as the lead performer or host
+         — e.g., if a retrieved 'Thick as Thieves' TV series article names Pat Ashton as the
+         star, or a 'Punchlines' article names Bill Cullen as the host, query that person's
+         Wikipedia article directly
        - The company that produced a film, the co-winner of an award, the co-author of a work
        - The broader topic article (the religion, county, or country) that sub-articles describe
          (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
          article; if retrieved articles discuss Cork schools, the "County Cork" article)
+       - A COMPARISON or RANKING entity explicitly named in a retrieved article as the entity
+         ranked above or below the article's subject (e.g., "the second busiest airport after
+         Heathrow Airport", "smaller than X", "second only to Y") — when the claim implies that
+         ranked entity's article is also needed, query it directly by name (e.g., 'Heathrow
+         Airport' if the retrieved Gatwick article names it as the UK's busiest)
        - A DEFUNCT, FORMER, or CEASED entity (airline, company, team, organization) mentioned
          by name in a retrieved article, when the claim describes that entity by its properties
          (e.g., "the airline that ceased operations in 2015" or "the former team based in X").
@@ -109,13 +125,19 @@ class IdentifyNextTarget(dspy.Signature):
          organizations are already retrieved, scan each article for the person listed as a
          member across ALL the named organizations; that person is the implied entity whose own
          article has not yet been retrieved
+       - The CO-FOUNDER, CO-ORGANIZER, or FOUNDING PARTNER explicitly named alongside the article
+         subject in a retrieved article about jointly founding a city, institution, or organization
+         — e.g., if a retrieved article about Augustus Chapman Allen names Charlotte Baldwin Allen
+         as co-founder of Houston, query Charlotte Baldwin Allen's Wikipedia article directly
        - The PARENT COMPANY, MANUFACTURER, or OWNING ORGANIZATION explicitly named in a
          retrieved article as the direct owner or parent of a retrieved subsidiary, brand, or
          product — e.g., if a retrieved candy-brand or product article says "wholly owned by
          [Parent Corp]" or "a subsidiary of [Parent Corp]", and the claim asks who MANUFACTURES
          or OWNS that brand, query the parent corporation's Wikipedia article directly (e.g.,
-         "Mars, Incorporated" if Wrigley says it is wholly owned by Mars). This applies to any
-         ownership/acquisition chain implied by the claim (manufacturer → brand → product).
+         "Mars, Incorporated" if Wrigley says it is wholly owned by Mars).
+         ORDERING RULE: Apply this bullet ONLY after the product/brand/subsidiary article is already in
+         retrieved_passages. If the product article has NOT yet been retrieved, query the PRODUCT first
+         (it is a required intermediate article); only then query the parent company in a later hop.
        - The specific TOWN, VILLAGE, or DISTRICT that a retrieved station, airport, building,
          or venue is explicitly described as being LOCATED IN, when the claim asks about that
          location's town or the town itself is a required article — e.g., if a retrieved
