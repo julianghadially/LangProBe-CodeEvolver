@@ -22,6 +22,11 @@ class IdentifyNextTarget(dspy.Signature):
        - Include ALL named entities, even those used only as comparison subjects or secondary
          referents (e.g., "more scope than Robert E. Howard" → Robert E. Howard is required;
          "born before X" → X is required; "partner of Y" → Y is required).
+       - List ONLY proper nouns that name specific Wikipedia articles. Do NOT list descriptive
+         claim phrases that describe concepts but are not Wikipedia titles. For example, "the
+         feather of truth", "the lake of fire", "the weighing mechanism", "a Chinese film
+         studio" are DESCRIPTIONS, not Wikipedia article titles — skip them in Step 1 and
+         resolve them via Step 4 after retrieving related articles instead.
     2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
@@ -30,7 +35,10 @@ class IdentifyNextTarget(dspy.Signature):
        NOT cover Person B. You still need a passage starting with "Person B | ..." to cover
        Person B. Always check the TITLE before " | ", never the body text, for coverage.
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
-    3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
+    3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
+       article title is NOT yet retrieved. Do NOT introduce any new entity name at this stage —
+       if all Step 1 entities are already covered, go directly to Step 4. Do NOT query
+       descriptive claim phrases that you excluded from Step 1.
     4. If ALL named entities in the claim already have their own article title retrieved, scan
        the retrieved passage TEXT for implied entities not yet retrieved as their own article.
        Key patterns to look for in retrieved text:
