@@ -1,5 +1,4 @@
 # LangProBe-CodeEvolver
-Copyright © 2026 440 Labs LLC
 
 LangProBe is an AI system benchmark built in DSPY for executing multiple common system types, including the following:
 - Multi-hop question-answering - HotpotQA
@@ -11,13 +10,11 @@ LangProBe is an AI system benchmark built in DSPY for executing multiple common 
 
 CodeEvolver will optimize one program at a time, by starting with the initial program and making changes to the prompts and the code (including context pipeline, tooling, AI modules, AI module graph, etc.). 
 
-In changing the system and code, CodeEvolver fundamentally modifies the resource consumption resulting from changing the number of AI modules called, and the services used. However, CodeEvolver does control for unfair resource additions. For example, the number of hops allowed in the multi hop benchmarks is kept constant. See controls by program, below. 
-
 ## CodeEvolver
-CodeEvolver offers autonomous coding agents for high reliability AI systems. It uses GEPA optimization to evolve your AI system code until it performs optimally for a given dataset and outcome metric.
+CodeEvolver offers autonomous coding agents for high reliability AI systems. It uses an optimizer to evolve AI system code until it performs optimally for a given dataset and outcome metric.
 
 This combines several mechanisms:
-- **Optimizer algorithm:** GEPA is a reflective language model algorithm that makes point mutations to the code base, over many iterations, and the best solution is selected, based on a dataset and a reward metric.
+- **Optimizer algorithm:** a reflective language model algorithm that makes point mutations to the code base, over many iterations, and the best solution is selected, based on a dataset and a reward metric.
 - **Coding agents**: Autonomous agents execute code changes that are requested by the optimizer. 
 - **Git branching:** A git process manages evolving code across many git worktrees  
 - **Sandboxing for security:** Coding agents are a big cyber risk without sandboxing, network policies, etc. 
@@ -32,34 +29,9 @@ Users connect their code with the CodeEvolver GitHub app, which allows CodeEvolv
 
 ### Multihop QA
 HotpotQA is designed to contain information from Wikipedia. 
-#### What's Allowed
-- The program is not required to stay on Wikipedia only.
-- The program is allowed to create or remove modules, dynamic prompts, tool calls, etc.
-- The program is allowed to change the module types (e.g., dspy.ReAct for tool calling, dspy.ChainOfThought, dspy.Predict, etc.)
-- There is no limit on the number of search results to display per query
-- Available services: Firecrawl and serper.dev. 
-
-#### Constraints:
-- Do NOT search more than two times per question. This is a hard requirement.
-- Do NOT visit more than one page per query
-- Do NOT use the HotpotQA dataset as context. 
 
 ### Hover
 Hover is designed to retrieve information from 2017 Wikipedia Abstracts (5.9M). 
-
-#### What's Allowed
-- The program is not required to stay on Wikipedia only.
-- The program is allowed to create or remove modules, dynamic prompts, tool calls, etc.
-- The program is allowed to change the module types (e.g., dspy.ReAct for tool calling, dspy.ChainOfThought, dspy.Predict, etc.)
-- The program is allowed to add rerankers, provided the final remains the same - 21 total documents
-- There is no limit on the number of search results to display per query
-- Available services: wikipedia colbert-server (Via dspy.Retrieve), Firecrawl, serper.dev. 
-
-#### Constraints:
-- Do NOT search more than three times per question. This is a hard requirement.
-- Do NOT return more than 21 documents. This is a hard requirement.
-- Do NOT use the hover dataset as context. 
-
 
 ## Experiment
 We will be replicating individual LangProBe benchmark programs with CodeEvolver, which provides prompt and architecture optimization.

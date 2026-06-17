@@ -1,7 +1,7 @@
 # hotpotGEPA
 HotpotGEPA mirrors the GEPA paper architecture, reconstructed to the best of our ability.
 
-According to the GEPA paper (arXiv:2507.19457):
+According to the GEPA paper:
 > "We modify the last hop of the HoVerMultiHop program to answer the question
 > instead of generating another query, and the rest of the system remains unmodified."
 > "The textual feedback module identifies the set of correct documents retrieved, and the set of documents remaining to be retrieved, and returns them as feedback text." 

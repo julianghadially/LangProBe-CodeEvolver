@@ -1,0 +1,1 @@
+Study specs/requirements.md to get context on the project before doing anything. Then proceed with the request.
