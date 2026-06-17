@@ -5,6 +5,16 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from .counting_rm import CountingRM
 from .hover_program import HoverMultiHop
 
+# DSPy caches LM completions in memory AND on disk (~/.dspy_cache) by default.
+# CodeEvolver runs this program directly via its mounted evaluator, bypassing the
+# langprobe/simple_eval harnesses that disable caching -- so without this, a rerun
+# replays cached completions and produces an instantaneous, non-representative
+# eval. Disable both so every run exercises the real LM and ColBERT calls.
+try:
+    dspy.configure_cache(enable_disk_cache=False, enable_memory_cache=False)
+except AttributeError:
+    pass  # older DSPy without configure_cache
+
 COLBERT_URL = "https://julianghadially--colbert-server-wiki-colbertservice-serve.modal.run/api/search"
 
 # gpt-5.4-nano is a reasoning model but runs with reasoning disabled by default
