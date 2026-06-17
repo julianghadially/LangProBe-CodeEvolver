@@ -29,9 +29,10 @@ class IdentifyNextTarget(dspy.Signature):
        (e.g., the company that produced a film, the co-winner of an award, the co-author of
        a work, the director of a music video, the composer of a song, the parent company of a
        brand) — output the most important one not yet retrieved.
-    5. NEVER repeat a query listed in fruitless_queries (those returned 0 new documents).
-       If step 3 or step 4 would lead you to repeat a fruitless query, instead look for a
-       DIFFERENT uncovered entity in the claim or retrieved text.
+    5. NEVER search for any query listed in previous_queries — those have already been searched,
+       and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
+       If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
+       a DIFFERENT uncovered entity in the claim or retrieved text.
 
     Output ONLY a concise Wikipedia article title or entity name — nothing else.
     Good examples: "Pablo Escobar", "Apple Inc.", "Gene Kelly", "Sheldon Lee Glashow",
@@ -44,8 +45,9 @@ class IdentifyNextTarget(dspy.Signature):
         desc="Wikipedia passages already retrieved (format: 'ArticleTitle | text excerpt...'). "
              "An entity is covered ONLY if its article TITLE (before ' | ') appears here."
     )
-    fruitless_queries: str = dspy.InputField(
-        desc="Comma-separated queries that were searched but returned 0 new unique documents. Do NOT repeat any of these exact queries.",
+    previous_queries: str = dspy.InputField(
+        desc="Comma-separated list of queries already searched in prior hops. Do NOT repeat ANY of these — "
+             "retrieval is deterministic so repeating a query can NEVER retrieve new documents.",
         default="None"
     )
     query: str = dspy.OutputField(
@@ -71,22 +73,22 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def forward(self, claim):
         seen_titles = set()
-        fruitless_queries = []
+        all_previous_queries = []
 
         def get_new_unique(docs, query=None):
-            """Return only docs with titles not yet seen; flag query as fruitless if 0 new docs."""
+            """Return only docs with titles not yet seen; track query in all_previous_queries."""
             new = []
             for doc in docs:
                 title = doc.split(" | ")[0].strip().lower()
                 if title not in seen_titles:
                     seen_titles.add(title)
                     new.append(doc)
-            if query is not None and not new:
-                fruitless_queries.append(query)
+            if query is not None:
+                all_previous_queries.append(query)
             return new
 
-        def fruitless_str():
-            return ", ".join(fruitless_queries) if fruitless_queries else "None"
+        def prev_queries_str():
+            return ", ".join(all_previous_queries) if all_previous_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
@@ -96,7 +98,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop2_query = self.identify_hop2_target(
             claim=claim,
             retrieved_passages=context2,
-            fruitless_queries=fruitless_str()
+            previous_queries=prev_queries_str()
         ).query
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
@@ -106,23 +108,30 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_query = self.identify_hop3_target(
             claim=claim,
             retrieved_passages=context3,
-            fruitless_queries=fruitless_str()
+            previous_queries=prev_queries_str()
         ).query
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
-        # HOP 4: Final targeted sweep — guaranteed slots via slot reservation
+        # HOP 4: Final targeted sweep
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
         hop4_query = self.identify_hop4_target(
             claim=claim,
             retrieved_passages=context4,
-            fruitless_queries=fruitless_str()
+            previous_queries=prev_queries_str()
         ).query
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
-        # Combine: all unique early-hop docs + new unique hop-4 docs, cap at 21.
-        # Incremental dedup ensures hop4_new contains only genuinely new documents
-        # not seen in hops 1-3. First-occurrence ordering within early_docs is preserved.
-        final_docs = early_docs + hop4_new
+        # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
+        # slots rather than being starved when hops 1-3 exhaust the 21-doc budget.
+        # Takes doc-1 from each hop, then doc-2, etc. No docs are dropped unless
+        # all 28 candidates are unique (7 per hop × 4 hops).
+        all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
+        interleaved = []
+        max_len = max((len(h) for h in all_hop_docs), default=0)
+        for i in range(max_len):
+            for hop_docs in all_hop_docs:
+                if i < len(hop_docs):
+                    interleaved.append(hop_docs[i])
 
-        return dspy.Prediction(retrieved_docs=final_docs[:21])
+        return dspy.Prediction(retrieved_docs=interleaved[:21])
