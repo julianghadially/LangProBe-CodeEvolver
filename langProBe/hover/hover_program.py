@@ -121,6 +121,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
+        self.identify_hop5_target = dspy.ChainOfThought(IdentifyNextTarget)
 
     @staticmethod
     def _normalize_query(q: str) -> str:
@@ -220,11 +221,34 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
-        # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
-        # slots rather than being starved when hops 1-3 exhaust the 21-doc budget.
+        # HOP 5 (conditional): Only execute if IdentifyNextTarget identifies a genuinely new entity.
+        # Context shows all docs retrieved so far (generous view for best coverage decision).
+        # If hop5 fires, we use 5-way round-robin; if not, preserve 4-way round-robin (no regression).
+        context5_docs = hop1_new[:6] + hop2_new[:5] + hop3_new[:5] + hop4_new[:4]
+        context5 = "\n---\n".join(context5_docs) if context5_docs else "No passages retrieved yet."
+
+        # Compute set of all normalized queries issued so far (used to determine if hop5 is genuinely new)
+        all_normalized_queries = {self._normalize_query(q) for q in all_previous_queries}
+
+        # Use retry mechanism to get the best hop5 query candidate
+        hop5_query = self._get_query_with_retry(
+            self.identify_hop5_target, claim, context5, prev_queries_str(), fruitless_str()
+        )
+        hop5_query_norm = self._normalize_query(hop5_query)
+
+        hop5_new = []
+        if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
+            # Genuinely new entity identified — execute hop 5 retrieval
+            hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
+            all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new, hop5_new]
+        else:
+            # No new target found — skip hop 5, preserve 4-hop round-robin (no slot displacement)
+            all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
+
+        # Round-robin interleaving across all hops ensures each hop gets proportional
+        # slots rather than being starved when earlier hops exhaust the 21-doc budget.
         # Takes doc-1 from each hop, then doc-2, etc. No docs are dropped unless
-        # all 28 candidates are unique (7 per hop × 4 hops).
-        all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
+        # all candidates are unique (7 per hop × number of hops).
         interleaved = []
         max_len = max((len(h) for h in all_hop_docs), default=0)
         for i in range(max_len):
