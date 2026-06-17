@@ -120,9 +120,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
-        # Slot allocation: hops 1-3 get at most 14 slots, hop 4 gets the remainder (up to 7).
-        # This guarantees hop 4's new unique documents are included even when early hops
-        # fill 21 total unique docs (the previous "slot starvation" bug).
-        final_docs = early_docs[:14] + hop4_new
+        # Combine: all unique early-hop docs + new unique hop-4 docs, cap at 21.
+        # Incremental dedup ensures hop4_new contains only genuinely new documents
+        # not seen in hops 1-3. First-occurrence ordering within early_docs is preserved.
+        final_docs = early_docs + hop4_new
 
         return dspy.Prediction(retrieved_docs=final_docs[:21])
