@@ -1,7 +1,25 @@
 import sys
 import threading
+import time
 
 import requests
+from requests.adapters import HTTPAdapter
+
+# Shared, connection-pooled HTTP session for all ColBERT searches.
+#
+# Without this, each search did a bare ``requests.get(...)`` which opens a fresh
+# TCP connection AND a fresh DNS lookup every call. Under concurrent load the
+# local resolver (macOS mDNSResponder in particular) transiently fails to
+# resolve the host, surfacing as ``NameResolutionError`` ([Errno 8]) and tanking
+# eval scores. A pooled Session resolves the host once and reuses kept-alive
+# connections across threads, so the per-search DNS/connection churn is gone.
+#
+# ``pool_maxsize`` must be >= the eval thread count so concurrent threads each
+# get a reused connection rather than spilling over into new ones.
+_SESSION = requests.Session()
+_adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32)
+_SESSION.mount("https://", _adapter)
+_SESSION.mount("http://", _adapter)
 
 
 class CountingRM:
@@ -22,11 +40,12 @@ class CountingRM:
         num_retrievals = rm.get_count()
     """
 
-    def __init__(self, rm, timeout=60, max_retries=2):
+    def __init__(self, rm, timeout=60, max_retries=2, retry_backoff=60):
         self._rm = rm
         self._local = threading.local()
         self.timeout = timeout
         self.max_retries = max_retries
+        self.retry_backoff = retry_backoff
         # Override the default 10s timeout in ColBERTv2's underlying requests.
         self._patch_timeout()
 
@@ -38,7 +57,7 @@ class CountingRM:
 
         def patched_get(url, query, k):
             payload = {"query": query, "k": k}
-            res = requests.get(url, params=payload, timeout=timeout)
+            res = _SESSION.get(url, params=payload, timeout=timeout)
             res.raise_for_status()
             res_json = res.json()
             if res_json.get("error"):
@@ -65,9 +84,14 @@ class CountingRM:
                 if attempt < self.max_retries:
                     print(
                         f"[WARNING] Retrieval timeout/error (attempt {attempt + 1}/"
-                        f"{self.max_retries + 1}): {e}. Retrying...",
+                        f"{self.max_retries + 1}): {e}. "
+                        f"Retrying in {self.retry_backoff}s...",
                         file=sys.stderr,
                     )
+                    # Back off before retrying. A transient resolver/connection
+                    # failure clears given a pause; an instant retry just re-hits
+                    # the same exhausted state and re-resolves DNS, amplifying it.
+                    time.sleep(self.retry_backoff)
                 else:
                     print(
                         f"[ERROR] Retrieval failed after {self.max_retries + 1} attempts: {e}",
