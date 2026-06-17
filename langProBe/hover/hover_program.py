@@ -1,4 +1,5 @@
 import dspy
+import unicodedata
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
@@ -18,17 +19,31 @@ class IdentifyNextTarget(dspy.Signature):
        - If the claim references a specific season, episode, or event, use the EXACT Wikipedia
          article title (e.g., "2004-05 Memphis Grizzlies season" not just "Memphis Grizzlies";
          "World Without Love" as a song article, not just "Peter and Gordon").
+       - Include ALL named entities, even those used only as comparison subjects or secondary
+         referents (e.g., "more scope than Robert E. Howard" → Robert E. Howard is required;
+         "born before X" → X is required; "partner of Y" → Y is required).
     2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
        a mere mention of the entity inside another article's text does NOT count as covered.
+       Concrete example: if you retrieve "Person A | ...text mentioning Person B...", that does
+       NOT cover Person B. You still need a passage starting with "Person B | ..." to cover
+       Person B. Always check the TITLE before " | ", never the body text, for coverage.
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
     3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
     4. If ALL named entities in the claim already have their own article title retrieved, scan
-       the retrieved passage TEXT for implied entities not yet retrieved as their own article
-       (e.g., the company that produced a film, the co-winner of an award, the co-author of
-       a work, the director of a music video, the composer of a song, the parent company of a
-       brand) — output the most important one not yet retrieved.
+       the retrieved passage TEXT for implied entities not yet retrieved as their own article.
+       Key patterns to look for in retrieved text:
+       - The partner, opponent, or co-participant of an athlete/performer named in a
+         retrieved tournament or event article (e.g., the doubles partner in a tennis match)
+       - The specific song, work, or adaptation derived from a composition named in a retrieved
+         article (e.g., the musical song adapted from an orchestral piece)
+       - The film, TV show, or production in which a person performed stunt work or appeared
+       - The company that produced a film, the co-winner of an award, the co-author of a work
+       - The broader topic article (the religion, county, or country) that sub-articles describe
+         (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
+         article; if retrieved articles discuss Cork schools, the "County Cork" article)
+       Output the most important such implied entity not yet retrieved.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
        If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
@@ -71,6 +86,42 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
 
+    @staticmethod
+    def _normalize_query(q: str) -> str:
+        """Normalize a query string for duplicate detection."""
+        q = q.strip().lower()
+        q = q.replace('–', '-').replace('—', '-')
+        q = unicodedata.normalize('NFC', q)
+        return q
+
+    @staticmethod
+    def _get_query_with_retry(predictor, claim, retrieved_passages, previous_queries_str):
+        """Call predictor; if query duplicates a prior query, retry once with an explicit warning."""
+        result = predictor(
+            claim=claim,
+            retrieved_passages=retrieved_passages,
+            previous_queries=previous_queries_str,
+        )
+        query = result.query.strip()
+
+        prev_set = {
+            HoverMultiHop._normalize_query(q)
+            for q in previous_queries_str.split(",")
+            if q.strip() and q.strip() not in ("None", "")
+        }
+        if HoverMultiHop._normalize_query(query) in prev_set:
+            augmented_prev = (
+                previous_queries_str
+                + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+            )
+            result = predictor(
+                claim=claim,
+                retrieved_passages=retrieved_passages,
+                previous_queries=augmented_prev,
+            )
+            query = result.query.strip()
+        return query
+
     def forward(self, claim):
         seen_titles = set()
         all_previous_queries = []
@@ -95,31 +146,25 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 2: Identify the next most important missing entity
         context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
-        hop2_query = self.identify_hop2_target(
-            claim=claim,
-            retrieved_passages=context2,
-            previous_queries=prev_queries_str()
-        ).query
+        hop2_query = self._get_query_with_retry(
+            self.identify_hop2_target, claim, context2, prev_queries_str()
+        )
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
         # HOP 3: Identify another missing entity (aware of hops 1+2)
         early_docs = hop1_new + hop2_new
         context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop3_query = self.identify_hop3_target(
-            claim=claim,
-            retrieved_passages=context3,
-            previous_queries=prev_queries_str()
-        ).query
+        hop3_query = self._get_query_with_retry(
+            self.identify_hop3_target, claim, context3, prev_queries_str()
+        )
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
         # HOP 4: Final targeted sweep
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop4_query = self.identify_hop4_target(
-            claim=claim,
-            retrieved_passages=context4,
-            previous_queries=prev_queries_str()
-        ).query
+        hop4_query = self._get_query_with_retry(
+            self.identify_hop4_target, claim, context4, prev_queries_str()
+        )
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
         # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
