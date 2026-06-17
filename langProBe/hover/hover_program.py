@@ -71,6 +71,37 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
 
+    @staticmethod
+    def _get_query_with_retry(identify_fn, claim, retrieved_passages, all_previous_queries):
+        """Get next hop query. If the LM returns a query already in all_previous_queries,
+        retry once with an explicit warning appended to previous_queries. This prevents
+        catastrophic repetition loops (e.g. the same hallucinated entity queried 3× in a row)
+        without changing behavior for the ~90% of cases where no repetition occurs.
+
+        Thread-safe: all state is passed as arguments, no instance mutation."""
+        prev_q = ", ".join(all_previous_queries) if all_previous_queries else "None"
+        query = identify_fn(
+            claim=claim,
+            retrieved_passages=retrieved_passages,
+            previous_queries=prev_q,
+        ).query.strip()
+
+        # Programmatic dedup: if LM returns an already-searched query, force one retry
+        if query.lower() in {q.lower() for q in all_previous_queries}:
+            augmented_prev = (
+                prev_q
+                + f" [CRITICAL WARNING: you just tried to repeat '{query}' — it is already in this"
+                  f" list and has been searched before. ColBERT is deterministic — repeating it"
+                  f" CANNOT retrieve new documents. You MUST choose a COMPLETELY DIFFERENT entity.]"
+            )
+            query = identify_fn(
+                claim=claim,
+                retrieved_passages=retrieved_passages,
+                previous_queries=augmented_prev,
+            ).query.strip()
+
+        return query
+
     def forward(self, claim):
         seen_titles = set()
         all_previous_queries = []
@@ -87,39 +118,30 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 all_previous_queries.append(query)
             return new
 
-        def prev_queries_str():
-            return ", ".join(all_previous_queries) if all_previous_queries else "None"
-
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
 
         # HOP 2: Identify the next most important missing entity
         context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
-        hop2_query = self.identify_hop2_target(
-            claim=claim,
-            retrieved_passages=context2,
-            previous_queries=prev_queries_str()
-        ).query
+        hop2_query = self._get_query_with_retry(
+            self.identify_hop2_target, claim, context2, list(all_previous_queries)
+        )
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
         # HOP 3: Identify another missing entity (aware of hops 1+2)
         early_docs = hop1_new + hop2_new
         context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop3_query = self.identify_hop3_target(
-            claim=claim,
-            retrieved_passages=context3,
-            previous_queries=prev_queries_str()
-        ).query
+        hop3_query = self._get_query_with_retry(
+            self.identify_hop3_target, claim, context3, list(all_previous_queries)
+        )
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
         # HOP 4: Final targeted sweep
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop4_query = self.identify_hop4_target(
-            claim=claim,
-            retrieved_passages=context4,
-            previous_queries=prev_queries_str()
-        ).query
+        hop4_query = self._get_query_with_retry(
+            self.identify_hop4_target, claim, context4, list(all_previous_queries)
+        )
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
         # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
