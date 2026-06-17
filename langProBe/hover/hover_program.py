@@ -66,6 +66,12 @@ class IdentifyNextTarget(dspy.Signature):
        qualifier in parentheses: e.g., "The Secret Agent (TV series)", "Moonrunners (film)",
        "F.E.A.R. (video game)", "Stranger in Paradise (song)". Use context from the claim and
        retrieved passages to determine the right qualifier.
+       CRITICAL TYPE QUALIFIER RULE: When the claim EXPLICITLY states the media type of a work
+       (e.g., "a video game", "the film", "a TV series", "the song"), you MUST include that
+       type as a Wikipedia qualifier in your query — NEVER use the bare title alone. Example:
+       if the claim says "a 2017 video game" and the title is "F.E.A.R.", query "F.E.A.R.
+       (video game)" — NOT bare "F.E.A.R." The qualifier is required to distinguish the
+       specific article from disambiguation pages or series overview articles.
     4. If ALL named entities in the claim already have their own article title retrieved or are
        in fruitless_queries, scan the body text of EACH retrieved passage for the most important
        named entity not yet retrieved as its own standalone article. Look for:
@@ -103,6 +109,22 @@ class IdentifyNextTarget(dspy.Signature):
          organizations are already retrieved, scan each article for the person listed as a
          member across ALL the named organizations; that person is the implied entity whose own
          article has not yet been retrieved
+       - The PARENT COMPANY, MANUFACTURER, or OWNING ORGANIZATION explicitly named in a
+         retrieved article as the direct owner or parent of a retrieved subsidiary, brand, or
+         product — e.g., if a retrieved candy-brand or product article says "wholly owned by
+         [Parent Corp]" or "a subsidiary of [Parent Corp]", and the claim asks who MANUFACTURES
+         or OWNS that brand, query the parent corporation's Wikipedia article directly (e.g.,
+         "Mars, Incorporated" if Wrigley says it is wholly owned by Mars). This applies to any
+         ownership/acquisition chain implied by the claim (manufacturer → brand → product).
+       - The specific TOWN, VILLAGE, or DISTRICT that a retrieved station, airport, building,
+         or venue is explicitly described as being LOCATED IN, when the claim asks about that
+         location's town or the town itself is a required article — e.g., if a retrieved
+         railway station article says "located in [Town name]", query that town's Wikipedia
+         article directly (e.g., "Afonwen" if Caerwys railway station says it was in Afonwen).
+       - The specific VENUE, NIGHTCLUB, ARENA, THEATER, or BUILDING named in a retrieved event
+         or festival article as the location where the event takes place, when the claim implies
+         that venue's own Wikipedia article is needed — e.g., if a festival article names a
+         specific nightclub (e.g., "Flex") as its venue, query that venue's Wikipedia article.
        PRIORITY: Choose the entity that DIRECTLY satisfies the claim's core relationship (the
        song referenced, the show hosted, the genus studied, the adaptation cited) — NOT peripheral
        mentions like co-authors, technical subcomponents, or historical peoples mentioned only
