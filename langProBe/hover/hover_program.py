@@ -18,14 +18,17 @@ class IdentifyNextTarget(dspy.Signature):
        - If the claim references a specific season, episode, or event, use the EXACT Wikipedia
          article title (e.g., "2004-05 Memphis Grizzlies season" not just "Memphis Grizzlies";
          "World Without Love" as a song article, not just "Peter and Gordon").
-    2. COVERAGE CHECK — use the "RETRIEVED ARTICLE TITLES" list at the top of retrieved_passages.
-       That list contains the EXACT article titles retrieved so far.
-       An entity is COVERED only if its exact article title appears in that list.
-       WARNING: Do NOT scan the body text (the part after " | ") for coverage — entity names
-       frequently appear in other articles' body text without having their own article retrieved.
-       Seeing "Jonathan Lynn" mentioned in the Antony Jay article does NOT mean Jonathan Lynn's
-       own article is retrieved. Only the title list counts.
-       A disambiguation page (title containing "disambiguation") does NOT count as the article.
+    2. COVERAGE CHECK: For each entity from step 1, scan retrieved_passages for a passage whose
+       ARTICLE TITLE exactly matches that entity. The article title is the text BEFORE the
+       first " | " separator. Look ONLY at the text before " | " — not the body text after it.
+       CRITICAL WARNING: An entity's name appearing in another article's body text does NOT
+       mean that entity's own article has been retrieved. Two common errors to avoid:
+         - If the Antony Jay article body says "co-writer Jonathan Lynn", this does NOT mean
+           the Jonathan Lynn article is retrieved.
+         - If the Erik Watts article body says "son of Bill Watts", this does NOT mean the
+           Bill Watts article is retrieved.
+       You must find each entity's OWN dedicated article title (text before " | ") to count as covered.
+       A disambiguation page (title containing "disambiguation") does NOT count.
     3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
     4. If ALL named entities in the claim already have their own article title retrieved, scan
        the retrieved passage TEXT for implied entities not yet retrieved as their own article
@@ -45,8 +48,8 @@ class IdentifyNextTarget(dspy.Signature):
     """
     claim: str = dspy.InputField(desc="The factual claim to verify")
     retrieved_passages: str = dspy.InputField(
-        desc="Wikipedia passages retrieved so far. Starts with 'RETRIEVED ARTICLE TITLES' list, "
-             "then full passage text. Coverage check: use ONLY the title list — body text mentions do NOT count."
+        desc="Wikipedia passages already retrieved (format: 'ArticleTitle | text excerpt...'). "
+             "An entity is covered ONLY if its article TITLE (before ' | ') appears here."
     )
     previous_queries: str = dspy.InputField(
         desc="Comma-separated list of queries already searched in prior hops. Do NOT repeat ANY of these — "
@@ -113,20 +116,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         def prev_queries_str():
             return ", ".join(all_previous_queries) if all_previous_queries else "None"
 
-        def build_context(docs):
-            if not docs:
-                return "No passages retrieved yet."
-            # Extract and display titles explicitly so LM can scan them directly
-            titles = [doc.split(" | ")[0].strip() for doc in docs]
-            title_list = "RETRIEVED ARTICLE TITLES (coverage check: an entity is ONLY covered if its title appears in this list):\n" + "\n".join(f"  - {t}" for t in titles)
-            passages_text = "\n---\n".join(docs)
-            return f"{title_list}\n\nFULL PASSAGES:\n{passages_text}"
-
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
 
         # HOP 2: Identify the next most important missing entity
-        context2 = build_context(hop1_new)
+        context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
         hop2_query = HoverMultiHop._get_query_with_retry(
             self.identify_hop2_target,
             claim=claim,
@@ -138,7 +132,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 3: Identify another missing entity (aware of hops 1+2)
         early_docs = hop1_new + hop2_new
-        context3 = build_context(early_docs)
+        context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
         hop3_query = HoverMultiHop._get_query_with_retry(
             self.identify_hop3_target,
             claim=claim,
@@ -150,7 +144,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 4: Final targeted sweep
         early_docs = hop1_new + hop2_new + hop3_new
-        context4 = build_context(early_docs)
+        context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
         hop4_query = HoverMultiHop._get_query_with_retry(
             self.identify_hop4_target,
             claim=claim,
