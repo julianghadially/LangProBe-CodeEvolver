@@ -35,10 +35,9 @@ class IdentifyNextTarget(dspy.Signature):
        the retrieved passage TEXT for implied entities not yet retrieved as their own article
        (e.g., the company that produced a film, the co-winner of an award, the co-author of
        a work, the director of a music video, the composer of a song, the parent company of a
-       brand, the 1975 film that inspired a TV show). When you identify such an implied entity
-       in the retrieved text, OUTPUT THAT IMPLIED ENTITY AS YOUR QUERY IMMEDIATELY — identifying
-       it in the text does NOT mean it is covered, and you MUST query it as a new search before
-       moving to any other entity.
+       brand, the 1975 film that inspired a TV show). Identifying such an entity in retrieved
+       text does NOT mean it is covered — you must still query it as a separate search.
+       Output the most important such implied entity not yet retrieved.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
        If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
