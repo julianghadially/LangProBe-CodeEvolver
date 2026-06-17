@@ -1,4 +1,5 @@
 import dspy
+import unicodedata
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
@@ -25,22 +26,23 @@ class IdentifyNextTarget(dspy.Signature):
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
        a mere mention of the entity inside another article's text does NOT count as covered.
+       Concrete example: if you retrieve "Person A | ...text mentioning Person B...", that does
+       NOT cover Person B. You still need a passage starting with "Person B | ..." to cover
+       Person B. Always check the TITLE before " | ", never the body text, for coverage.
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
     3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
     4. If ALL named entities in the claim already have their own article title retrieved, scan
        the retrieved passage TEXT for implied entities not yet retrieved as their own article
        (e.g., the company that produced a film, the co-winner of an award, the co-author of
        a work, the director of a music video, the composer of a song, the parent company of a
-       brand) — output the most important one not yet retrieved.
+       brand, the 1975 film that inspired a TV show). When you identify such an implied entity
+       in the retrieved text, OUTPUT THAT IMPLIED ENTITY AS YOUR QUERY IMMEDIATELY — identifying
+       it in the text does NOT mean it is covered, and you MUST query it as a new search before
+       moving to any other entity.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
        If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
        a DIFFERENT uncovered entity in the claim or retrieved text.
-    6. If no_results_queries is not "None", those queries returned ZERO Wikipedia results —
-       the article does NOT exist under that exact name. Try an ALTERNATIVE name, spelling, or
-       disambiguation suffix (e.g., "(film)", "(TV series)", "(musician)", "(song)") for any
-       entity in no_results_queries before attempting other approaches. E.g., if "American Cats"
-       returned zero results, try "African Cats" or "African Cats (film)".
 
     Output ONLY a concise Wikipedia article title or entity name — nothing else.
     Good examples: "Pablo Escobar", "Apple Inc.", "Gene Kelly", "Sheldon Lee Glashow",
@@ -56,12 +58,6 @@ class IdentifyNextTarget(dspy.Signature):
     previous_queries: str = dspy.InputField(
         desc="Comma-separated list of queries already searched in prior hops. Do NOT repeat ANY of these — "
              "retrieval is deterministic so repeating a query can NEVER retrieve new documents.",
-        default="None"
-    )
-    no_results_queries: str = dspy.InputField(
-        desc="Comma-separated list of queries that returned ZERO Wikipedia results. These entity names "
-             "likely do NOT exist in Wikipedia under that exact name — try an ALTERNATIVE name, "
-             "spelling, or disambiguation suffix for these entities.",
         default="None"
     )
     query: str = dspy.OutputField(
@@ -86,10 +82,48 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop5_target = dspy.ChainOfThought(IdentifyNextTarget)
 
+    @staticmethod
+    def _normalize_query(q: str) -> str:
+        """Normalize a query string for duplicate detection."""
+        q = q.strip().lower()
+        # Normalize em-dashes, en-dashes to regular hyphens for fuzzy comparison
+        q = q.replace('–', '-').replace('—', '-')
+        q = unicodedata.normalize('NFC', q)
+        return q
+
+    @staticmethod
+    def _get_query_with_retry(predictor, claim, retrieved_passages, previous_queries_str):
+        """Call predictor; if query is a duplicate of a prior query, retry once with an explicit warning."""
+        result = predictor(
+            claim=claim,
+            retrieved_passages=retrieved_passages,
+            previous_queries=previous_queries_str,
+        )
+        query = result.query.strip()
+
+        # Check for duplicate using normalized comparison
+        prev_set = {
+            HoverMultiHop._normalize_query(q)
+            for q in previous_queries_str.split(",")
+            if q.strip() and q.strip() not in ("None", "")
+        }
+        if HoverMultiHop._normalize_query(query) in prev_set:
+            # Retry once with an explicit CRITICAL warning injected into previous_queries
+            augmented_prev = (
+                previous_queries_str
+                + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+            )
+            result = predictor(
+                claim=claim,
+                retrieved_passages=retrieved_passages,
+                previous_queries=augmented_prev,
+            )
+            query = result.query.strip()
+        return query
+
     def forward(self, claim):
         seen_titles = set()
         all_previous_queries = []
-        no_results_queries = []
 
         def get_new_unique(docs, query=None):
             """Return only docs with titles not yet seen; track query in all_previous_queries."""
@@ -101,61 +135,43 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     new.append(doc)
             if query is not None:
                 all_previous_queries.append(query)
-                if not docs:  # zero results from ColBERT — entity likely doesn't exist under this name
-                    no_results_queries.append(query)
             return new
 
         def prev_queries_str():
             return ", ".join(all_previous_queries) if all_previous_queries else "None"
-
-        def no_results_str():
-            return ", ".join(no_results_queries) if no_results_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
 
         # HOP 2: Identify the next most important missing entity
         context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
-        hop2_query = self.identify_hop2_target(
-            claim=claim,
-            retrieved_passages=context2,
-            previous_queries=prev_queries_str(),
-            no_results_queries=no_results_str()
-        ).query
+        hop2_query = self._get_query_with_retry(
+            self.identify_hop2_target, claim, context2, prev_queries_str()
+        )
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
         # HOP 3: Identify another missing entity (aware of hops 1+2)
         early_docs = hop1_new + hop2_new
         context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop3_query = self.identify_hop3_target(
-            claim=claim,
-            retrieved_passages=context3,
-            previous_queries=prev_queries_str(),
-            no_results_queries=no_results_str()
-        ).query
+        hop3_query = self._get_query_with_retry(
+            self.identify_hop3_target, claim, context3, prev_queries_str()
+        )
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
         # HOP 4: Deep chain completion
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop4_query = self.identify_hop4_target(
-            claim=claim,
-            retrieved_passages=context4,
-            previous_queries=prev_queries_str(),
-            no_results_queries=no_results_str()
-        ).query
+        hop4_query = self._get_query_with_retry(
+            self.identify_hop4_target, claim, context4, prev_queries_str()
+        )
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
         # HOP 5: Final bridging hop — catches entities that require one more step after hop 4
-        # (e.g., the director of a film retrieved in hop 4, the parent company of a brand, etc.)
         all_docs = hop1_new + hop2_new + hop3_new + hop4_new
         context5 = "\n---\n".join(all_docs) if all_docs else "No passages retrieved yet."
-        hop5_query = self.identify_hop5_target(
-            claim=claim,
-            retrieved_passages=context5,
-            previous_queries=prev_queries_str(),
-            no_results_queries=no_results_str()
-        ).query
+        hop5_query = self._get_query_with_retry(
+            self.identify_hop5_target, claim, context5, prev_queries_str()
+        )
         hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
 
         # Round-robin interleaving across all 5 hops ensures each hop gets proportional
