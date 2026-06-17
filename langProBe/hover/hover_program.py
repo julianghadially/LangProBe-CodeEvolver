@@ -30,6 +30,10 @@ class IdentifyNextTarget(dspy.Signature):
          feather of truth", "the lake of fire", "the weighing mechanism", "a Chinese film
          studio" are DESCRIPTIONS, not Wikipedia article titles — skip them in Step 1 and
          resolve them via Step 4 after retrieving related articles instead.
+       SELF-CHECK: Before moving to Step 2, confirm you have listed EVERY proper-noun entity
+       that appears verbatim in the claim text, including comparison subjects and date/person
+       anchors (e.g., "more scope than Robert E. Howard" → Robert E. Howard is required;
+       "born before Robert Jordan" → Robert Jordan is required).
     2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
@@ -40,10 +44,34 @@ class IdentifyNextTarget(dspy.Signature):
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
        Also treat any entity in fruitless_queries as covered (it was searched and is either not
        in Wikipedia or was already fully retrieved).
+       A sub-page article (whose title contains "bibliography", "filmography", "discography",
+       "early life", or "health" as a separate word) does NOT count as the main article for
+       that entity. Example: "Robert E. Howard bibliography | ..." does NOT cover "Robert E.
+       Howard" — you still need "Robert E. Howard | ..." for that. NOTE: ANY parenthetical
+       qualifier makes an article the entity's OWN dedicated Wikipedia article — it is NOT
+       a sub-page. Examples: "Dave Evans (singer) | ..." DOES cover "Dave Evans"; "F.E.A.R.
+       (video game) | ..." DOES cover "F.E.A.R."; "The Secret Agent (TV series) | ..." DOES
+       cover "The Secret Agent"; "Moonrunners (film) | ..." DOES cover "Moonrunners". These
+       qualifiers simply DISAMBIGUATE the article — they ARE the entity's article, not sub-
+       pages. The ONLY exceptions that do NOT cover X are: "X bibliography", "X filmography",
+       "X discography", "X early life", "X health" — these are Wikipedia sub-pages. Similarly,
+       a name-variant article (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts as
+       covered — do not loop on minor name-form differences.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
        go directly to Step 4. Do NOT query descriptive claim phrases excluded from Step 1.
+       When querying a WORK whose title might match multiple Wikipedia articles (a film vs. TV
+       series, a video game vs. film, a song vs. its composer), include the Wikipedia type
+       qualifier in parentheses: e.g., "The Secret Agent (TV series)", "Moonrunners (film)",
+       "F.E.A.R. (video game)", "Stranger in Paradise (song)". Use context from the claim and
+       retrieved passages to determine the right qualifier.
+       CRITICAL TYPE QUALIFIER RULE: When the claim EXPLICITLY states the media type of a work
+       (e.g., "a video game", "the film", "a TV series", "the song"), you MUST include that
+       type as a Wikipedia qualifier in your query — NEVER use the bare title alone. Example:
+       if the claim says "a 2017 video game" and the title is "F.E.A.R.", query "F.E.A.R.
+       (video game)" — NOT bare "F.E.A.R." The qualifier is required to distinguish the
+       specific article from disambiguation pages or series overview articles.
     4. If ALL named entities in the claim already have their own article title retrieved or are
        in fruitless_queries, scan the body text of EACH retrieved passage for the most important
        named entity not yet retrieved as its own standalone article. Look for:
@@ -66,11 +94,23 @@ class IdentifyNextTarget(dspy.Signature):
        - The broader topic article (the religion, county, or country) that sub-articles describe
          (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
          article; if retrieved articles discuss Cork schools, the "County Cork" article)
+       - A specific individual described in the claim by their involvement in MULTIPLE named
+         organizations or groups (e.g., "former member of Band A, Band B, and Band C", or
+         "former bassist/vocalist of X, Y, and Z") — when articles for some of those
+         organizations are already retrieved, scan each article for the person listed as a
+         member across ALL the named organizations; that person is the implied entity whose own
+         article has not yet been retrieved
        PRIORITY: Choose the entity that DIRECTLY satisfies the claim's core relationship (the
        song referenced, the show hosted, the genus studied, the adaptation cited) — NOT peripheral
        mentions like co-authors, technical subcomponents, or historical peoples mentioned only
        as descriptors in a title (e.g., "a dance named after the Cumans" → querying the Cumans
        article is wrong; the required article is the dance or its musical adaptation).
+       ANTI-FAME BIAS: When a retrieved article lists multiple people (cast members, participants,
+       collaborators), do NOT default to the most famous or prominent name. Instead, identify the
+       entity that fills the SPECIFIC ROLE described by the claim — e.g., the person listed as
+       X's direct partner (not the tournament winner), the lead star of the SPECIFIC film version
+       (not the most famous actor in the list), the cast member who appeared in the SPECIFIC
+       other work referenced by the claim.
        Output the most important such implied entity not yet retrieved.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
