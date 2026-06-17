@@ -126,10 +126,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # Asymmetric k: hop1 uses broad raw-claim query (gold docs rank 1-6, k=7 sufficient)
-        # Hops 2-5 use targeted entity queries where gold articles sometimes rank 8-12 (need k=12)
-        self.retrieve_hop1 = dspy.Retrieve(k=7)
-        self.retrieve = dspy.Retrieve(k=12)
+        # k=7 for hops 1-4: prevents seen_titles pollution (only 4 slots per hop in round-robin,
+        # so ranks 5-12 would land in seen_titles without entering the output, blocking later hops)
+        # k=12 for hop5 only: safe (last hop, no subsequent hops to pollute) and beneficial
+        # when the target article is at rank 8-12 because ranks 1-7 are all already-seen duplicates
+        self.retrieve = dspy.Retrieve(k=7)
+        self.retrieve_hop5 = dspy.Retrieve(k=12)
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
@@ -213,7 +215,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return ", ".join(all_fruitless_queries) if all_fruitless_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
-        hop1_new = get_new_unique(self.retrieve_hop1(claim).passages)
+        hop1_new = get_new_unique(self.retrieve(claim).passages)
 
         # HOP 2: context uses top-6 from hop1.
         # With k=7 and 4 hops (28 total candidates for 21 slots), round-robin interleaving
@@ -261,7 +263,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop5_new = []
         if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
             # Genuinely new entity identified — execute hop 5 retrieval
-            hop5_new = get_new_unique(self.retrieve(hop5_query).passages, hop5_query)
+            hop5_new = get_new_unique(self.retrieve_hop5(hop5_query).passages, hop5_query)
 
         if hop5_new:
             # Priority interleaving: hop1 gets its full 6 slots first (positions 1-6),
