@@ -44,12 +44,14 @@ class IdentifyNextTarget(dspy.Signature):
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
        Also treat any entity in fruitless_queries as covered (it was searched and is either not
        in Wikipedia or was already fully retrieved).
-       A sub-article or sub-page (title containing qualifiers like "bibliography",
-       "filmography", "discography", "health", "early life") does NOT count as the main article
-       for that entity. You still need a passage starting with the EXACT plain title "X | ..."
-       (without any qualifier) to consider entity X covered. For example, "Robert E. Howard
-       bibliography | ..." does NOT cover "Robert E. Howard" — you still need "Robert E.
-       Howard | ..." for that.
+       A sub-page article (whose title contains "bibliography", "filmography", "discography",
+       "early life", or "health" as a separate word) does NOT count as the main article for
+       that entity. Example: "Robert E. Howard bibliography | ..." does NOT cover "Robert E.
+       Howard" — you still need "Robert E. Howard | ..." for that. NOTE: A disambiguation
+       suffix in parentheses like "Dave Evans (singer) | ..." DOES count as covering "Dave
+       Evans" — those are the person's actual articles, not sub-pages. Similarly, a retrieved
+       article with a name variant (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts
+       as covered — do not loop on minor name-form differences.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
