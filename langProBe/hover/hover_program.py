@@ -62,6 +62,10 @@ class IdentifyNextTarget(dspy.Signature):
          the match article names two players, output the one who is NOT X and NOT already
          retrieved
        - The film, TV show, or production in which a person performed stunt work or appeared
+       - The director, lead actress/actor, choreographer, or primary creator of a film, TV
+         show, or musical recording that has already been retrieved — e.g., if a film article
+         is already retrieved and the claim implies a specific person made/starred in that film,
+         output that person's name as the next query
        - The company that produced a film, the co-winner of an award, the co-author of a work
        - The broader topic article (the religion, county, or country) that sub-articles describe
          (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
@@ -114,10 +118,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
+    # Placeholder/invalid outputs that should trigger a retry
+    NONE_PATTERNS = frozenset({
+        "none", "n/a", "na", "null", "no query", "no more", "no more queries",
+        "no more entities", "no query needed", "not applicable",
+    })
+
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        # Asymmetric k: hop1 uses broad raw-claim query (gold docs rank 1-6, k=7 sufficient)
+        # Hops 2-5 use targeted entity queries where gold articles sometimes rank 8-12 (need k=12)
+        self.retrieve_hop1 = dspy.Retrieve(k=7)
+        self.retrieve = dspy.Retrieve(k=12)
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
@@ -137,7 +149,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     @staticmethod
     def _get_query_with_retry(predictor, claim, retrieved_passages, previous_queries_str, fruitless_queries_str="None"):
-        """Call predictor; if query duplicates a prior query, retry once with an explicit warning."""
+        """Call predictor; if query duplicates a prior query or is a placeholder, retry once with an explicit warning."""
         result = predictor(
             claim=claim,
             retrieved_passages=retrieved_passages,
@@ -146,16 +158,26 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         query = result.query.strip()
 
+        # Check if output is a placeholder/invalid response
+        is_none_output = query.lower() in HoverMultiHop.NONE_PATTERNS or len(query) < 2
+
         prev_set = {
             HoverMultiHop._normalize_query(q)
             for q in previous_queries_str.split(",")
             if q.strip() and q.strip() not in ("None", "")
         }
-        if HoverMultiHop._normalize_query(query) in prev_set:
-            augmented_prev = (
-                previous_queries_str
-                + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
-            )
+        if HoverMultiHop._normalize_query(query) in prev_set or is_none_output:
+            if is_none_output:
+                augmented_prev = (
+                    previous_queries_str
+                    + f", [CRITICAL: You output '{query}' which is not a valid Wikipedia entity name. "
+                    f"You MUST output a real Wikipedia article title or entity name — do NOT output 'None', 'N/A', or any placeholder.]"
+                )
+            else:
+                augmented_prev = (
+                    previous_queries_str
+                    + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+                )
             result = predictor(
                 claim=claim,
                 retrieved_passages=retrieved_passages,
@@ -191,7 +213,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return ", ".join(all_fruitless_queries) if all_fruitless_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
-        hop1_new = get_new_unique(self.retrieve_k(claim).passages)
+        hop1_new = get_new_unique(self.retrieve_hop1(claim).passages)
 
         # HOP 2: context uses top-6 from hop1.
         # With k=7 and 4 hops (28 total candidates for 21 slots), round-robin interleaving
@@ -203,7 +225,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop2_query = self._get_query_with_retry(
             self.identify_hop2_target, claim, context2, prev_queries_str(), fruitless_str()
         )
-        hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
+        hop2_new = get_new_unique(self.retrieve(hop2_query).passages, hop2_query)
 
         # HOP 3: context uses top-6 from hop1 + top-5 from hop2 (guaranteed round-robin slots)
         early_docs_ctx = hop1_new[:6] + hop2_new[:5]
@@ -211,7 +233,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_query = self._get_query_with_retry(
             self.identify_hop3_target, claim, context3, prev_queries_str(), fruitless_str()
         )
-        hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
+        hop3_new = get_new_unique(self.retrieve(hop3_query).passages, hop3_query)
 
         # HOP 4: Final targeted sweep — context uses top-6/5/5 from hops 1/2/3
         early_docs_ctx = hop1_new[:6] + hop2_new[:5] + hop3_new[:5]
@@ -219,7 +241,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop4_query = self._get_query_with_retry(
             self.identify_hop4_target, claim, context4, prev_queries_str(), fruitless_str()
         )
-        hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
+        hop4_new = get_new_unique(self.retrieve(hop4_query).passages, hop4_query)
 
         # HOP 5 (conditional): Only execute if IdentifyNextTarget identifies a genuinely new entity.
         # Context shows all docs retrieved so far (generous view for best coverage decision).
@@ -239,7 +261,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop5_new = []
         if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
             # Genuinely new entity identified — execute hop 5 retrieval
-            hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
+            hop5_new = get_new_unique(self.retrieve(hop5_query).passages, hop5_query)
 
         if hop5_new:
             # Priority interleaving: hop1 gets its full 6 slots first (positions 1-6),
