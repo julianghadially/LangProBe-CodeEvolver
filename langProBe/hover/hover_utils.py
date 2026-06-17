@@ -59,13 +59,14 @@ def discrete_retrieval_eval_with_resource_penalty(example, pred, trace=None):
 
 
 def discrete_retrieval_eval_with_resource_penalty_and_feedback(
-    example, pred, trace=None, pred_name=None, pred_trace=None
+    output, supporting_facts, trace=None, pred_name=None, pred_trace=None
 ):
     """Retrieval success penalized by search count, with feedback for reflection."""
+    pred = output #rename
     gold_titles = set(
         map(
             dspy.evaluate.normalize_text,
-            [doc["key"] for doc in example["supporting_facts"]],
+            [doc["key"] for doc in supporting_facts],
         )
     )
     found_titles = set(

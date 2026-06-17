@@ -3,6 +3,7 @@ local_cache
 .DS_Store
 temp
 env/*
+.codeevolver.lock
 
 scratchpad.ipynb
 langProBe/AppWorld/data/
@@ -23,3 +24,9 @@ mlruns
 mlartifacts
 gepa_optimize/output_promptonly_gepa/gepa_logs/
 gepa_optimize/output_hover_CE_202603032032/gepa_logs
+.venv
+env
+.env
+.claude/
+.opencode/
+.codeevolver/
