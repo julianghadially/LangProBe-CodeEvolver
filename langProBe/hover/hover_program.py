@@ -30,6 +30,10 @@ class IdentifyNextTarget(dspy.Signature):
          feather of truth", "the lake of fire", "the weighing mechanism", "a Chinese film
          studio" are DESCRIPTIONS, not Wikipedia article titles — skip them in Step 1 and
          resolve them via Step 4 after retrieving related articles instead.
+       SELF-CHECK: Before moving to Step 2, confirm you have listed EVERY proper-noun entity
+       that appears verbatim in the claim text, including comparison subjects and date/person
+       anchors (e.g., "more scope than Robert E. Howard" → Robert E. Howard is required;
+       "born before Robert Jordan" → Robert Jordan is required).
     2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
@@ -40,10 +44,21 @@ class IdentifyNextTarget(dspy.Signature):
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
        Also treat any entity in fruitless_queries as covered (it was searched and is either not
        in Wikipedia or was already fully retrieved).
+       A sub-article or sub-page (title containing qualifiers like "bibliography",
+       "filmography", "discography", "health", "early life") does NOT count as the main article
+       for that entity. You still need a passage starting with the EXACT plain title "X | ..."
+       (without any qualifier) to consider entity X covered. For example, "Robert E. Howard
+       bibliography | ..." does NOT cover "Robert E. Howard" — you still need "Robert E.
+       Howard | ..." for that.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
        go directly to Step 4. Do NOT query descriptive claim phrases excluded from Step 1.
+       When querying a WORK whose title might match multiple Wikipedia articles (a film vs. TV
+       series, a video game vs. film, a song vs. its composer), include the Wikipedia type
+       qualifier in parentheses: e.g., "The Secret Agent (TV series)", "Moonrunners (film)",
+       "F.E.A.R. (video game)", "Stranger in Paradise (song)". Use context from the claim and
+       retrieved passages to determine the right qualifier.
     4. If ALL named entities in the claim already have their own article title retrieved or are
        in fruitless_queries, scan the body text of EACH retrieved passage for the most important
        named entity not yet retrieved as its own standalone article. Look for:
@@ -114,10 +129,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
+    NONE_PATTERNS = frozenset({
+        "none", "n/a", "na", "null", "nil", "unknown", "n/a.", "none.",
+        "not applicable", "no query", "no entity", "no result", ""
+    })
+
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        # Asymmetric-k: hop1 gets 6 slots, hops 2-4 get 5 each (6+5+5+5=21, zero eviction),
+        # hop5 expands to k=12 to catch articles at ranks 8-12.
+        self.retrieve_hop1 = dspy.Retrieve(k=6)
+        self.retrieve_k = dspy.Retrieve(k=5)
+        self.retrieve_hop5 = dspy.Retrieve(k=12)
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
@@ -137,7 +160,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     @staticmethod
     def _get_query_with_retry(predictor, claim, retrieved_passages, previous_queries_str, fruitless_queries_str="None"):
-        """Call predictor; if query duplicates a prior query, retry once with an explicit warning."""
+        """Call predictor; if query is a placeholder or duplicates a prior query, retry once with an explicit warning."""
         result = predictor(
             claim=claim,
             retrieved_passages=retrieved_passages,
@@ -151,11 +174,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             for q in previous_queries_str.split(",")
             if q.strip() and q.strip() not in ("None", "")
         }
-        if HoverMultiHop._normalize_query(query) in prev_set:
-            augmented_prev = (
-                previous_queries_str
-                + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
-            )
+        norm_query = HoverMultiHop._normalize_query(query)
+
+        is_none = norm_query in HoverMultiHop.NONE_PATTERNS
+        is_duplicate = (not is_none) and (norm_query in prev_set)
+
+        if is_none or is_duplicate:
+            if is_none:
+                warning = f"[CRITICAL: '{query}' is not a valid Wikipedia article title — you MUST output a specific named entity]"
+            else:
+                warning = f"[CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+            augmented_prev = previous_queries_str + f", {warning}"
             result = predictor(
                 claim=claim,
                 retrieved_passages=retrieved_passages,
@@ -190,15 +219,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         def fruitless_str():
             return ", ".join(all_fruitless_queries) if all_fruitless_queries else "None"
 
-        # HOP 1: Direct retrieval on raw claim
-        hop1_new = get_new_unique(self.retrieve_k(claim).passages)
+        # HOP 1: Direct retrieval on raw claim with k=6 (exact slot count for hop1 in round-robin)
+        hop1_new = get_new_unique(self.retrieve_hop1(claim).passages)
 
         # HOP 2: context uses top-6 from hop1.
-        # With k=7 and 4 hops (28 total candidates for 21 slots), round-robin interleaving
-        # guarantees exactly 6 slots to hop1 (ranks 1-6) and 5 to hops 2-4 (ranks 1-5 each).
-        # Rank-7 docs from hop1 land at position 25 in round-robin and are evicted.
-        # Excluding them from the LM's coverage check prevents the LM from falsely marking
-        # rank-7 entities as "covered" when they will be evicted from the final 21.
+        # With asymmetric-k: hop1=6, hops2-4=5 each (6+5+5+5=21 exactly, zero eviction).
+        # Excluding rank-7+ docs from LM's coverage check prevents false-coverage from evicted docs.
         context2 = "\n---\n".join(hop1_new[:6]) if hop1_new else "No passages retrieved yet."
         hop2_query = self._get_query_with_retry(
             self.identify_hop2_target, claim, context2, prev_queries_str(), fruitless_str()
@@ -224,6 +250,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 5 (conditional): Only execute if IdentifyNextTarget identifies a genuinely new entity.
         # Context shows all docs retrieved so far (generous view for best coverage decision).
         # If hop5 fires, we use 5-way round-robin; if not, preserve 4-way round-robin (no regression).
+        # hop5 uses k=12 to catch articles at ranks 8-12.
         context5_docs = hop1_new[:6] + hop2_new[:4] + hop3_new[:4] + hop4_new[:4]
         context5 = "\n---\n".join(context5_docs) if context5_docs else "No passages retrieved yet."
 
@@ -236,10 +263,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         hop5_query_norm = self._normalize_query(hop5_query)
 
+        # Seen-titles guard for hop5: if the LM proposed an entity already retrieved, retry once
+        if hop5_query_norm in seen_titles:
+            augmented_prev5 = (
+                prev_queries_str()
+                + f", [CRITICAL: '{hop5_query}' is already a retrieved Wikipedia article"
+                  f" — query a DIFFERENT uncovered entity not yet in the retrieved passages]"
+            )
+            retry5_result = self.identify_hop5_target(
+                claim=claim,
+                retrieved_passages=context5,
+                previous_queries=augmented_prev5,
+                fruitless_queries=fruitless_str(),
+            )
+            new5_query = retry5_result.query.strip()
+            new5_norm = self._normalize_query(new5_query)
+            if new5_norm and new5_norm not in seen_titles:
+                hop5_query = new5_query
+                hop5_query_norm = new5_norm
+
         hop5_new = []
         if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
-            # Genuinely new entity identified — execute hop 5 retrieval
-            hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
+            # Genuinely new entity identified — execute hop 5 retrieval with expanded k=12
+            hop5_new = get_new_unique(self.retrieve_hop5(hop5_query).passages, hop5_query)
 
         if hop5_new:
             # Priority interleaving: hop1 gets its full 6 slots first (positions 1-6),
