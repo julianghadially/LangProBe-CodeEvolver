@@ -47,11 +47,16 @@ class IdentifyNextTarget(dspy.Signature):
        A sub-page article (whose title contains "bibliography", "filmography", "discography",
        "early life", or "health" as a separate word) does NOT count as the main article for
        that entity. Example: "Robert E. Howard bibliography | ..." does NOT cover "Robert E.
-       Howard" — you still need "Robert E. Howard | ..." for that. NOTE: A disambiguation
-       suffix in parentheses like "Dave Evans (singer) | ..." DOES count as covering "Dave
-       Evans" — those are the person's actual articles, not sub-pages. Similarly, a retrieved
-       article with a name variant (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts
-       as covered — do not loop on minor name-form differences.
+       Howard" — you still need "Robert E. Howard | ..." for that. NOTE: ANY parenthetical
+       qualifier makes an article the entity's OWN dedicated Wikipedia article — it is NOT
+       a sub-page. Examples: "Dave Evans (singer) | ..." DOES cover "Dave Evans"; "F.E.A.R.
+       (video game) | ..." DOES cover "F.E.A.R."; "The Secret Agent (TV series) | ..." DOES
+       cover "The Secret Agent"; "Moonrunners (film) | ..." DOES cover "Moonrunners". These
+       qualifiers simply DISAMBIGUATE the article — they ARE the entity's article, not sub-
+       pages. The ONLY exceptions that do NOT cover X are: "X bibliography", "X filmography",
+       "X discography", "X early life", "X health" — these are Wikipedia sub-pages. Similarly,
+       a name-variant article (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts as
+       covered — do not loop on minor name-form differences.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
@@ -84,6 +89,14 @@ class IdentifyNextTarget(dspy.Signature):
        - The broader topic article (the religion, county, or country) that sub-articles describe
          (e.g., if retrieved articles discuss Egyptian deities, the "Ancient Egyptian religion"
          article; if retrieved articles discuss Cork schools, the "County Cork" article)
+       - A DEFUNCT, FORMER, or CEASED entity (airline, company, team, organization) mentioned
+         by name in a retrieved article, when the claim describes that entity by its properties
+         (e.g., "the airline that ceased operations in 2015" or "the former team based in X").
+         If a retrieved article (such as an airport, venue, or parent company article) explicitly
+         names a defunct entity matching the claim's description, query that defunct entity's
+         own Wikipedia article directly. Example: if a retrieved airport article names a defunct
+         airline that ceased operations in a specific year, and the claim mentions such an
+         airline, query "Air Lituanica" (or the specific defunct airline name) directly.
        - A specific individual described in the claim by their involvement in MULTIPLE named
          organizations or groups (e.g., "former member of Band A, Band B, and Band C", or
          "former bassist/vocalist of X, Y, and Z") — when articles for some of those
