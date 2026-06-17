@@ -116,12 +116,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 7
-        self.retrieve_k = dspy.Retrieve(k=self.k)
+        # hop1 gets exactly 6 round-robin slots in both 4-hop equal round-robin and
+        # 5-hop priority interleaving. k=6 ensures all retrieved docs enter the output
+        # with zero seen_titles pollution from rank-7 docs.
+        self.retrieve_hop1 = dspy.Retrieve(k=6)
+        # hops 2-4 get 5 slots in 4-hop equal round-robin and 4 slots in 5-hop priority
+        # interleaving. k=5 minimizes seen_titles pollution vs the prior k=7.
+        # With k=5 and 4-hop equal round-robin: 6+5+5+5=21 slots fill exactly, zero pollution.
+        self.retrieve_k = dspy.Retrieve(k=5)
+        # hop5 is the LAST hop — safe to use k=12 (no subsequent hops to pollute seen_titles).
+        # k=12 expands coverage when the target article is at rank 8-12 after earlier hops
+        # have exhausted lower-ranked duplicates.
+        self.retrieve_hop5 = dspy.Retrieve(k=12)
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop5_target = dspy.ChainOfThought(IdentifyNextTarget)
+
+    # Placeholder outputs to detect and retry — the LM occasionally outputs these
+    # instead of a real Wikipedia article title.
+    NONE_PATTERNS = frozenset({
+        "none", "n/a", "na", "null", "nil", "unknown", "n/a.", "none.",
+        "not applicable", "no query", "no entity", "no result", ""
+    })
 
     @staticmethod
     def _normalize_query(q: str) -> str:
@@ -137,7 +154,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     @staticmethod
     def _get_query_with_retry(predictor, claim, retrieved_passages, previous_queries_str, fruitless_queries_str="None"):
-        """Call predictor; if query duplicates a prior query, retry once with an explicit warning."""
+        """Call predictor; if query is a placeholder or duplicates a prior query, retry once with an explicit warning."""
         result = predictor(
             claim=claim,
             retrieved_passages=retrieved_passages,
@@ -151,11 +168,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             for q in previous_queries_str.split(",")
             if q.strip() and q.strip() not in ("None", "")
         }
-        if HoverMultiHop._normalize_query(query) in prev_set:
-            augmented_prev = (
-                previous_queries_str
-                + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
-            )
+        norm_query = HoverMultiHop._normalize_query(query)
+
+        # Check for placeholder/invalid output
+        is_none = norm_query in HoverMultiHop.NONE_PATTERNS
+        # Check for duplicate of a previous query
+        is_duplicate = (not is_none) and (norm_query in prev_set)
+
+        if is_none or is_duplicate:
+            if is_none:
+                warning = f"[CRITICAL: '{query}' is not a valid Wikipedia article title — you MUST output a specific named entity]"
+            else:
+                warning = f"[CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+            augmented_prev = previous_queries_str + f", {warning}"
             result = predictor(
                 claim=claim,
                 retrieved_passages=retrieved_passages,
@@ -191,14 +216,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return ", ".join(all_fruitless_queries) if all_fruitless_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
-        hop1_new = get_new_unique(self.retrieve_k(claim).passages)
+        hop1_new = get_new_unique(self.retrieve_hop1(claim).passages)
 
         # HOP 2: context uses top-6 from hop1.
-        # With k=7 and 4 hops (28 total candidates for 21 slots), round-robin interleaving
-        # guarantees exactly 6 slots to hop1 (ranks 1-6) and 5 to hops 2-4 (ranks 1-5 each).
-        # Rank-7 docs from hop1 land at position 25 in round-robin and are evicted.
-        # Excluding them from the LM's coverage check prevents the LM from falsely marking
-        # rank-7 entities as "covered" when they will be evicted from the final 21.
+        # With k=6 for hop1 and 4-hop equal round-robin (6+5+5+5=21 slots), all hop1
+        # docs enter the output — no seen_titles pollution from evicted rank-7 docs.
+        # In 5-hop priority interleaving, hop1 also gets exactly 6 slots.
+        # hop1_new[:6] is all of hop1_new (since k=6), shown here for clarity.
         context2 = "\n---\n".join(hop1_new[:6]) if hop1_new else "No passages retrieved yet."
         hop2_query = self._get_query_with_retry(
             self.identify_hop2_target, claim, context2, prev_queries_str(), fruitless_str()
@@ -236,10 +260,32 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         hop5_query_norm = self._normalize_query(hop5_query)
 
+        # Seen-titles guard: if hop5 is about to query an article that's already in
+        # seen_titles (e.g., retrieved at rank 7 of an earlier hop but evicted from
+        # the output by round-robin), retry once to get a genuinely new entity.
+        if hop5_query_norm in seen_titles:
+            augmented_prev5 = (
+                prev_queries_str()
+                + f", [CRITICAL: '{hop5_query}' is already a retrieved Wikipedia article"
+                  f" — query a DIFFERENT uncovered entity not yet in the retrieved passages]"
+            )
+            retry5_result = self.identify_hop5_target(
+                claim=claim,
+                retrieved_passages=context5,
+                previous_queries=augmented_prev5,
+                fruitless_queries=fruitless_str(),
+            )
+            new5_query = retry5_result.query.strip()
+            new5_norm = self._normalize_query(new5_query)
+            # Only adopt the retry query if it's genuinely new
+            if new5_norm and new5_norm not in seen_titles:
+                hop5_query = new5_query
+                hop5_query_norm = new5_norm
+
         hop5_new = []
         if hop5_query_norm and hop5_query_norm not in all_normalized_queries:
             # Genuinely new entity identified — execute hop 5 retrieval
-            hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
+            hop5_new = get_new_unique(self.retrieve_hop5(hop5_query).passages, hop5_query)
 
         if hop5_new:
             # Priority interleaving: hop1 gets its full 6 slots first (positions 1-6),
