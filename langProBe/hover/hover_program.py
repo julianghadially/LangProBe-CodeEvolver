@@ -22,13 +22,22 @@ class IdentifyNextTarget(dspy.Signature):
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
        a mere mention of the entity inside another article's text does NOT count as covered.
+       Concrete example: If "Person B" appears only inside the text of "Person A | ...Person B
+       co-stars with..." then Person B is NOT covered — you must still query "Person B" directly.
        A disambiguation page (title containing "disambiguation") does NOT count as the article.
     3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
-    4. If ALL named entities in the claim already have their own article title retrieved, scan
-       the retrieved passage TEXT for implied entities not yet retrieved as their own article
-       (e.g., the company that produced a film, the co-winner of an award, the co-author of
-       a work, the director of a music video, the composer of a song, the parent company of a
-       brand) — output the most important one not yet retrieved.
+    4. Scan the retrieved passage TEXT for implied entities NOT yet retrieved as their own article:
+       the person named as "friend of" or "collaborator of", the subsidiary company named in a
+       parent company article, the director named in a film article, the founder named in an
+       institution article, the co-winner named in an award article. Do this CONCURRENTLY with
+       step 3 — do NOT wait until every claim entity is retrieved before scanning bodies.
+       PRIORITY RULE: If a retrieved article body directly and explicitly names an entity as the
+       KEY CONNECTING LINK in the claim's verification chain, PREFER querying that implied entity
+       over remaining claim entities that serve only as background/context (e.g., major cities
+       mentioned as location, broad organizations mentioned only as background setting, or entities
+       from false-premise clauses). Ask: "Does querying this claim entity get me closer to
+       verifying the claim's core fact, OR does the text of already-retrieved articles point me
+       more directly to the missing piece?" Output whichever entity best advances the chain.
     5. NEVER search for any query listed in previous_queries — those have already been searched,
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
        If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
@@ -71,6 +80,24 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
 
+    @staticmethod
+    def _get_query_with_retry(hop_predictor, claim, context, prev_queries_str, all_previous_queries):
+        """Call hop_predictor and retry once if the returned query duplicates a prior query."""
+        query = hop_predictor(
+            claim=claim,
+            retrieved_passages=context,
+            previous_queries=prev_queries_str
+        ).query
+        query_norm = query.strip().lower()
+        if query_norm in {q.strip().lower() for q in all_previous_queries}:
+            # Retry once with an explicit warning injected into previous_queries
+            query = hop_predictor(
+                claim=claim,
+                retrieved_passages=context,
+                previous_queries=prev_queries_str + f" [CRITICAL: '{query}' was already searched — you MUST output a DIFFERENT entity name]"
+            ).query
+        return query
+
     def forward(self, claim):
         seen_titles = set()
         all_previous_queries = []
@@ -95,31 +122,25 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 2: Identify the next most important missing entity
         context2 = "\n---\n".join(hop1_new) if hop1_new else "No passages retrieved yet."
-        hop2_query = self.identify_hop2_target(
-            claim=claim,
-            retrieved_passages=context2,
-            previous_queries=prev_queries_str()
-        ).query
+        hop2_query = self._get_query_with_retry(
+            self.identify_hop2_target, claim, context2, prev_queries_str(), all_previous_queries
+        )
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
         # HOP 3: Identify another missing entity (aware of hops 1+2)
         early_docs = hop1_new + hop2_new
         context3 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop3_query = self.identify_hop3_target(
-            claim=claim,
-            retrieved_passages=context3,
-            previous_queries=prev_queries_str()
-        ).query
+        hop3_query = self._get_query_with_retry(
+            self.identify_hop3_target, claim, context3, prev_queries_str(), all_previous_queries
+        )
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
         # HOP 4: Final targeted sweep
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
-        hop4_query = self.identify_hop4_target(
-            claim=claim,
-            retrieved_passages=context4,
-            previous_queries=prev_queries_str()
-        ).query
+        hop4_query = self._get_query_with_retry(
+            self.identify_hop4_target, claim, context4, prev_queries_str(), all_previous_queries
+        )
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
         # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
