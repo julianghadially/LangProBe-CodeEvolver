@@ -18,6 +18,9 @@ class IdentifyNextTarget(dspy.Signature):
        - If the claim references a specific season, episode, or event, use the EXACT Wikipedia
          article title (e.g., "2004-05 Memphis Grizzlies season" not just "Memphis Grizzlies";
          "World Without Love" as a song article, not just "Peter and Gordon").
+       - Include ALL named entities, even those used only as comparison subjects or secondary
+         referents (e.g., "more scope than Robert E. Howard" → Robert E. Howard is required;
+         "born before X" → X is required; "partner of Y" → Y is required).
     2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
        ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
        IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
@@ -33,6 +36,11 @@ class IdentifyNextTarget(dspy.Signature):
        and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
        If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
        a DIFFERENT uncovered entity in the claim or retrieved text.
+    6. If no_results_queries is not "None", those queries returned ZERO Wikipedia results —
+       the article does NOT exist under that exact name. Try an ALTERNATIVE name, spelling, or
+       disambiguation suffix (e.g., "(film)", "(TV series)", "(musician)", "(song)") for any
+       entity in no_results_queries before attempting other approaches. E.g., if "American Cats"
+       returned zero results, try "African Cats" or "African Cats (film)".
 
     Output ONLY a concise Wikipedia article title or entity name — nothing else.
     Good examples: "Pablo Escobar", "Apple Inc.", "Gene Kelly", "Sheldon Lee Glashow",
@@ -48,6 +56,12 @@ class IdentifyNextTarget(dspy.Signature):
     previous_queries: str = dspy.InputField(
         desc="Comma-separated list of queries already searched in prior hops. Do NOT repeat ANY of these — "
              "retrieval is deterministic so repeating a query can NEVER retrieve new documents.",
+        default="None"
+    )
+    no_results_queries: str = dspy.InputField(
+        desc="Comma-separated list of queries that returned ZERO Wikipedia results. These entity names "
+             "likely do NOT exist in Wikipedia under that exact name — try an ALTERNATIVE name, "
+             "spelling, or disambiguation suffix for these entities.",
         default="None"
     )
     query: str = dspy.OutputField(
@@ -70,10 +84,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop4_target = dspy.ChainOfThought(IdentifyNextTarget)
+        self.identify_hop5_target = dspy.ChainOfThought(IdentifyNextTarget)
 
     def forward(self, claim):
         seen_titles = set()
         all_previous_queries = []
+        no_results_queries = []
 
         def get_new_unique(docs, query=None):
             """Return only docs with titles not yet seen; track query in all_previous_queries."""
@@ -85,10 +101,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     new.append(doc)
             if query is not None:
                 all_previous_queries.append(query)
+                if not docs:  # zero results from ColBERT — entity likely doesn't exist under this name
+                    no_results_queries.append(query)
             return new
 
         def prev_queries_str():
             return ", ".join(all_previous_queries) if all_previous_queries else "None"
+
+        def no_results_str():
+            return ", ".join(no_results_queries) if no_results_queries else "None"
 
         # HOP 1: Direct retrieval on raw claim
         hop1_new = get_new_unique(self.retrieve_k(claim).passages)
@@ -98,7 +119,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop2_query = self.identify_hop2_target(
             claim=claim,
             retrieved_passages=context2,
-            previous_queries=prev_queries_str()
+            previous_queries=prev_queries_str(),
+            no_results_queries=no_results_str()
         ).query
         hop2_new = get_new_unique(self.retrieve_k(hop2_query).passages, hop2_query)
 
@@ -108,25 +130,39 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_query = self.identify_hop3_target(
             claim=claim,
             retrieved_passages=context3,
-            previous_queries=prev_queries_str()
+            previous_queries=prev_queries_str(),
+            no_results_queries=no_results_str()
         ).query
         hop3_new = get_new_unique(self.retrieve_k(hop3_query).passages, hop3_query)
 
-        # HOP 4: Final targeted sweep
+        # HOP 4: Deep chain completion
         early_docs = hop1_new + hop2_new + hop3_new
         context4 = "\n---\n".join(early_docs) if early_docs else "No passages retrieved yet."
         hop4_query = self.identify_hop4_target(
             claim=claim,
             retrieved_passages=context4,
-            previous_queries=prev_queries_str()
+            previous_queries=prev_queries_str(),
+            no_results_queries=no_results_str()
         ).query
         hop4_new = get_new_unique(self.retrieve_k(hop4_query).passages, hop4_query)
 
-        # Round-robin interleaving across all 4 hops ensures hop 4 gets proportional
-        # slots rather than being starved when hops 1-3 exhaust the 21-doc budget.
+        # HOP 5: Final bridging hop — catches entities that require one more step after hop 4
+        # (e.g., the director of a film retrieved in hop 4, the parent company of a brand, etc.)
+        all_docs = hop1_new + hop2_new + hop3_new + hop4_new
+        context5 = "\n---\n".join(all_docs) if all_docs else "No passages retrieved yet."
+        hop5_query = self.identify_hop5_target(
+            claim=claim,
+            retrieved_passages=context5,
+            previous_queries=prev_queries_str(),
+            no_results_queries=no_results_str()
+        ).query
+        hop5_new = get_new_unique(self.retrieve_k(hop5_query).passages, hop5_query)
+
+        # Round-robin interleaving across all 5 hops ensures each hop gets proportional
+        # slots rather than being starved when other hops exhaust the 21-doc budget.
         # Takes doc-1 from each hop, then doc-2, etc. No docs are dropped unless
-        # all 28 candidates are unique (7 per hop × 4 hops).
-        all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new]
+        # all 35 candidates are unique (7 per hop × 5 hops).
+        all_hop_docs = [hop1_new, hop2_new, hop3_new, hop4_new, hop5_new]
         interleaved = []
         max_len = max((len(h) for h in all_hop_docs), default=0)
         for i in range(max_len):
