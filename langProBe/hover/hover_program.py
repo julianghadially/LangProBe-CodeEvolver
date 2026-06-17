@@ -3,42 +3,34 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
 class IdentifyNextTarget(dspy.Signature):
-    """You are retrieving Wikipedia articles to support verification of a multi-hop factual claim.
+    """You are selecting the SINGLE next Wikipedia article to retrieve for multi-hop fact verification.
 
-    Given the claim and Wikipedia passages already retrieved, identify the SINGLE most important
-    Wikipedia article still needed to verify the claim.
+    Given a factual claim and retrieved Wikipedia passages, choose the most important article still missing.
 
     Steps:
-    1. List ALL named entities explicitly mentioned in the claim (people, places, organizations,
-       works, songs, films, awards, titles, etc.). CRITICAL nuances:
-       - If the claim references "the person who wrote/directed/performed/created X", the PERSON
-         themselves is a required entity (not just X's article). E.g., if the claim says
-         "fronted by [person]", that person's own article is needed; if the claim says
-         "the director of [film]", that director's own article is needed.
-       - If the claim references a specific season, episode, or event, use the EXACT Wikipedia
-         article title (e.g., "2004-05 Memphis Grizzlies season" not just "Memphis Grizzlies";
-         "World Without Love" as a song article, not just "Peter and Gordon").
-    2. For EACH named entity from step 1, check the retrieved_passages for a passage whose
-       ARTICLE TITLE (the text before the " | " separator) matches that entity's name.
-       IMPORTANT: An entity is covered ONLY if its own dedicated article title appears —
-       a mere mention of the entity inside another article's text does NOT count as covered.
-       A disambiguation page (title containing "disambiguation") does NOT count as the article.
-    3. Output the FIRST named entity from step 1 whose own article title is NOT yet retrieved.
-    4. If ALL named entities in the claim already have their own article title retrieved, scan
-       the retrieved passage TEXT for implied entities not yet retrieved as their own article
-       (e.g., the company that produced a film, the co-winner of an award, the co-author of
-       a work, the director of a music video, the composer of a song, the parent company of a
-       brand) — output the most important one not yet retrieved.
-    5. NEVER search for any query listed in previous_queries — those have already been searched,
-       and since retrieval is deterministic, repeating a query CANNOT retrieve new documents.
-       If step 3 or step 4 would lead you to repeat a previous query, you MUST instead look for
-       a DIFFERENT uncovered entity in the claim or retrieved text.
+    1. **Claim entities**: List every named entity in the claim (people, places, works, organizations, events).
+       - If the claim says "the director/writer/performer/founder of X", include THAT PERSON as an entity, not just X.
+       - For seasons, episodes, or specific events, use the EXACT Wikipedia article title (e.g., "2004-05 Memphis Grizzlies season", not "Memphis Grizzlies").
 
-    Output ONLY a concise Wikipedia article title or entity name — nothing else.
-    Good examples: "Pablo Escobar", "Apple Inc.", "Gene Kelly", "Sheldon Lee Glashow",
-                   "2004-05 Memphis Grizzlies season", "World Without Love", "Warren Fu"
-    Bad examples: "Who starred in Narcos?", "Was Steven Weinberg a professor?"
-    Do NOT output a question. Do NOT output a sentence. Output a Wikipedia title or entity name only.
+    2. **Coverage check**: For each claim entity, check whether its own dedicated article title appears in retrieved_passages (the text BEFORE " | "). Rules:
+       - A mention inside another article's text does NOT count as covered.
+       - A disambiguation page does NOT count as the article.
+
+    3. **Second-hop scan** (always run this — not just as a fallback): Read the TEXT of each retrieved passage and identify entities NOT mentioned in the claim that are likely required supporting documents:
+       - Co-stars, co-founders, collaborators, or co-authors named in a retrieved person/organization article
+       - Films, works, or organizations explicitly named in a retrieved article but not yet retrieved as their own article
+       - A broader parent/overview article when you have retrieved specific sub-articles (e.g., if you retrieved articles about specific Egyptian deities or concepts, "Ancient Egyptian religion" may be the required parent article)
+       - Named venues, artworks, or institutions the claim describes only obliquely ("the nightclub", "the art installation") — find their proper name in retrieved text and search for it directly
+
+    4. **Select best next query**: From BOTH (a) uncovered claim entities AND (b) second-hop entities from Step 3, choose the SINGLE most important article:
+       - If a retrieved passage explicitly names an entity strongly implied by the claim (e.g., a stunt performer's article names the film she worked on; a co-founder's article names their partner), PRIORITIZE that second-hop entity over remaining claim entities that are less critical to verification
+       - Avoid querying specific sub-concepts stated in the claim (e.g., named concepts or sub-events) when a broader parent article is more likely to be a required supporting document
+       - Use disambiguation suffixes when needed: "Skittles (confectionery)", "Stranger in Paradise (song)", "Guy Davis (comics)"
+       - NEVER repeat a query from previous_queries — ColBERT is deterministic; repeating cannot retrieve new documents. If tempted to repeat, find a DIFFERENT uncovered entity instead.
+
+    Output ONLY a Wikipedia article title or entity name — not a question, not a sentence.
+    Good: "Pablo Escobar", "Rogue One", "Ancient Egyptian religion", "2004-05 Memphis Grizzlies season", "Warren Fu"
+    Bad: "Who starred in Narcos?", "What is the feather of truth?"
     """
     claim: str = dspy.InputField(desc="The factual claim to verify")
     retrieved_passages: str = dspy.InputField(
