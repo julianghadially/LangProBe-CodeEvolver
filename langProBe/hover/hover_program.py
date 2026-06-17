@@ -2,40 +2,68 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+class IdentifyNextTarget(dspy.Signature):
+    """You are retrieving Wikipedia articles to support verification of a multi-hop factual claim.
+
+    Given the claim and Wikipedia passages already retrieved, identify the single most important
+    Wikipedia article still needed to verify the claim.
+
+    Steps:
+    1. List all named entities in the claim (people, places, organizations, works, titles)
+    2. Check which named entities are already covered by the retrieved passage titles
+    3. Also scan the retrieved passage TEXT for any new named entities the claim implies but haven't been retrieved
+    4. Pick the single most important uncovered entity/article
+
+    Output ONLY a concise Wikipedia article title or entity name.
+    Good examples: "Pablo Escobar", "Worldview Entertainment", "Ibn Tufail", "Gene Kelly"
+    Bad examples: "Who wrote The Four-Chambered Heart?", "Is Bob Fosse born in 1912?"
+    Do NOT output a question. Do NOT output a sentence. Output a Wikipedia title or entity name only.
+    """
+    claim: str = dspy.InputField(desc="The factual claim to verify")
+    retrieved_passages: str = dspy.InputField(desc="Wikipedia passages already retrieved (format: 'ArticleTitle | text excerpt...')")
+    query: str = dspy.OutputField(desc="A Wikipedia article title or entity name to search for next — not a question, not a sentence")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim. 
-    
+    '''Multi hop system for retrieving documents for a provided claim.
+
     EVALUATION
-    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
     def __init__(self):
         super().__init__()
         self.k = 7
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
-        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
-        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
+        self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
+        self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
 
     def forward(self, claim):
-        # HOP 1
+        # HOP 1: Direct retrieval on raw claim
         hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        # HOP 2: Identify the next most important missing entity from the claim
+        hop2_query = self.identify_hop2_target(
+            claim=claim,
+            retrieved_passages="\n---\n".join(hop1_docs)
+        ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
 
-        # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
+        # HOP 3: Identify another missing entity (aware of what hop 1 and 2 retrieved)
+        hop3_query = self.identify_hop3_target(
+            claim=claim,
+            retrieved_passages="\n---\n".join(hop1_docs + hop2_docs)
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        # Combine all docs, deduplicate by article title (first occurrence wins)
+        all_docs = hop1_docs + hop2_docs + hop3_docs
+        seen_titles = set()
+        unique_docs = []
+        for doc in all_docs:
+            title = doc.split(" | ")[0].strip().lower()
+            if title not in seen_titles:
+                seen_titles.add(title)
+                unique_docs.append(doc)
+
+        return dspy.Prediction(retrieved_docs=unique_docs[:21])
