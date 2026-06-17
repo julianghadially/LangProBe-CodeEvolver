@@ -61,6 +61,13 @@ class IdentifyNextTarget(dspy.Signature):
          tournament or event article — e.g., if the claim asks about X's doubles partner and
          the match article names two players, output the one who is NOT X and NOT already
          retrieved
+       - The DIRECTOR, LEAD ACTOR/ACTRESS, CHOREOGRAPHER, or PRIMARY CREATOR of a film or
+         recording already retrieved — e.g., if the claim says 'the actress/director/choreographer
+         of [film X]' and film X's article is already retrieved, scan that film article's text
+         to find who fills that role and output them as your next query (e.g., after retrieving
+         Rogue One, if the claim asks about the lead actress, output 'Felicity Jones'; after
+         retrieving a Liza Minnelli recording, if the claim asks about the choreographer, look
+         for who choreographed it)
        - The film, TV show, or production in which a person performed stunt work or appeared
        - The company that produced a film, the co-winner of an award, the co-author of a work
        - The broader topic article (the religion, county, or country) that sub-articles describe
@@ -116,7 +123,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 7
+        self.k = 12
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.identify_hop2_target = dspy.ChainOfThought(IdentifyNextTarget)
         self.identify_hop3_target = dspy.ChainOfThought(IdentifyNextTarget)
@@ -155,6 +162,23 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             augmented_prev = (
                 previous_queries_str
                 + f", [CRITICAL: '{query}' was already searched — you MUST choose a DIFFERENT uncovered entity]"
+            )
+            result = predictor(
+                claim=claim,
+                retrieved_passages=retrieved_passages,
+                previous_queries=augmented_prev,
+                fruitless_queries=fruitless_queries_str,
+            )
+            query = result.query.strip()
+
+        # Guard against placeholder/invalid outputs (e.g., LM outputs "None" when it thinks
+        # all entities are covered, wasting a ColBERT call on a noise query).
+        NONE_PATTERNS = {"none", "n a", "n/a", "na", "null", "no query", "no more", "no more queries",
+                         "no more entities", "no query needed", "not applicable"}
+        if HoverMultiHop._normalize_query(query) in NONE_PATTERNS or len(query.strip()) < 2:
+            augmented_prev = (
+                previous_queries_str
+                + f", [CRITICAL: '{query}' is NOT a valid Wikipedia article title. You MUST output a real entity name from Step 3 or Step 4 — look harder at retrieved passage bodies for an uncovered entity.]"
             )
             result = predictor(
                 claim=claim,
