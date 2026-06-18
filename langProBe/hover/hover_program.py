@@ -209,6 +209,41 @@ class QueryHop5FinalSignature(dspy.Signature):
     )
 
 
+class Summarize3Signature(dspy.Signature):
+    """Update entity coverage after hop 4 for final targeted recovery.
+
+    CRITICAL DISTINCTION — an entity is only 'DIRECTLY RETRIEVED' if its OWN
+    Wikipedia article title appears in the passages (the document title begins
+    with that entity's name). Being merely mentioned inside another article does
+    NOT count — that entity's own page still needs a direct search.
+
+    After reading the hop 4 passages, scan the text of each passage for proper
+    names of persons, works, organizations, or places that are referenced
+    (e.g., 'founded by X', 'directed by X', 'created by X', 'starring X').
+    If such a name does NOT have its own Wikipedia article in the passages,
+    list it under MENTIONED BUT NOT RETRIEVED. These are the top priority
+    for the final recovery hop.
+    """
+
+    claim: str = dspy.InputField(desc="The factual claim being verified")
+    context: str = dspy.InputField(
+        desc="Coverage report from hops 1-2 listing directly-retrieved, mentioned-but-not-retrieved, and missing entities"
+    )
+    passages: str = dspy.InputField(
+        desc="New passages retrieved in hop 4 (format: 'Title | text') — scan these for newly-named entities"
+    )
+    summary: str = dspy.OutputField(
+        desc=(
+            "Updated coverage report for final-hop targeting: "
+            "(1) DIRECTLY RETRIEVED: entities whose OWN Wikipedia article title appears in passages; "
+            "(2) MENTIONED BUT NOT RETRIEVED: proper names found INSIDE the passage text (directors, founders, creators, authors, related persons/works) "
+            "whose own Wikipedia article has NOT been retrieved — list their EXACT proper names; "
+            "(3) NOT YET FOUND: entities from the claim entirely absent. "
+            "The final recovery hop should query an entity from category (2) or (3) directly by proper name."
+        )
+    )
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -229,6 +264,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought(Summarize1Signature)
         self.summarize2 = dspy.ChainOfThought(Summarize2Signature)
+        self.summarize3 = dspy.ChainOfThought(Summarize3Signature)
 
     def _interleave_and_deduplicate(self, *hop_docs_lists, max_docs=21):
         """Round-robin interleave docs from multiple hops, deduplicate by title, take top max_docs.
@@ -296,18 +332,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # HOP 5 - Final recovery hop: examine the actual preliminary final 21 output
         # and query for the entity that's still missing from it.
-        # This fixes: (a) eviction — gold docs retrieved early but displaced by later hops,
-        # (b) duplicate queries — hops 2/3/4 that duplicated each other wasted slots,
-        # (c) summarizer hallucinations — hop4 skipped the right entity thinking it was covered.
+        # First, generate a fresh post-hop4 summary so hop5 can see entities named
+        # inside hop4's retrieved articles (e.g., a person named inside a retrieved
+        # organization's article). This fixes the "stale summary" failure where
+        # hop5 was receiving only the hop-2 summary and missing critical new info.
         preliminary_final = self._interleave_and_deduplicate(
             hop1_docs, hop2_docs, hop3_docs, hop4_docs, max_docs=21
         )
         preliminary_titles = ", ".join([d.split(" | ")[0] for d in preliminary_final])
+
+        # Generate fresh post-hop4 coverage summary for hop5
+        summary_3 = self.summarize3(
+            claim=claim,
+            context=summary_2,
+            passages=hop4_docs,
+        ).summary
+
         hop5_query = self.create_query_hop5(
             claim=claim,
             retrieved_titles=preliminary_titles,
             previous_queries=f"{hop2_query}; {hop3_query}; {hop4_query}",
-            summary=summary_2,
+            summary=summary_3,
         ).query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
