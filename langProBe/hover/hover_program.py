@@ -18,6 +18,18 @@ class Summarize1Signature(dspy.Signature):
     Example: retrieving 'Capitale de la douleur | collection by Paul Éluard...'
     means you have the book's article but NOT 'Paul Éluard' — his biography page
     must still be searched directly.
+
+    BODY TEXT SCANNING — Also scan the BODY TEXT of each retrieved passage for
+    named entities (persons, films, shows, companies, organizations, places)
+    referenced with relational phrases such as 'directed by X', 'produced by X',
+    'starred in X', 'founded by X', 'located beside X', 'known for X',
+    'chancellor of X', 'focuses on X', 'based on X'. If entity X does NOT have
+    its own Wikipedia article title in the passages, add X to MENTIONED BUT NOT
+    RETRIEVED — it is a priority follow-up retrieval target.
+
+    LIST ARTICLE NOTE: A 'List of X episodes', 'X discography', or 'X filmography'
+    article is NOT the same as the main 'X' article. If such a derivative article
+    is retrieved but 'X' itself is not, add 'X' to MENTIONED BUT NOT RETRIEVED.
     """
 
     claim: str = dspy.InputField(desc="The factual claim being verified")
@@ -28,7 +40,8 @@ class Summarize1Signature(dspy.Signature):
         desc=(
             "Coverage report listing: "
             "(1) DIRECTLY RETRIEVED: entities whose OWN Wikipedia article title appears in passages; "
-            "(2) MENTIONED BUT NOT RETRIEVED: entities named inside retrieved articles but lacking their own fetched page; "
+            "(2) MENTIONED BUT NOT RETRIEVED: entities named inside retrieved articles but lacking their own fetched page — "
+            "include entities found by scanning passage body text with relational phrases (per the docstring instructions); "
             "(3) NOT YET FOUND: entities from the claim absent entirely. "
             "Be specific about entity names for category (2) — these are the top priority for next queries."
         )
@@ -45,6 +58,18 @@ class Summarize2Signature(dspy.Signature):
 
     Check both the new passages AND re-examine prior context for any entities that
     were mentioned in earlier passes but whose own article was never fetched.
+
+    BODY TEXT SCANNING — Also scan the BODY TEXT of each retrieved passage for
+    named entities (persons, films, shows, companies, organizations, places)
+    referenced with relational phrases such as 'directed by X', 'produced by X',
+    'starred in X', 'founded by X', 'located beside X', 'known for X',
+    'chancellor of X', 'focuses on X', 'based on X'. If entity X does NOT have
+    its own Wikipedia article title in the passages, add X to MENTIONED BUT NOT
+    RETRIEVED — it is a priority follow-up retrieval target.
+
+    LIST ARTICLE NOTE: A 'List of X episodes', 'X discography', or 'X filmography'
+    article is NOT the same as the main 'X' article. If such a derivative article
+    is retrieved but 'X' itself is not, add 'X' to MENTIONED BUT NOT RETRIEVED.
     """
 
     claim: str = dspy.InputField(desc="The factual claim being verified")
@@ -58,7 +83,8 @@ class Summarize2Signature(dspy.Signature):
         desc=(
             "Updated coverage report: "
             "(1) DIRECTLY RETRIEVED: entities with their own Wikipedia article now in hand; "
-            "(2) MENTIONED BUT NOT RETRIEVED: entities named in retrieved articles but whose own page is still missing — list their EXACT names; "
+            "(2) MENTIONED BUT NOT RETRIEVED: entities named in retrieved articles but whose own page is still missing — "
+            "list their EXACT names; include entities found by scanning passage body text with relational phrases (per the docstring); "
             "(3) NOT YET FOUND: entities from the claim not seen at all. "
             "The next query should directly target an entity from category (2) by its proper name."
         )
