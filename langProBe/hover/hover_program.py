@@ -57,6 +57,17 @@ class IdentifyNextTarget(dspy.Signature):
        "X discography", "X early life", "X health" — these are Wikipedia sub-pages. Similarly,
        a name-variant article (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts as
        covered — do not loop on minor name-form differences.
+       Similarly, if the claim uses a longer formal or official name for an entity (e.g.,
+       "Boris Franz Becker") but a retrieved article uses the shorter common name (e.g.,
+       "Boris Becker"), that shorter-name article DOES cover the entity — do NOT re-query
+       the longer formal name. Formal-name vs. common-name variants are the same entity.
+       CRITICAL PERSON COVERAGE RULE: An ORGANIZATION, FILM, TV SHOW, or WORK article that
+       names a PERSON in any role (director, founder, CEO, cast member, professor, staff, etc.)
+       does NOT cover that person's biographical article. Example: "Centre for Astrophysics &
+       Supercomputing | ... director Matthew Bailes ..." covers the Centre but NOT "Matthew
+       Bailes" — you still need "Matthew Bailes | ..." to cover that person. Similarly,
+       "Swinburne University | ... Professor Matthew Bailes ..." covers Swinburne but NOT
+       Matthew Bailes. ANY named PERSON requires their OWN dedicated biographical article.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
@@ -103,6 +114,14 @@ class IdentifyNextTarget(dspy.Signature):
          own Wikipedia article directly. Example: if a retrieved airport article names a defunct
          airline that ceased operations in a specific year, and the claim mentions such an
          airline, query "Air Lituanica" (or the specific defunct airline name) directly.
+       - A RANKED or COMPARED ENTITY explicitly named in a retrieved article as the top-ranked,
+         busiest, tallest, largest, most prominent, or directly compared counterpart — e.g., if
+         a retrieved airport article says "the second-busiest airport after London Heathrow" and
+         the claim asks about the busiest airport outside London, query "Heathrow Airport"
+         directly (do NOT query a list or ranking category page). When a retrieved article names
+         a specific rival, leading entity, or comparison point by name AND that entity is implied
+         by the claim (e.g., the claim asks about "the busiest X" and the article names it),
+         query that named entity's own Wikipedia article directly.
        - A specific individual described in the claim by their involvement in MULTIPLE named
          organizations or groups (e.g., "former member of Band A, Band B, and Band C", or
          "former bassist/vocalist of X, Y, and Z") — when articles for some of those
