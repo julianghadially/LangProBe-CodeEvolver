@@ -171,6 +171,44 @@ class QueryHop4GapSignature(dspy.Signature):
     )
 
 
+class QueryHop5FinalSignature(dspy.Signature):
+    """Final targeted query to recover the last missing supporting document.
+
+    You are given the FINAL LIST of 21 Wikipedia titles that will be returned as
+    the output of the retrieval system. Compare these titles against the claim to
+    find which key named entity still lacks its OWN Wikipedia article in the output.
+
+    An entity is missing if:
+    - The claim references it (as a person, film, show, song, place, company, or event)
+    - Its own Wikipedia article title does NOT appear in retrieved_titles
+    - Note: An entity MENTIONED INSIDE another article's text is NOT the same as
+      having its own Wikipedia article retrieved — it still needs a direct search
+
+    Generate a direct, name-based query for the single most important missing entity.
+    Do NOT query for an entity already present by name in retrieved_titles.
+    Do NOT repeat any query from previous_queries.
+    """
+
+    claim: str = dspy.InputField(desc="The factual claim being verified")
+    retrieved_titles: str = dspy.InputField(
+        desc="Comma-separated list of the 21 Wikipedia article titles currently in the final output"
+    )
+    previous_queries: str = dspy.InputField(
+        desc="Semicolon-separated list of all queries used in previous hops — do NOT repeat these"
+    )
+    summary: str = dspy.InputField(
+        desc="Latest coverage report — check 'MENTIONED BUT NOT RETRIEVED' for entities needing direct lookup"
+    )
+    query: str = dspy.OutputField(
+        desc=(
+            "A direct, name-based query (2-6 words) for the one most important missing entity's "
+            "Wikipedia article. Use the entity's proper name (e.g., 'Sojourner Truth', "
+            "'Shanghai Noon film', 'Ice Princess 2005 film', 'Jimi Hendrix'). "
+            "Do not repeat previous_queries."
+        )
+    )
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -186,6 +224,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.create_query_hop2 = dspy.ChainOfThought(QueryHop2Signature)
         self.create_query_hop3 = dspy.ChainOfThought(QueryHop3Signature)
         self.create_query_hop4 = dspy.ChainOfThought(QueryHop4GapSignature)
+        self.create_query_hop5 = dspy.ChainOfThought(QueryHop5FinalSignature)
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought(Summarize1Signature)
@@ -255,10 +294,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop4_docs = self.retrieve_k(hop4_query).passages
 
-        # Round-robin interleave all hops, deduplicate by title, return top 21
-        # Each hop contributes ~5 docs to the final 21 (21 / 4 hops ≈ 5 each)
+        # HOP 5 - Final recovery hop: examine what actually made it into the preliminary
+        # final 21 and query for the entity that's still missing.
+        # This fixes: (a) eviction — gold docs retrieved early but displaced by later hops,
+        # (b) duplicate queries — hops 2/3/4 that duplicated each other wasted slots,
+        # (c) summarizer hallucinations — hop4 skipped the right entity thinking it was covered.
+        preliminary_final = self._interleave_and_deduplicate(
+            hop1_docs, hop2_docs, hop3_docs, hop4_docs, max_docs=21
+        )
+        preliminary_titles = ", ".join([d.split(" | ")[0] for d in preliminary_final])
+        hop5_query = self.create_query_hop5(
+            claim=claim,
+            retrieved_titles=preliminary_titles,
+            previous_queries=f"{hop2_query}; {hop3_query}; {hop4_query}",
+            summary=summary_2,
+        ).query
+        hop5_docs = self.retrieve_k(hop5_query).passages
+
+        # Round-robin interleave all 5 hops, deduplicate by title, return top 21.
+        # Each hop contributes ~4 docs to the final 21 (21 / 5 hops ≈ 4 each).
+        # Hop5 targets the last missing entity, ensuring it appears in the top 21
+        # even if earlier hops failed to retrieve or retain it.
         return dspy.Prediction(
             retrieved_docs=self._interleave_and_deduplicate(
-                hop1_docs, hop2_docs, hop3_docs, hop4_docs, max_docs=21
+                hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, max_docs=21
             )
         )
