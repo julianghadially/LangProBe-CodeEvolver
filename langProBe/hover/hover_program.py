@@ -294,8 +294,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop4_docs = self.retrieve_k(hop4_query).passages
 
-        # HOP 5 - Final recovery hop: examine what actually made it into the preliminary
-        # final 21 and query for the entity that's still missing.
+        # HOP 5 - Final recovery hop: examine the actual preliminary final 21 output
+        # and query for the entity that's still missing from it.
         # This fixes: (a) eviction — gold docs retrieved early but displaced by later hops,
         # (b) duplicate queries — hops 2/3/4 that duplicated each other wasted slots,
         # (c) summarizer hallucinations — hop4 skipped the right entity thinking it was covered.
@@ -311,12 +311,26 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
-        # Round-robin interleave all 5 hops, deduplicate by title, return top 21.
-        # Each hop contributes ~4 docs to the final 21 (21 / 5 hops ≈ 4 each).
-        # Hop5 targets the last missing entity, ensuring it appears in the top 21
-        # even if earlier hops failed to retrieve or retain it.
-        return dspy.Prediction(
-            retrieved_docs=self._interleave_and_deduplicate(
-                hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, max_docs=21
-            )
-        )
+        # "20 + 1 from hop5" merge strategy:
+        # Keep the first 20 docs from the 4-hop round-robin unchanged (identical to the
+        # existing 4-hop system for these slots, preserving all position-4 docs from
+        # hops 2-4 that the full 5-hop round-robin incorrectly dropped).
+        # Use hop5's top NEW result as the 21st slot only, replacing what would have been
+        # hop1's 6th result in the pure 4-hop round-robin.
+        # Fallback: if hop5 has no new doc, restore the natural 4-hop 21st slot.
+        first_20 = preliminary_final[:20]
+        first_20_titles = {d.split(" | ")[0].strip().lower() for d in first_20}
+
+        hop5_insertion = None
+        for doc in hop5_docs:
+            title = doc.split(" | ")[0].strip().lower()
+            if title not in first_20_titles:
+                hop5_insertion = doc
+                break
+
+        if hop5_insertion is not None:
+            final_docs = first_20 + [hop5_insertion]
+        else:
+            final_docs = preliminary_final  # fallback: natural 21st from 4-hop (hop1[5])
+
+        return dspy.Prediction(retrieved_docs=final_docs)
