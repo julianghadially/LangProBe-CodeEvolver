@@ -244,6 +244,27 @@ class Summarize3Signature(dspy.Signature):
     )
 
 
+class ClaimEntityExtractSignature(dspy.Signature):
+    """Identify Wikipedia article titles most likely needed to verify this factual claim.
+
+    Look for named persons, works (films, songs, albums, books), organizations, places, or
+    events explicitly mentioned in the claim. Use CANONICAL Wikipedia article titles — exact
+    article names, not descriptions or nicknames.
+
+    Good: 'Pablo Escobar', '2005 NASDAQ-100 Open – Women\'s Doubles', 'Barbe de Verrue',
+          'Del Davis (singer)', 'Flare Acoustic Arts League', 'A World Without Love'
+    Bad:  'The King of Cocaine', 'the film Roger Yuan appeared in', 'the acoustic league'
+    """
+
+    claim: str = dspy.InputField(desc="The factual claim being verified")
+    key_entities: str = dspy.OutputField(
+        desc=(
+            "Comma-separated list of 2-4 Wikipedia article titles most likely needed. "
+            "Include entities named verbatim in the claim. Use canonical Wikipedia titles."
+        )
+    )
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -254,6 +275,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 22  # Increased from 15 for broader candidate coverage; max allowed is 25
+
+        # Pre-step: claim entity extraction (LM only, no retrieval)
+        self.extract_claim_entities = dspy.ChainOfThought(ClaimEntityExtractSignature)
 
         # Query generators with entity-focused signatures
         self.create_query_hop2 = dspy.ChainOfThought(QueryHop2Signature)
@@ -289,6 +313,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return unique
 
     def forward(self, claim):
+        # Pre-step: extract key entity seeds from claim (LM only, no ColBERT, no search count increase)
+        # This identifies canonical entity names that hops 4 and 5 should verify are retrieved.
+        key_entities = self.extract_claim_entities(claim=claim).key_entities
+
         # HOP 1 - Initial retrieval with raw claim
         hop1_docs = self.retrieve_k(claim).passages
         summary_1 = self.summarize1(
@@ -322,11 +350,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop1_docs, hop2_docs, hop3_docs, max_docs=30
         )
         retrieved_titles = ", ".join([d.split(" | ")[0] for d in combined_so_far[:20]])
+        summary_with_entity_hints = (
+            summary_2
+            + "\n\n[Key Wikipedia articles identified from this claim — check each against retrieved_titles]: "
+            + key_entities
+        )
         hop4_query = self.create_query_hop4(
             claim=claim,
             retrieved_titles=retrieved_titles,
             previous_queries=f"{hop2_query}; {hop3_query}",
-            summary=summary_2,
+            summary=summary_with_entity_hints,
         ).query
         hop4_docs = self.retrieve_k(hop4_query).passages
 
@@ -354,12 +387,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # (e.g., Anaïs Nin correctly identified in summary_2) while still giving
         # hop5 new info from hop 4 (e.g., Billy Corgan named in Constantinople Records).
         hop5_summary = summary_2 + "\n\n[Updated coverage from hop 4 passages]\n" + summary_3
+        hop5_summary_with_hints = (
+            hop5_summary
+            + "\n\n[Key Wikipedia articles from claim — verify each is present in retrieved_titles]: "
+            + key_entities
+        )
 
         hop5_query = self.create_query_hop5(
             claim=claim,
             retrieved_titles=preliminary_titles,
             previous_queries=f"{hop2_query}; {hop3_query}; {hop4_query}",
-            summary=hop5_summary,
+            summary=hop5_summary_with_hints,
         ).query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
