@@ -61,13 +61,6 @@ class IdentifyNextTarget(dspy.Signature):
        "Boris Franz Becker") but a retrieved article uses the shorter common name (e.g.,
        "Boris Becker"), that shorter-name article DOES cover the entity — do NOT re-query
        the longer formal name. Formal-name vs. common-name variants are the same entity.
-       CRITICAL PERSON COVERAGE RULE: An ORGANIZATION, FILM, TV SHOW, or WORK article that
-       names a PERSON in any role (director, founder, CEO, cast member, professor, staff, etc.)
-       does NOT cover that person's biographical article. Example: "Centre for Astrophysics &
-       Supercomputing | ... director Matthew Bailes ..." covers the Centre but NOT "Matthew
-       Bailes" — you still need "Matthew Bailes | ..." to cover that person. Similarly,
-       "Swinburne University | ... Professor Matthew Bailes ..." covers Swinburne but NOT
-       Matthew Bailes. ANY named PERSON requires their OWN dedicated biographical article.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
