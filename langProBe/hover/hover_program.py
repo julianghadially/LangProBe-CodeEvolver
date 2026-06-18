@@ -348,11 +348,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             passages=hop4_docs,
         ).summary
 
+        # Combine summaries: preserve summary_2's correct guidance while adding
+        # summary_3's newly-discovered entities from hop 4 articles.
+        # This avoids summary_3 replacing summary_2's correct entity tracking
+        # (e.g., Anaïs Nin correctly identified in summary_2) while still giving
+        # hop5 new info from hop 4 (e.g., Billy Corgan named in Constantinople Records).
+        hop5_summary = summary_2 + "\n\n[Updated coverage from hop 4 passages]\n" + summary_3
+
         hop5_query = self.create_query_hop5(
             claim=claim,
             retrieved_titles=preliminary_titles,
             previous_queries=f"{hop2_query}; {hop3_query}; {hop4_query}",
-            summary=summary_3,
+            summary=hop5_summary,
         ).query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
