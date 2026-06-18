@@ -56,7 +56,10 @@ class IdentifyNextTarget(dspy.Signature):
        pages. The ONLY exceptions that do NOT cover X are: "X bibliography", "X filmography",
        "X discography", "X early life", "X health" — these are Wikipedia sub-pages. Similarly,
        a name-variant article (e.g., "Pierre Womé | ..." for "Pierre Nlend Womé") counts as
-       covered — do not loop on minor name-form differences.
+       covered — do not loop on minor name-form differences. Also, a FULL LEGAL NAME form that
+       adds middle names or formal names counts as covered by the common-name article already
+       retrieved: e.g., if "Boris Becker | ..." is already retrieved, then "Boris Franz Becker"
+       is covered — do not re-query the same person under their longer formal name.
     3. ONLY check the entities you explicitly listed in Step 1. Output the FIRST one whose own
        article title is NOT yet retrieved AND is NOT in fruitless_queries. Do NOT introduce any
        new entity name at this stage — if all Step 1 entities are already covered or fruitless,
@@ -110,12 +113,15 @@ class IdentifyNextTarget(dspy.Signature):
          member across ALL the named organizations; that person is the implied entity whose own
          article has not yet been retrieved
        - The PARENT COMPANY, MANUFACTURER, or OWNING ORGANIZATION explicitly named in a
-         retrieved article as the direct owner or parent of a retrieved subsidiary, brand, or
-         product — e.g., if a retrieved candy-brand or product article says "wholly owned by
-         [Parent Corp]" or "a subsidiary of [Parent Corp]", and the claim asks who MANUFACTURES
-         or OWNS that brand, query the parent corporation's Wikipedia article directly (e.g.,
-         "Mars, Incorporated" if Wrigley says it is wholly owned by Mars). This applies to any
-         ownership/acquisition chain implied by the claim (manufacturer → brand → product).
+         retrieved article as the direct owner or parent of a subsidiary, brand, or product —
+         e.g., if a retrieved candy-brand or product article says "wholly owned by [Parent Corp]"
+         or "a subsidiary of [Parent Corp]", and the claim asks who MANUFACTURES or OWNS that
+         brand, query the parent corporation's Wikipedia article (e.g., "Mars, Incorporated" if
+         a product article says it is wholly owned by Mars). ORDERING RULE: Apply this bullet
+         ONLY after the product/brand article itself is already in retrieved_passages. When the
+         product's own article is NOT yet retrieved, query the PRODUCT FIRST (e.g., "Skittles
+         (confectionery)" before "Mars, Incorporated") — reserve the parent company query for
+         a later hop after the product article is confirmed retrieved.
        - The specific TOWN, VILLAGE, or DISTRICT that a retrieved station, airport, building,
          or venue is explicitly described as being LOCATED IN, when the claim asks about that
          location's town or the town itself is a required article — e.g., if a retrieved
@@ -125,6 +131,20 @@ class IdentifyNextTarget(dspy.Signature):
          or festival article as the location where the event takes place, when the claim implies
          that venue's own Wikipedia article is needed — e.g., if a festival article names a
          specific nightclub (e.g., "Flex") as its venue, query that venue's Wikipedia article.
+       - The COMPOSER, PLAYWRIGHT, SONGWRITER, or PRIMARY CREATOR of a specific artistic
+         work named in a retrieved article about a performer, musician, or artist — when a
+         retrieved article about an artist or performer credits a named composer or writer
+         for a specific song, musical, or work directly associated with the claim, query
+         that creator's own Wikipedia article (e.g., if a performer's article names the
+         composer of the specific musical they starred in, and the claim implies a creative
+         relationship like "composed by X" or "written by Y", output that composer/writer
+         as your query)
+       - A COMPARISON or RANKING entity explicitly named in a retrieved article as the
+         reference point ranked above or below the article's subject — e.g., if a retrieved
+         airport article says "the busiest airport in the UK after Heathrow Airport" or "the
+         second-busiest after [Airport X]", query that comparison entity (Heathrow Airport or
+         Airport X) directly. Apply this when the claim involves a ranked comparison and the
+         specific comparison entity is explicitly named in a retrieved article body.
        PRIORITY: Choose the entity that DIRECTLY satisfies the claim's core relationship (the
        song referenced, the show hosted, the genus studied, the adaptation cited) — NOT peripheral
        mentions like co-authors, technical subcomponents, or historical peoples mentioned only
