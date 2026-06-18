@@ -312,10 +312,60 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                             return unique
         return unique
 
+    def _filter_seeds_verbatim(self, key_entities_str, claim):
+        """Filter entity seeds to only those whose text appears verbatim (case-insensitive) in the claim.
+
+        Prevents hallucinated seeds (e.g., 'Stuart Little' for an Ice Princess claim,
+        'Mark Fywell' when claim says 'Tim Fywell') from steering hop queries off-track.
+        """
+        if not key_entities_str:
+            return ""
+        claim_lower = claim.lower()
+        entities = [e.strip() for e in key_entities_str.split(",") if e.strip()]
+        verbatim = [e for e in entities if e.lower() in claim_lower]
+        return ", ".join(verbatim)
+
+    def _is_near_duplicate(self, new_query, previous_queries_str):
+        """True if new_query is identical or nearly identical to any previous query.
+
+        'Nearly identical' means one query is a substring of the other (catches
+        cases like 'Kirsten Olson actress' vs 'Kirsten Olson').
+        Ignores placeholder tokens like '[raw claim]' and '[raw claim verbatim]'.
+        """
+        new_lower = new_query.strip().lower()
+        prev_queries = []
+        for part in previous_queries_str.split(";"):
+            part = part.strip().lower()
+            if part and "[raw claim" not in part:
+                prev_queries.append(part)
+        for prev_q in prev_queries:
+            if new_lower == prev_q:
+                return True
+            # Near-duplicate: one is a substring of the other
+            if new_lower in prev_q or prev_q in new_lower:
+                return True
+        return False
+
+    def _get_seed_fallback(self, key_entities_str, retrieved_titles_str):
+        """Return the first seed entity not yet present in retrieved_titles, or None.
+
+        Used as a fallback query when a hop generates a duplicate query, ensuring
+        a new, potentially missing entity gets a retrieval slot.
+        """
+        if not key_entities_str:
+            return None
+        retrieved_lower = retrieved_titles_str.lower()
+        for entity in [e.strip() for e in key_entities_str.split(",")]:
+            if entity and entity.lower() not in retrieved_lower:
+                return entity
+        return None
+
     def forward(self, claim):
         # Pre-step: extract key entity seeds from claim (LM only, no ColBERT, no search count increase)
         # This identifies canonical entity names that hops 4 and 5 should verify are retrieved.
         key_entities = self.extract_claim_entities(claim=claim).key_entities
+        # Filter seeds to only those appearing verbatim in the claim (prevents hallucinated seeds)
+        key_entities_filtered = self._filter_seeds_verbatim(key_entities, claim)
 
         # HOP 1 - Initial retrieval with raw claim
         hop1_docs = self.retrieve_k(claim).passages
@@ -353,14 +403,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         summary_with_entity_hints = (
             summary_2
             + "\n\n[Key Wikipedia articles identified from this claim — check each against retrieved_titles]: "
-            + key_entities
-        )
+            + key_entities_filtered
+        ) if key_entities_filtered else summary_2
         hop4_query = self.create_query_hop4(
             claim=claim,
             retrieved_titles=retrieved_titles,
             previous_queries=f"{hop2_query}; {hop3_query}",
             summary=summary_with_entity_hints,
         ).query
+        # Dedup guard: if hop4 duplicates a prior query, fall back to first missing seed entity
+        if self._is_near_duplicate(hop4_query, f"{hop2_query}; {hop3_query}") and key_entities_filtered:
+            fallback_q = self._get_seed_fallback(key_entities_filtered, retrieved_titles)
+            if fallback_q:
+                hop4_query = fallback_q
         hop4_docs = self.retrieve_k(hop4_query).passages
 
         # HOP 5 - Final recovery hop: examine the actual preliminary final 21 output
@@ -390,8 +445,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop5_summary_with_hints = (
             hop5_summary
             + "\n\n[Key Wikipedia articles from claim — verify each is present in retrieved_titles]: "
-            + key_entities
-        )
+            + key_entities_filtered
+        ) if key_entities_filtered else hop5_summary
 
         hop5_query = self.create_query_hop5(
             claim=claim,
@@ -399,6 +454,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             previous_queries=f"{hop2_query}; {hop3_query}; {hop4_query}",
             summary=hop5_summary_with_hints,
         ).query
+        # Dedup guard: if hop5 duplicates a prior query, fall back to first missing seed entity
+        if self._is_near_duplicate(hop5_query, f"{hop2_query}; {hop3_query}; {hop4_query}") and key_entities_filtered:
+            fallback_q = self._get_seed_fallback(key_entities_filtered, preliminary_titles)
+            if fallback_q:
+                hop5_query = fallback_q
         hop5_docs = self.retrieve_k(hop5_query).passages
 
         # "20 + 1 from hop5" merge strategy:
