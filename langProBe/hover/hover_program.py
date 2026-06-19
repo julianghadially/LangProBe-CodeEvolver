@@ -400,11 +400,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop1_docs, hop2_docs, hop3_docs, max_docs=30
         )
         retrieved_titles = ", ".join([d.split(" | ")[0] for d in combined_so_far[:20]])
+        # Only show seeds CONFIRMED MISSING from retrieved_titles (pre-filtered, more actionable)
+        retrieved_lower_str = retrieved_titles.lower()
+        missing_seeds_hop4 = [e.strip() for e in key_entities_filtered.split(",")
+                              if e.strip() and e.strip().lower() not in retrieved_lower_str]
         summary_with_entity_hints = (
             summary_2
-            + "\n\n[Key Wikipedia articles identified from this claim — check each against retrieved_titles]: "
-            + key_entities_filtered
-        ) if key_entities_filtered else summary_2
+            + "\n\n[CONFIRMED MISSING from retrieved articles — query directly]: "
+            + ", ".join(missing_seeds_hop4)
+        ) if missing_seeds_hop4 else summary_2
         hop4_query = self.create_query_hop4(
             claim=claim,
             retrieved_titles=retrieved_titles,
@@ -442,11 +446,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # (e.g., Anaïs Nin correctly identified in summary_2) while still giving
         # hop5 new info from hop 4 (e.g., Billy Corgan named in Constantinople Records).
         hop5_summary = summary_2 + "\n\n[Updated coverage from hop 4 passages]\n" + summary_3
+        # Only show seeds CONFIRMED MISSING from preliminary output (pre-filtered, more actionable)
+        preliminary_lower_str = preliminary_titles.lower()
+        missing_seeds_hop5 = [e.strip() for e in key_entities_filtered.split(",")
+                              if e.strip() and e.strip().lower() not in preliminary_lower_str]
         hop5_summary_with_hints = (
             hop5_summary
-            + "\n\n[Key Wikipedia articles from claim — verify each is present in retrieved_titles]: "
-            + key_entities_filtered
-        ) if key_entities_filtered else hop5_summary
+            + "\n\n[CONFIRMED MISSING from final output — query directly]: "
+            + ", ".join(missing_seeds_hop5)
+        ) if missing_seeds_hop5 else hop5_summary
 
         hop5_query = self.create_query_hop5(
             claim=claim,
@@ -455,11 +463,20 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             summary=hop5_summary_with_hints,
         ).query
         # Dedup guard: if hop5 duplicates a prior query, fall back to first missing seed entity
-        if self._is_near_duplicate(hop5_query, f"{hop2_query}; {hop3_query}; {hop4_query}") and key_entities_filtered:
+        _hop5_prev_queries = f"{hop2_query}; {hop3_query}; {hop4_query}"
+        _hop5_is_dup = self._is_near_duplicate(hop5_query, _hop5_prev_queries)
+        if _hop5_is_dup and key_entities_filtered:
             fallback_q = self._get_seed_fallback(key_entities_filtered, preliminary_titles)
             if fallback_q:
                 hop5_query = fallback_q
-        hop5_docs = self.retrieve_k(hop5_query).passages
+                _hop5_is_dup = False
+        # Skip ColBERT if hop5 query is still a duplicate (no seed fallback) or is trivially empty/none.
+        # A duplicate query returns the same results as a prior hop — wasting the final retrieval slot.
+        # Skipping lets the 20+1 merge fall back to the natural 4-hop 21st slot instead.
+        if _hop5_is_dup or not hop5_query.strip() or hop5_query.strip().lower() == "none":
+            hop5_docs = []  # No new documents; fallback uses natural 4-hop 21st slot
+        else:
+            hop5_docs = self.retrieve_k(hop5_query).passages
 
         # "20 + 1 from hop5" merge strategy:
         # Keep the first 20 docs from the 4-hop round-robin unchanged (identical to the
