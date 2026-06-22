@@ -2,16 +2,11 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
-class GapFillingEntityName(dspy.Signature):
+class GapFillingQuery(dspy.Signature):
     """You are given a claim, a list of Wikipedia article titles already retrieved, and a summary
     of what has been found so far. Compare the entities/topics explicitly mentioned in the claim
-    against the retrieved titles. Identify the single most important named entity from the claim
-    that is NOT yet represented in the retrieved documents.
-
-    Output ONLY the exact entity name as it would appear as a Wikipedia article title.
-    Good examples: 'Rogue One', 'University of Florida', 'Caroline Wozniacki', 'Sunkist (soft drink)',
-    'Ancient Egyptian religion', 'Home on the Range (2004 film)', 'West Cheshire Association Football League'
-    Do NOT output a long descriptive query — output just the entity name."""
+    against the retrieved titles. Generate a targeted search query for the key entity or topic from
+    the claim that is NOT yet represented in the retrieved documents. Prefer exact entity names."""
 
     claim: str = dspy.InputField()
     retrieved_titles: str = dspy.InputField(
@@ -20,8 +15,8 @@ class GapFillingEntityName(dspy.Signature):
     summary_2: str = dspy.InputField(
         desc="summary of the context and documents found in hops 1 and 2"
     )
-    entity_name: str = dspy.OutputField(
-        desc="exact Wikipedia article title of the most important missing entity from the claim"
+    query: str = dspy.OutputField(
+        desc="targeted search query for the missing entity/topic from the claim not yet found"
     )
 
 
@@ -34,12 +29,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # k=25 per hop (max allowed). With 3 hops × 25 = 75 candidates, the
-        # round-robin naturally goes deeper into each hop when duplicates exist,
-        # extending coverage to positions 7-24.
+        # k=25 per hop (up from 21). With 3 hops × 25 = 75 candidates, the
+        # round-robin naturally goes deeper when inter-hop duplicates arise,
+        # extending coverage to positions 7-24 at no extra penalty cost.
         self.k = 25
         self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought(GapFillingEntityName)
+        self.create_query_hop3 = dspy.ChainOfThought(GapFillingQuery)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
@@ -62,19 +57,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, context=summary_1, passages=hop2_docs[:7]
         ).summary
 
-        # HOP 3: gap-filling — identify the exact Wikipedia entity name most likely
-        # missing from the claim and search for it directly by title.
-        # Using top 8 from each of hops 1+2 for thorough gap analysis.
+        # HOP 3: gap-filling query — compare claim entities against already-retrieved titles
+        # Collect titles from hops 1+2 for explicit gap analysis
         retrieved_titles = "; ".join(
-            self._doc_title(d) for d in (hop1_docs[:8] + hop2_docs[:8])
+            self._doc_title(d) for d in (hop1_docs[:6] + hop2_docs[:6])
         )
 
-        entity_name = self.create_query_hop3(
+        hop3_query = self.create_query_hop3(
             claim=claim,
             retrieved_titles=retrieved_titles,
             summary_2=summary_2,
-        ).entity_name
-        hop3_docs = self.retrieve_k(entity_name).passages
+        ).query
+        hop3_docs = self.retrieve_k(hop3_query).passages
 
         # Interleaved round-robin merge with deduplication.
         # At each round i, we take position i from hop1, then hop2, then hop3
