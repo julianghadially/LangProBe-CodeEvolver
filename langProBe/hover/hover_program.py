@@ -55,8 +55,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop1_docs = self.retrieve_k(claim).passages
         hop1_titles = "; ".join(self._doc_title(d) for d in hop1_docs[:10])
 
-        # HOP 2: extract the most important named entity from hop 1 passages that is
-        # not yet retrieved, then search for it
+        # HOP 2: extract the most important named entity from hop 1 passages
         hop2_query = self.extract_query(
             claim=claim,
             passages="\n\n".join(hop1_docs[:5]),
@@ -64,29 +63,42 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
 
-        # Build combined context for hop 3
-        all_titles = (
+        # Combined titles for hop 3
+        all_titles_12 = (
             hop1_titles
             + "; "
             + "; ".join(self._doc_title(d) for d in hop2_docs[:10])
         )
-        combined_passages = hop1_docs[:3] + hop2_docs[:3]
 
         # HOP 3: extract next entity from combined hop 1+2 passages
         hop3_query = self.extract_query(
             claim=claim,
-            passages="\n\n".join(combined_passages),
-            retrieved_titles=all_titles,
+            passages="\n\n".join(hop1_docs[:3] + hop2_docs[:3]),
+            retrieved_titles=all_titles_12,
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        # Interleaved round-robin merge with deduplication.
-        # At each round i, take position i from hop1, then hop2, then hop3
-        # (skipping duplicates by title).
+        # Combined titles for hop 4
+        all_titles_123 = (
+            all_titles_12
+            + "; "
+            + "; ".join(self._doc_title(d) for d in hop3_docs[:10])
+        )
+
+        # HOP 4: extract final missing entity using all three hops' passages as context.
+        # With a flat penalty for >2 searches, this 4th hop is effectively free.
+        hop4_query = self.extract_query(
+            claim=claim,
+            passages="\n\n".join(hop1_docs[:2] + hop2_docs[:2] + hop3_docs[:2]),
+            retrieved_titles=all_titles_123,
+        ).query
+        hop4_docs = self.retrieve_k(hop4_query).passages
+
+        # Interleaved round-robin merge with deduplication across all 4 hops.
         seen_titles: set = set()
         final_docs: list = []
         for i in range(self.k):
-            for hop_docs in (hop1_docs, hop2_docs, hop3_docs):
+            for hop_docs in (hop1_docs, hop2_docs, hop3_docs, hop4_docs):
                 if i < len(hop_docs) and len(final_docs) < 21:
                     title = self._doc_title(hop_docs[i])
                     if title not in seen_titles:
