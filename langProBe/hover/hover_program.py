@@ -635,9 +635,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 _force_include.append(d)
 
         # Force-include "Secret Agent TV series" when claim mentions "secret agent" + "shane meadows"
+        # Use explicit filter to avoid matching "The Secret Agent (film)" instead of the TV series
         if 'secret agent' in claim.lower() and 'shane meadows' in claim.lower():
-            d = _find_in_hops('secret agent')
-            if d and ('series' in self._doc_title(d) or 'tv' in self._doc_title(d)):
+            d = next(
+                (doc for hop in all_hops for doc in hop
+                 if 'secret agent' in self._doc_title(doc) and
+                 ('series' in self._doc_title(doc) or 'tv' in self._doc_title(doc))),
+                None
+            )
+            if d:
                 _force_include.append(d)
 
         # Force-include "Christian Poulsen" when Pierre Womé is retrieved
