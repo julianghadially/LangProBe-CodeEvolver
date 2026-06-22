@@ -3,24 +3,33 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
 class ExtractNextQuery(dspy.Signature):
-    """Multi-hop Wikipedia retrieval system. The claim requires finding 3 Wikipedia articles.
+    """Multi-hop Wikipedia retrieval. The claim requires finding ~3 Wikipedia articles.
+    Identify the single most important Wikipedia article NOT yet in retrieved_titles.
 
-    Task: Examine the retrieved passages and identify the single most important named entity
-    (person, film, book, album, TV show, organization, place, etc.) that:
-    1. Appears explicitly by name in the retrieved passages
-    2. Is directly relevant to verifying the claim
-    3. Does NOT already have a Wikipedia article in retrieved_titles
+    Follow these steps IN ORDER:
 
-    Output: A short, precise search query — typically just the entity name (e.g., 'Jack Nicholson',
-    'Don Giovanni', 'Mars Incorporated', 'The Rescuers'). NOT a question or sentence."""
+    STEP 1 — CLAIM SCAN: Read the claim carefully. Find any specific named entity
+    (person, film, song, TV show, book, company, place, tournament, season, etc.)
+    that is explicitly mentioned in the claim text AND does NOT appear in retrieved_titles.
+    If such an entity exists, output a short search query for the most important one.
+
+    STEP 2 — PASSAGE SCAN (only use this if all claim entities are already covered by
+    retrieved_titles): Read the retrieved passages and find a named entity that:
+    (a) is named explicitly in the passages, (b) is directly relevant to verifying the
+    claim, and (c) does NOT appear in retrieved_titles.
+    Output a short search query for it.
+
+    Output: Just the entity name or title as the query (e.g., 'Elena Shaddow',
+    '20th Century Fox', 'Jack Nicholson', '2004-05 Memphis Grizzlies season').
+    Do NOT output a sentence or question."""
 
     claim: str = dspy.InputField()
-    passages: str = dspy.InputField(desc="top retrieved passages from previous search(es)")
+    passages: str = dspy.InputField(desc="retrieved passages from previous hops")
     retrieved_titles: str = dspy.InputField(
-        desc="Wikipedia article titles already retrieved, semicolon-separated — do NOT generate a query for these"
+        desc="Wikipedia article titles already retrieved — do NOT query for these"
     )
     query: str = dspy.OutputField(
-        desc="search query for the most important missing Wikipedia article — just the entity name/title"
+        desc="search query for the most important missing Wikipedia article"
     )
 
 
