@@ -68,15 +68,20 @@ class ExtractGapQuery(dspy.Signature):
     - "book/work A written by B" → if claim references the author, search for "B"
     - "directed by Y" → if claim needs the director, search for "Y"
     - "Retrieved articles are all about specific sub-topics of [X]" → if claim refers to [X] broadly, search for "[X] article" (e.g., all topics are Egyptian → search "Ancient Egyptian religion")
-    - "piece/composition was adapted into [well-known work]" → search for the adapted work
+    - "piece/composition was adapted into [well-known work]" → search for the adapted work (e.g., "Stranger in Paradise" is a famous song adaptation of "Polovtsian Dances")
     - "Multiple [things] of [place] retrieved but no overview article" → search for "[Things] of [Place]" or "[Place] [Things]" overview
     - "TV show [X] was inspired by film [Y]" → search for the TV show "[X]" or film "[Y]" directly
     - "X was a pilot/inspiration for show/film Y" → search for "Y" by name
+    - "passage mentions aircraft/vehicle [NAME] at location" → claim about that location likely needs the specific named aircraft/vehicle article (e.g., "Texas Raiders" B-17 at an airport)
+    - "passage mentions song/film title that claim's performer/choir is associated with" → search for that specific song or film title directly
+    - "host of a game show" or "number of shows hosted" → search for the host's name and/or the show title directly
+    - IMPORTANT: If already_searched contains multiple variations of a similar query (e.g., airport name twice), STOP generating more airport queries — look for a completely different angle based on the claim's other details
 
     Rules:
     - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
     - For films: add "(film)" if needed to disambiguate
     - NEVER repeat a query from already_searched
+    - If already_searched contains 2+ queries for the same entity type, pivot to a DIFFERENT entity entirely
     - If the missing entity is a show/film DESCRIBED in the claim, name it specifically (e.g., "The Dukes of Hazzard" not "TV show inspired by 1975 film")
     - Target specific Wikipedia article titles, not general topics"""
 
@@ -191,6 +196,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
         # HOP 7: second gap-fill query
+        # Always include hop6_query in already_searched (even if duplicate) so the
+        # LM doesn't regenerate the same thing on the next hop.
         all_queries_up_to_6 = [q1, q2, q3, q4, q5, hop6_query]
         titles_up_to_6 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs)
         passages_up_to_6 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, top_n=3)
@@ -207,7 +214,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop7_docs = self.retrieve_k(hop7_query).passages
 
         # HOP 8: third gap-fill query
-        all_queries_up_to_7 = all_queries_up_to_6 + ([hop7_query] if not self._is_duplicate_query(hop7_query, all_queries_up_to_6) else [])
+        # Always include hop7_query so the LM avoids re-generating it.
+        all_queries_up_to_7 = all_queries_up_to_6 + [hop7_query]
         titles_up_to_7 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs)
         passages_up_to_7 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, top_n=3)
         already_searched_up_to_7 = "; ".join(all_queries_up_to_7)
@@ -223,7 +231,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop8_docs = self.retrieve_k(hop8_query).passages
 
         # HOP 9: fourth gap-fill query
-        all_queries_up_to_8 = all_queries_up_to_7 + ([hop8_query] if not self._is_duplicate_query(hop8_query, all_queries_up_to_7) else [])
+        # Always include hop8_query so the LM avoids re-generating it.
+        all_queries_up_to_8 = all_queries_up_to_7 + [hop8_query]
         titles_up_to_8 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs)
         passages_up_to_8 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs, top_n=3)
         already_searched_up_to_8 = "; ".join(all_queries_up_to_8)
