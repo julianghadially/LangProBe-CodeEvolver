@@ -2,21 +2,25 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
-class GapFillingQuery(dspy.Signature):
-    """You are given a claim, a list of Wikipedia article titles already retrieved, and a summary
-    of what has been found so far. Compare the entities/topics explicitly mentioned in the claim
-    against the retrieved titles. Generate a targeted search query for the key entity or topic from
-    the claim that is NOT yet represented in the retrieved documents. Prefer exact entity names."""
+class GapFillingEntities(dspy.Signature):
+    """Given a claim and the Wikipedia articles already retrieved, identify the two most important
+    named entities from the claim that are NOT yet covered by the retrieved documents.
+    Return exact entity names as they would appear as Wikipedia article titles.
+    Examples: 'Rogue One', 'University of Florida', 'Caroline Wozniacki', 'Mars Incorporated'.
+    Focus on specific people, films, places, songs, organizations explicitly mentioned in the claim."""
 
     claim: str = dspy.InputField()
     retrieved_titles: str = dspy.InputField(
         desc="semicolon-separated titles of Wikipedia documents already retrieved in earlier hops"
     )
-    summary_2: str = dspy.InputField(
-        desc="summary of the context and documents found in hops 1 and 2"
+    summary: str = dspy.InputField(
+        desc="summary of context and key entities found in hops 1 and 2"
     )
-    query: str = dspy.OutputField(
-        desc="targeted search query for the missing entity/topic from the claim not yet found"
+    entity1: str = dspy.OutputField(
+        desc="most important entity from the claim not yet found in retrieved titles, as exact Wikipedia article title"
+    )
+    entity2: str = dspy.OutputField(
+        desc="second most important entity from the claim not yet found, as exact Wikipedia article title"
     )
 
 
@@ -29,12 +33,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # Retrieve 21 candidates per hop (up from 7). Interleaved deduplication
-        # below ensures all 3 hops contribute equally to the 21-doc output budget,
-        # while tripling coverage per hop.
-        self.k = 21
+        # 25 candidates per hop (max allowed). Four hops × 25 = 100 candidates,
+        # deduped down to 21. Hops 3 & 4 directly target the two most likely
+        # missing entities by exact Wikipedia-title search.
+        self.k = 25
         self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought(GapFillingQuery)
+        self.extract_gap_entities = dspy.ChainOfThought(GapFillingEntities)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
@@ -57,27 +61,28 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, context=summary_1, passages=hop2_docs[:7]
         ).summary
 
-        # HOP 3: gap-filling query — compare claim entities against already-retrieved titles
-        # Collect titles from hops 1+2 for explicit gap analysis
+        # HOPS 3 & 4: extract the two most-missing entities from the claim and
+        # search for each one directly by exact Wikipedia-title query.
+        # Using top 10 from each of hops 1+2 for a thorough gap analysis.
         retrieved_titles = "; ".join(
-            self._doc_title(d) for d in (hop1_docs[:6] + hop2_docs[:6])
+            self._doc_title(d) for d in (hop1_docs[:10] + hop2_docs[:10])
         )
 
-        hop3_query = self.create_query_hop3(
+        gap = self.extract_gap_entities(
             claim=claim,
             retrieved_titles=retrieved_titles,
-            summary_2=summary_2,
-        ).query
-        hop3_docs = self.retrieve_k(hop3_query).passages
+            summary=summary_2,
+        )
+        hop3_docs = self.retrieve_k(gap.entity1).passages
+        hop4_docs = self.retrieve_k(gap.entity2).passages
 
         # Interleaved round-robin merge with deduplication.
-        # At each round i, we take position i from hop1, then hop2, then hop3
-        # (skipping duplicates by title). This ensures all three hops contribute
-        # equally rather than hop1 monopolising the 21-doc budget.
+        # At each round i, we take position i from hop1, hop2, hop3, hop4
+        # (skipping duplicates by title). All four hops contribute equally.
         seen_titles: set = set()
         final_docs: list = []
         for i in range(self.k):
-            for hop_docs in (hop1_docs, hop2_docs, hop3_docs):
+            for hop_docs in (hop1_docs, hop2_docs, hop3_docs, hop4_docs):
                 if i < len(hop_docs) and len(final_docs) < 21:
                     title = self._doc_title(hop_docs[i])
                     if title not in seen_titles:
