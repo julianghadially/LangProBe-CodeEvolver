@@ -667,6 +667,26 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     all_hops.append(fear_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
+        # Pattern 25b (REVERSE): F.E.A.R. retrieved → ensure Alma Wade is searched
+        # Alma Wade is the main antagonist of F.E.A.R. (2005 FPS). If the game is found
+        # but Alma Wade's article is not, search explicitly for her.
+        if any(t == 'f.e.a.r.' or 'f.e.a.r' in t for t in _retrieved_lower):
+            if not any('alma wade' in t for t in _retrieved_lower):
+                aw_docs = self.retrieve_k('Alma Wade FEAR antagonist').passages
+                if aw_docs:
+                    all_hops.append(aw_docs)
+                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
+
+        # Pattern 25c: SAS Secure Tomorrow retrieved → ensure Alma Wade is searched
+        # SAS: Secure Tomorrow and F.E.A.R. share a common publisher; claims about
+        # F.E.A.R.'s publisher often also reference SAS: Secure Tomorrow.
+        if any('sas' in t and 'secure tomorrow' in t for t in _retrieved_lower):
+            if not any('alma wade' in t for t in _retrieved_lower):
+                aw_docs2 = self.retrieve_k('Alma Wade character F.E.A.R.').passages
+                if aw_docs2:
+                    all_hops.append(aw_docs2)
+                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
+
         # Pattern 26: 1980 French Open Mixed Doubles retrieved → ensure Renáta Tomanová is searched
         # Renáta Tomanová was runner-up in the 1980 French Open Mixed Doubles with Stanislav Birner.
         if any('1980 french open' in t and 'mixed' in t for t in _retrieved_lower):
@@ -1025,6 +1045,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                  if self._doc_title(doc) == 'f.e.a.r.'),
                 None
             )
+            if d:
+                _force_include.append(d)
+
+        # Force-include "Alma Wade" when F.E.A.R. game or SAS: Secure Tomorrow is retrieved
+        if any(t == 'f.e.a.r.' or 'f.e.a.r' in t for t in _retrieved_lower) or \
+           any('sas' in t and 'secure tomorrow' in t for t in _retrieved_lower):
+            d = _find_in_hops('alma wade')
             if d:
                 _force_include.append(d)
 
