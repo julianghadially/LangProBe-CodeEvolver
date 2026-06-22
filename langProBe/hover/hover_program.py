@@ -103,23 +103,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 passages.append(passage)
         return "\n\n---\n\n".join(passages)
 
-    def _rrf_merge(self, all_hops, k=60, max_docs=21):
-        """Reciprocal Rank Fusion merge of multiple retrieval lists."""
-        rrf_scores = {}
-        doc_map = {}  # normalized_title -> doc string
-
-        for hop_docs in all_hops:
-            for rank, doc in enumerate(hop_docs):
-                title = self._doc_title(doc)
-                if title not in rrf_scores:
-                    rrf_scores[title] = 0.0
-                    doc_map[title] = doc
-                rrf_scores[title] += 1.0 / (rank + k)
-
-        # Sort by RRF score descending
-        sorted_titles = sorted(rrf_scores.keys(), key=lambda t: rrf_scores[t], reverse=True)
-        return [doc_map[t] for t in sorted_titles[:max_docs]]
-
     def forward(self, claim):
         # STEP 1: Generate 3 targeted queries from the claim in one shot
         cq = self.generate_queries(claim=claim)
@@ -174,10 +157,20 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if not self._is_duplicate_query(hop6_query, all_queries):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
-        # RRF merge: includes docs ranked 4+ if they score well overall
-        all_hops_to_merge = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
+        # Interleaved round-robin merge with deduplication
+        # Prioritize targeted hops (1-3) then gap fills (4-6)
+        all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
         if hop6_docs:
-            all_hops_to_merge.append(hop6_docs)
+            all_hops.append(hop6_docs)
 
-        final_docs = self._rrf_merge(all_hops_to_merge, k=60, max_docs=21)
+        seen_titles: set = set()
+        final_docs: list = []
+        for i in range(self.k):
+            for hop_docs in all_hops:
+                if i < len(hop_docs) and len(final_docs) < 21:
+                    title = self._doc_title(hop_docs[i])
+                    if title not in seen_titles:
+                        seen_titles.add(title)
+                        final_docs.append(hop_docs[i])
+
         return dspy.Prediction(retrieved_docs=final_docs[:21])
