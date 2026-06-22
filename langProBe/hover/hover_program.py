@@ -6,24 +6,25 @@ class GenerateClaimQueries(dspy.Signature):
     """A factual claim connects approximately 3 Wikipedia articles that need to be retrieved.
     Generate exactly 5 distinct search queries to maximize coverage.
 
-    ABSOLUTE RULES — check these FIRST before generating any query:
-    1. VOICE TYPE: If claim says "lowest vocal range" or "bass" in a music/singing context → one query MUST be "bass voice type"
-    2. MUSIC ADAPTATION: If claim mentions a classical piece performed by a choir/group → one query MUST be "[piece name] song" for famous pop/song adaptations (e.g., "Polovtsian Dances" → "Stranger in Paradise song")
-    3. FILM TITLE: If claim says "[Person] directed the [YEAR] film" → one query MUST be "[PersonName] film" (e.g., "Harry Booth film" for "Harry Booth directed the 1971 film")
-    4. NO GENERIC QUERIES: NEVER generate queries for broad categories. FORBIDDEN queries include: "Drama film", "Comedy film", "Action film", "Korean film", "South Korean films", "American film", "British film", "TV series", "Television", "Song", "Music", "Film", "Films", "Actor", "Actress". If you would generate a forbidden query, replace it with a cross-reference like "[ActorName] film" or "[DirectorName] film" instead.
-
     Strategy:
     - Query 1: for the 1st EXPLICITLY named or described entity/article in the claim
     - Query 2: for the 2nd EXPLICITLY named or described entity/article (different from query1)
     - Query 3: for the 3rd EXPLICITLY named or described entity/article
-    - Query 4: CROSS-REFERENCE or SPECIAL query (see ABSOLUTE RULES above; use rule 1/2/3 if applicable, otherwise use an IMPLICIT entity)
-    - Query 5: DESCRIPTION-BASED FALLBACK — use EXACT WORDS or PHRASES from the claim:
-      * "the 1975 film starring James Mitchum" → q5 = "James Mitchum 1975 film"
-      * "the actress from Thank You for Smoking" → q5 = "actress Thank You for Smoking"
-      * "the night club in Vienna" → q5 = "nightclub Vienna"
-      * "the TV show inspired by Moonrunners" → q5 = "TV show inspired Moonrunners"
-      * "the star of Spaceballs" → q5 = "star of Spaceballs actor"
-      * "Harry Booth directed the 1971 film that features the star of Thick as Thieves" → q5 = "Harry Booth 1971 film"
+    - Query 4: for an entity that is IMPLICIT or INFERRED — not directly named in the claim,
+      but likely needed given the multi-hop reasoning structure. Examples:
+      * If claim says "X directed Y" and Y is a film → q4 might target the film studio or a co-star
+      * If claim says "X was at university Z" → q4 might target a notable person associated with Z
+      * If claim says "X appeared in Y" → q4 might target the director or creator of Y
+      * If the claim's logic requires an intermediate hop entity → q4 targets that entity
+    - Query 5: a DESCRIPTION-BASED FALLBACK — use EXACT WORDS or PHRASES from the claim to
+      search for an entity that is described but not directly named. Use the claim's own language.
+      Examples:
+      * Claim says "the 1975 film starring James Mitchum" → q5 = "James Mitchum 1975 film"
+      * Claim says "the actress from Thank You for Smoking" → q5 = "actress Thank You for Smoking"
+      * Claim says "the night club in Vienna" → q5 = "nightclub Vienna electronic music"
+      * Claim says "the TV show inspired by Moonrunners" → q5 = "TV show inspired Moonrunners"
+      * Claim says "the star of Spaceballs" → q5 = "star of Spaceballs actor"
+      * Claim says "a film directed by the same director as X" → q5 = "director X film"
 
     For each query:
     - Named person: use their full name directly
@@ -34,6 +35,7 @@ class GenerateClaimQueries(dspy.Signature):
 
     Additional strategy for q3 or q4:
     - If the claim uses phrases like "in this religion", "this culture", "in this country/city" → generate a query for the BROADER TOPIC article (e.g., "Ancient Egyptian religion", "Education in Cork")
+    - If the claim mentions "[a composition/piece] was performed by X" → check if the composition has a famous adaptation (e.g., "Stranger in Paradise (song)" from "Polovtsian Dances")
     - If claim says "[place] has several [things]" → also include the overview article (e.g., "Education in Cork" when claim says "Cork has several colleges")
 
     CRITICAL: All 5 queries MUST target DIFFERENT Wikipedia articles.
@@ -44,8 +46,8 @@ class GenerateClaimQueries(dspy.Signature):
     query1: str = dspy.OutputField(desc="search query for 1st Wikipedia article (explicitly mentioned)")
     query2: str = dspy.OutputField(desc="search query for 2nd Wikipedia article (explicitly mentioned, different from query1)")
     query3: str = dspy.OutputField(desc="search query for 3rd Wikipedia article (explicitly mentioned or described)")
-    query4: str = dspy.OutputField(desc="CROSS-REFERENCE or SPECIAL query: use ABSOLUTE RULES 1-3 if applicable (bass voice type / music adaptation / film title from director); otherwise an IMPLICIT entity not directly named but needed for multi-hop reasoning")
-    query5: str = dspy.OutputField(desc="DESCRIPTION-BASED FALLBACK using EXACT WORDS from the claim — e.g., 'Harry Booth 1971 film' when claim says 'Harry Booth directed the 1971 film'; '1975 film James Mitchum' when claim says 'the 1975 film starring James Mitchum'; 'actress Thank You for Smoking' for 'the actress from Thank You for Smoking'")
+    query4: str = dspy.OutputField(desc="search query for 4th Wikipedia article — an IMPLICIT or INFERRED entity not directly named in the claim but needed for multi-hop reasoning")
+    query5: str = dspy.OutputField(desc="search query using DESCRIPTIVE WORDS from the claim for an entity that is described but not directly named — use phrases from the claim itself (e.g., '1975 film James Mitchum' when claim says 'the 1975 film starring James Mitchum'; 'actress Thank You for Smoking' for 'the actress from Thank You for Smoking'; 'nightclub Vienna' for 'the nightclub in Vienna')")
 
 
 class ExtractGapQuery(dspy.Signature):
