@@ -22,6 +22,11 @@ class GenerateClaimQueries(dspy.Signature):
     - Described entity: infer the Wikipedia article title
     - Inferred entity (q4): reason carefully about what intermediate Wikipedia article connects the claim
 
+    Additional strategy for q3 or q4:
+    - If the claim uses phrases like "in this religion", "this culture", "in this country/city" → generate a query for the BROADER TOPIC article (e.g., "Ancient Egyptian religion", "Education in Cork")
+    - If the claim mentions "[a composition/piece] was performed by X" → check if the composition has a famous adaptation (e.g., "Stranger in Paradise (song)" from "Polovtsian Dances")
+    - If claim says "[place] has several [things]" → also include the overview article (e.g., "Education in Cork" when claim says "Cork has several colleges")
+
     CRITICAL: All 4 queries MUST target DIFFERENT Wikipedia articles.
     CRITICAL: Target specific Wikipedia article titles, NOT general concepts or locations.
     Keep each query short (1-6 words), similar to a Wikipedia article title."""
@@ -50,6 +55,9 @@ class ExtractGapQuery(dspy.Signature):
     - "owned/produced by company X" → if claim needs that owner, search for "X"
     - "book/work A written by B" → if claim references the author, search for "B"
     - "directed by Y" → if claim needs the director, search for "Y"
+    - "Retrieved articles are all about specific sub-topics of [X]" → if claim refers to [X] broadly, search for "[X] article" (e.g., all topics are Egyptian → search "Ancient Egyptian religion")
+    - "piece/composition was adapted into [well-known work]" → search for the adapted work
+    - "Multiple [things] of [place] retrieved but no overview article" → search for "[Things] of [Place]" or "[Place] [Things]" overview
 
     Rules:
     - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
@@ -114,7 +122,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         passages = []
         for docs in doc_lists:
             for doc in docs[:top_n]:
-                passage = doc[:500]
+                passage = doc[:800]
                 passages.append(passage)
         return "\n\n---\n\n".join(passages)
 
@@ -142,7 +150,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             already_searched=already_searched_1234,
         )
         hop5_query = hop5_result.query
-        hop5_docs = self.retrieve_k(hop5_query).passages
+        hop5_docs = []
+        if not self._is_duplicate_query(hop5_query, [q1, q2, q3, q4]):
+            hop5_docs = self.retrieve_k(hop5_query).passages
 
         # HOP 6: second gap-fill query (only if not a duplicate)
         all_queries = [q1, q2, q3, q4, hop5_query]
@@ -177,7 +187,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop7_docs = self.retrieve_k(hop7_query).passages
 
         # Interleaved round-robin merge with deduplication
-        all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
+        all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs]
+        if hop5_docs:
+            all_hops.append(hop5_docs)
         if hop6_docs:
             all_hops.append(hop6_docs)
         if hop7_docs:
