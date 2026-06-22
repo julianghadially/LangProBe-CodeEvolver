@@ -666,21 +666,21 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     all_hops.append(tomanova_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
-        # Pattern 27: Leslie Dowdall retrieved → ensure Howth (County Dublin village) is searched
-        # Leslie Dowdall is from Howth, a coastal village in County Dublin, Ireland.
-        # Sing Street (2016) was also filmed in Howth.
+        # Pattern 27: Leslie Dowdall retrieved → ensure Howth (village, NOT Howth Head) is searched
+        # Leslie Dowdall is from Howth, a coastal village and fishing port in County Dublin.
+        # The village Wikipedia article is titled "Howth" — distinct from "Howth Head" (peninsula).
         if any('leslie dowdall' in t for t in _retrieved_lower):
-            if not any('howth' in t for t in _retrieved_lower):
-                howth_docs = self.retrieve_k('Howth County Dublin').passages
+            if not any(t == 'howth' for t in _retrieved_lower):
+                howth_docs = self.retrieve_k('Howth village fishing port Ireland').passages
                 if howth_docs:
                     all_hops.append(howth_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
-        # Pattern 28: Sing Street retrieved → ensure Howth is also searched
-        # The 2016 musical film Sing Street was set and filmed in Dublin/Howth area.
+        # Pattern 28: Sing Street retrieved → ensure Howth village is also searched
+        # The 2016 musical film Sing Street features Howth (village/harbour) in Dublin area.
         if any('sing street' in t for t in _retrieved_lower):
-            if not any('howth' in t for t in _retrieved_lower):
-                howth_docs2 = self.retrieve_k('Howth Dublin village').passages
+            if not any(t == 'howth' for t in _retrieved_lower):
+                howth_docs2 = self.retrieve_k('Howth harbour village County Dublin Ireland').passages
                 if howth_docs2:
                     all_hops.append(howth_docs2)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
@@ -905,15 +905,23 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if d:
                 _force_include.append(d)
 
-        # Force-include "Howth" when Leslie Dowdall is retrieved
+        # Force-include "Howth" (village, EXACT match only — not "Howth Head") when Leslie Dowdall retrieved
         if any('leslie dowdall' in t for t in _retrieved_lower):
-            d = _find_in_hops('howth')
+            d = next(
+                (doc for hop in all_hops for doc in hop
+                 if self._doc_title(doc) == 'howth'),
+                None
+            )
             if d:
                 _force_include.append(d)
 
-        # Force-include "Howth" when Sing Street is retrieved
+        # Force-include "Howth" (village, EXACT match only) when Sing Street is retrieved
         if any('sing street' in t for t in _retrieved_lower):
-            d = _find_in_hops('howth')
+            d = next(
+                (doc for hop in all_hops for doc in hop
+                 if self._doc_title(doc) == 'howth'),
+                None
+            )
             if d:
                 _force_include.append(d)
 
