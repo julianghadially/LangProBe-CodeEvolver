@@ -3,24 +3,34 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
 class GenerateClaimQueries(dspy.Signature):
-    """A factual claim mentions approximately 3 Wikipedia articles that need to be retrieved.
-    Generate exactly 3 distinct search queries, one for each expected Wikipedia article.
+    """A factual claim connects approximately 3 Wikipedia articles that need to be retrieved.
+    Generate exactly 4 distinct search queries to maximize coverage.
+
+    Strategy:
+    - Queries 1-3: one for each EXPLICITLY named or described entity/article in the claim
+    - Query 4: for an entity that is IMPLICIT or INFERRED — not directly named in the claim,
+      but likely needed given the multi-hop reasoning structure. Examples:
+      * If claim says "X directed Y" and Y is a film → q4 might target the film studio or a co-star
+      * If claim says "X was at university Z" → q4 might target a notable person associated with Z
+      * If claim says "X appeared in Y" → q4 might target the director or creator of Y
+      * If the claim's logic requires an intermediate hop entity → q4 targets that entity
 
     For each query:
-    - Named person (e.g., "Billy Corgan", "Lavinia Greenlaw"): use their full name directly
+    - Named person: use their full name directly
     - Named film/show/song: use the exact title + "(film)"/"(song)"/"(TV series)" if needed
-    - Sports season article: use exact format "YEAR-YY TeamName season" (e.g., "2004-05 Memphis Grizzlies season", "1974-75 New York Islanders season")
-    - Described entity (e.g., "the show she starred in"): infer the Wikipedia article title
-    - Implied entity: reason to the Wikipedia article title
+    - Sports season article: use exact format "YEAR-YY TeamName season"
+    - Described entity: infer the Wikipedia article title
+    - Inferred entity (q4): reason carefully about what intermediate Wikipedia article connects the claim
 
-    CRITICAL: All 3 queries MUST target DIFFERENT Wikipedia articles.
+    CRITICAL: All 4 queries MUST target DIFFERENT Wikipedia articles.
     CRITICAL: Target specific Wikipedia article titles, NOT general concepts or locations.
     Keep each query short (1-6 words), similar to a Wikipedia article title."""
 
     claim: str = dspy.InputField()
-    query1: str = dspy.OutputField(desc="search query for 1st Wikipedia article")
-    query2: str = dspy.OutputField(desc="search query for 2nd Wikipedia article (different from query1)")
-    query3: str = dspy.OutputField(desc="search query for 3rd Wikipedia article (different from query1 and query2)")
+    query1: str = dspy.OutputField(desc="search query for 1st Wikipedia article (explicitly mentioned)")
+    query2: str = dspy.OutputField(desc="search query for 2nd Wikipedia article (explicitly mentioned, different from query1)")
+    query3: str = dspy.OutputField(desc="search query for 3rd Wikipedia article (explicitly mentioned or described)")
+    query4: str = dspy.OutputField(desc="search query for 4th Wikipedia article — an IMPLICIT or INFERRED entity not directly named in the claim but needed for multi-hop reasoning")
 
 
 class ExtractGapQuery(dspy.Signature):
@@ -94,44 +104,32 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     titles.append(doc.split(" | ")[0].strip())  # original casing
         return " | ".join(titles)
 
-    def _get_key_passages(self, *doc_lists, top_n=3) -> str:
-        """Get top passages from each hop for gap analysis context."""
+    def _get_key_passages(self, *doc_lists, top_n=1) -> str:
+        """Get the top passage from each hop, truncated for focus."""
         passages = []
         for docs in doc_lists:
             for doc in docs[:top_n]:
-                passage = doc[:350]
+                passage = doc[:500]
                 passages.append(passage)
         return "\n\n---\n\n".join(passages)
 
     def forward(self, claim):
-        # STEP 1: Generate 3 targeted queries from the claim in one shot
+        # STEP 1: Generate 4 targeted queries from the claim in one shot
         cq = self.generate_queries(claim=claim)
-        q1, q2, q3 = cq.query1, cq.query2, cq.query3
+        q1, q2, q3, q4 = cq.query1, cq.query2, cq.query3, cq.query4
 
-        # HOPS 1-3: targeted searches for each claim entity
+        # HOPS 1-4: targeted searches (3 explicit + 1 inferred)
         hop1_docs = self.retrieve_k(q1).passages
         hop2_docs = self.retrieve_k(q2).passages
         hop3_docs = self.retrieve_k(q3).passages
+        hop4_docs = self.retrieve_k(q4).passages
 
-        # Build structured context for gap analysis: titles + focused passages
-        titles_123 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs)
-        passages_123 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs)
-        already_searched_123 = f"{q1}; {q2}; {q3}"
-
-        # HOP 4: first gap-fill query
-        hop4_result = self.extract_gap(
-            claim=claim,
-            retrieved_titles=titles_123,
-            key_passages=passages_123,
-            already_searched=already_searched_123,
-        )
-        hop4_query = hop4_result.query
-        hop4_docs = self.retrieve_k(hop4_query).passages
-
-        # HOP 5: second gap-fill query
+        # Build context for gap analysis using top-1 passage per hop
         titles_1234 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
         passages_1234 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
-        already_searched_1234 = f"{already_searched_123}; {hop4_query}"
+        already_searched_1234 = f"{q1}; {q2}; {q3}; {q4}"
+
+        # HOP 5: first gap-fill query
         hop5_result = self.extract_gap(
             claim=claim,
             retrieved_titles=titles_1234,
@@ -141,8 +139,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop5_query = hop5_result.query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
-        # HOP 6: third gap-fill query (only if not a duplicate)
-        all_queries = [q1, q2, q3, hop4_query, hop5_query]
+        # HOP 6: second gap-fill query (only if not a duplicate)
+        all_queries = [q1, q2, q3, q4, hop5_query]
         titles_12345 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
         passages_12345 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
         already_searched_12345 = f"{already_searched_1234}; {hop5_query}"
@@ -158,7 +156,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
         # Interleaved round-robin merge with deduplication
-        # Prioritize targeted hops (1-3) then gap fills (4-6)
         all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
         if hop6_docs:
             all_hops.append(hop6_docs)
