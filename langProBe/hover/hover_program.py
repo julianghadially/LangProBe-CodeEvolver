@@ -125,7 +125,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         titles = []
         seen = set()
         for docs in doc_lists:
-            for doc in docs[:7]:  # top 7 from each hop
+            for doc in docs[:15]:  # top 15 from each hop for better coverage
                 title_norm = self._doc_title(doc)
                 if title_norm not in seen:
                     seen.add(title_norm)
@@ -137,7 +137,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         passages = []
         for docs in doc_lists:
             for doc in docs[:top_n]:
-                passage = doc[:800]
+                passage = doc[:1500]  # increased from 800 to capture more entity mentions
                 passages.append(passage)
         return "\n\n---\n\n".join(passages)
 
@@ -191,6 +191,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
         # HOP 7: second gap-fill query
+        # Always include hop6_query in already_searched (even if it was a duplicate),
+        # so the LM knows to generate something different next time.
         all_queries_up_to_6 = [q1, q2, q3, q4, q5, hop6_query]
         titles_up_to_6 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs)
         passages_up_to_6 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, top_n=3)
@@ -207,7 +209,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop7_docs = self.retrieve_k(hop7_query).passages
 
         # HOP 8: third gap-fill query
-        all_queries_up_to_7 = all_queries_up_to_6 + ([hop7_query] if not self._is_duplicate_query(hop7_query, all_queries_up_to_6) else [])
+        # Always include hop7_query in already_searched regardless of duplicate status.
+        all_queries_up_to_7 = all_queries_up_to_6 + [hop7_query]
         titles_up_to_7 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs)
         passages_up_to_7 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, top_n=3)
         already_searched_up_to_7 = "; ".join(all_queries_up_to_7)
@@ -223,7 +226,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop8_docs = self.retrieve_k(hop8_query).passages
 
         # HOP 9: fourth gap-fill query
-        all_queries_up_to_8 = all_queries_up_to_7 + ([hop8_query] if not self._is_duplicate_query(hop8_query, all_queries_up_to_7) else [])
+        # Always include hop8_query in already_searched regardless of duplicate status.
+        all_queries_up_to_8 = all_queries_up_to_7 + [hop8_query]
         titles_up_to_8 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs)
         passages_up_to_8 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs, top_n=3)
         already_searched_up_to_8 = "; ".join(all_queries_up_to_8)
