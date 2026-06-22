@@ -713,7 +713,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # Force-include "Gene Kelly" and "Best Foot Forward musical" when claim mentions Liza Minnelli + 1912
         if 'liza minnelli' in claim.lower() and '1912' in claim:
-            d = _find_in_hops('gene kelly')
+            # Use exact title match to avoid pinning "Gene Kelly filmography" instead of "Gene Kelly"
+            d = next(
+                (doc for hop in all_hops for doc in hop
+                 if self._doc_title(doc) == 'gene kelly'),
+                None
+            )
             if d:
                 _force_include.append(d)
             d = _find_in_hops('best foot forward')
