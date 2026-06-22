@@ -1,19 +1,21 @@
 ## PARENT_MODULE_PATH: "langProBe.hover.hover_pipeline.HoverMultiHopPipeline"
 
-## ARCHITECTURE TITLE: "3-hop retrieval with entity-extraction-from-passages (ExtractNextQuery), k=25, and interleaved round-robin deduplication"
+## ARCHITECTURE TITLE: "5-hop retrieval with parallel 3-query claim extraction (GenerateClaimQueries) + gap-fill hops (ExtractGapQuery), k=25, interleaved round-robin deduplication"
 
 ## ARCHITECTURE SUMMARY:
-HoverMultiHopPipeline wraps HoverMultiHop, a 3-hop multi-hop retrieval system that retrieves 25 candidates per hop using DSPy's ColBERTv2 retriever. Instead of summarizing passages and gap-filling, hops 2 and 3 use a single shared `ExtractNextQuery` DSPy Signature that reads the raw retrieved passages directly and identifies the most important named entity not yet covered by retrieved titles. This entity-extraction approach preserves specific names mentioned in passages (e.g., actor names, film titles) that would be lost through summarization. After all three hops, candidates are merged via interleaved round-robin deduplication, and the final output is at most 21 unique documents.
+HoverMultiHopPipeline wraps HoverMultiHop, a 5-hop multi-hop retrieval system. Instead of sequentially deriving queries from retrieved passages, the new architecture begins with a single LM call (`GenerateClaimQueries`) that reads the raw claim and generates 3 distinct targeted queries simultaneously — one per expected Wikipedia article, covering both explicitly named entities and implied/described ones. Hops 1–3 execute these 3 targeted queries (k=25 each). Hops 4–5 use `ExtractGapQuery` to identify and fill retrieval gaps by inspecting already-retrieved passages and an explicit `already_searched` field that prevents repeated queries. After all five hops, candidates are merged via interleaved round-robin deduplication capped at 21 unique documents.
 
 ## ARCHITECTURE DESCRIPTION:
 HoverMultiHopPipeline is the top-level entry point. It configures the language model (gpt-5.4-nano with low reasoning effort) and a CountingRM-wrapped ColBERTv2 retriever, then delegates all retrieval logic to HoverMultiHop via a dspy.context call.
 
-HoverMultiHop performs three retrieval hops, each with k=25 candidates, using only 2 LM calls total (one for hop 2 and one for hop 3):
+HoverMultiHop performs five retrieval hops with k=25 candidates each, using 3 LM calls total:
 
-- **Hop 1**: Retrieves directly from the raw claim. No LM call is made; the top-10 passage titles are collected for deduplication tracking.
+- **GenerateClaimQueries (1 LM call)**: A ChainOfThought module over the `GenerateClaimQueries` signature reads the raw claim and outputs 3 distinct search queries simultaneously. For explicitly named entities (persons, films, shows, places), it uses the name directly. For described or implied entities, it infers the most likely Wikipedia article title. All 3 queries must target different Wikipedia articles and are kept short (1–6 words), similar to Wikipedia article titles. This single upfront call replaces the previous pattern of deriving queries one-by-one from retrieved passages, which frequently missed entities explicitly named in the claim.
 
-- **Hop 2**: `extract_query` (ExtractNextQuery signature) receives the claim, top-5 raw passages from hop 1, and the semicolon-separated hop-1 titles. It uses ChainOfThought to identify the single most important named entity from the passages that is directly relevant to the claim but not yet retrieved, outputting a short precise search query (typically just the entity name). This entity-first approach preserves specific names mentioned in passages that would be lost through summarization.
+- **Hops 1–3**: The 3 queries from `GenerateClaimQueries` are each sent to the ColBERTv2 retriever (k=25). These targeted hops maximize recall for the ~3 Wikipedia articles the claim typically requires.
 
-- **Hop 3**: `extract_query` is called again with the claim, the combined top-3 passages from hops 1 and 2, and the full semicolon-separated titles from both hops. It identifies the next missing entity and generates a targeted search query for it.
+- **Hop 4 (ExtractGapQuery, 1 LM call)**: A ChainOfThought module over `ExtractGapQuery` receives the claim, the top-3 passages from each of hops 1–3, and a semicolon-separated `already_searched` string listing all prior queries. It prioritizes claim entities not yet surfaced in retrieved passages, then falls back to passage hints. It outputs a single short query for the most important missing article without repeating prior queries.
 
-**Merge — interleaved round-robin deduplication**: Rather than naively concatenating hop lists, we iterate round i=0..24 and, for each hop in order (hop1, hop2, hop3), add hop[i] to the final list if its title (the part before " | ") has not been seen before. We stop once 21 unique documents are collected. The final `dspy.Prediction(retrieved_docs=final_docs[:21])` is returned upstream to the evaluator.
+- **Hop 5 (ExtractGapQuery, 1 LM call)**: Same as hop 4 but receives top-2 passages from each of hops 1–4 and the updated `already_searched` string including hop 4's query.
+
+**Merge — interleaved round-robin deduplication**: Round-robin across all 5 hop lists (prioritizing hops 1–3), adding each document if its normalised title (before " | ") has not been seen. Stops at 21 unique documents. The final `dspy.Prediction(retrieved_docs=final_docs[:21])` is returned upstream to the evaluator.
