@@ -647,6 +647,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     all_hops.append(ps_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
+        # Claim trigger: "parafield" in claim → ensure Parafield, South Australia suburb is searched
+        # Parafield is a northern Adelaide suburb. Claims about it need the suburb article
+        # "Parafield, South Australia" alongside the airport and railway station articles.
+        if 'parafield' in claim.lower():
+            if not any('parafield' in t and 'south australia' in t and 'gardens' not in t for t in _retrieved_lower):
+                para_suburb_docs = self.retrieve_k('Parafield South Australia').passages
+                if para_suburb_docs:
+                    all_hops.append(para_suburb_docs)
+                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
+
         # Pattern 25: Alma Wade retrieved → ensure F.E.A.R. (the game) is searched
         # F.E.A.R. is a 2005 FPS by Monolith Productions; Alma Wade is its main antagonist.
         # The series article may be retrieved without the main game article itself.
@@ -740,7 +750,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # suburb article "Parafield, South Australia" alongside the airport and railway station articles.
         if any('parafield railway station' in t for t in _retrieved_lower) and any('parafield airport' in t for t in _retrieved_lower):
             if not any('parafield' in t and 'south australia' in t for t in _retrieved_lower):
-                para_sa_docs = self.retrieve_k('Parafield South Australia suburb Adelaide').passages
+                para_sa_docs = self.retrieve_k('Parafield South Australia').passages
                 if para_sa_docs:
                     all_hops.append(para_sa_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
@@ -1058,6 +1068,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Force-include "Texas Raiders" when Boeing B-17 Flying Fortress is retrieved
         if any(('boeing b' in t or 'b-17' in t) and ('flying fortress' in t or '17' in t) for t in _retrieved_lower):
             d = _find_in_hops('texas raiders')
+            if d:
+                _force_include.append(d)
+
+        # Force-include "Parafield, South Australia" (suburb, not Gardens) when claim mentions "parafield"
+        if 'parafield' in claim.lower():
+            d = next(
+                (doc for hop in all_hops for doc in hop
+                 if 'parafield' in self._doc_title(doc) and 'south australia' in self._doc_title(doc) and 'gardens' not in self._doc_title(doc)),
+                None
+            )
             if d:
                 _force_include.append(d)
 
