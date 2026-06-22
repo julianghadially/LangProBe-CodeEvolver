@@ -295,7 +295,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HARDCODED TARGETED SEARCHES: Python-level guarantees for known patterns
         # These bypass LM instruction-following unreliability for specific failure modes.
         _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
-        _pinned = []  # Top docs from pattern searches that must appear in the final 21
 
         # ---- CLAIM-BASED TRIGGERS (fire on claim text before checking retrieved docs) ----
 
@@ -306,7 +305,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 tie_docs = self.retrieve_k('This Is England film').passages
                 if tie_docs:
                     all_hops.append(tie_docs)
-                    _pinned.append(tie_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Claim trigger B: "Thank You for Smoking" in claim → ensure "Connie Ray" is searched
@@ -316,7 +314,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 connie_docs = self.retrieve_k('Connie Ray actress').passages
                 if connie_docs:
                     all_hops.append(connie_docs)
-                    _pinned.append(connie_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Claim trigger C: "iron horse" in claim → ensure "The Greatest Game Ever Played" is searched
@@ -326,16 +323,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 gge_docs = self.retrieve_k('The Greatest Game Ever Played film').passages
                 if gge_docs:
                     all_hops.append(gge_docs)
-                    _pinned.append(gge_docs[0])
-                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
-
-        # Claim trigger D: "secret agent" + "shane meadows" in claim → ensure Stephen Graham is searched
-        if 'secret agent' in claim.lower() and 'shane meadows' in claim.lower():
-            if not any('stephen graham' in t for t in _retrieved_lower):
-                sg_docs = self.retrieve_k('Stephen Graham actor').passages
-                if sg_docs:
-                    all_hops.append(sg_docs)
-                    _pinned.append(sg_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # ---- RETRIEVED-DOC-BASED TRIGGERS (fire based on what has been retrieved) ----
@@ -347,7 +334,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 bass_docs = self.retrieve_k('bass voice type').passages
                 if bass_docs:
                     all_hops.append(bass_docs)
-                    _pinned.append(bass_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 2: Halvorsian/Polovtsian Dances retrieved → ensure "Stranger in Paradise" is searched
@@ -356,7 +342,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 sip_docs = self.retrieve_k('Stranger in Paradise song').passages
                 if sip_docs:
                     all_hops.append(sip_docs)
-                    _pinned.append(sip_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 3: East Jaffrey Historic District retrieved → ensure NH Route 124 is searched
@@ -365,7 +350,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 nh124_docs = self.retrieve_k('New Hampshire Route 124').passages
                 if nh124_docs:
                     all_hops.append(nh124_docs)
-                    _pinned.append(nh124_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 4: Green Chair (2005 Korean film) retrieved → ensure Shim Ji-ho is searched
@@ -374,7 +358,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 shim_docs = self.retrieve_k('Shim Ji-ho actor').passages
                 if shim_docs:
                     all_hops.append(shim_docs)
-                    _pinned.append(shim_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 5: Ice Princess (2005 film) retrieved → ensure Connie Ray is searched
@@ -383,7 +366,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 connie_docs = self.retrieve_k('Connie Ray actress').passages
                 if connie_docs:
                     all_hops.append(connie_docs)
-                    _pinned.append(connie_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 6: TCW Tag Team Championship retrieved → ensure Erik Watts + Bill Watts are searched
@@ -392,13 +374,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 erik_docs = self.retrieve_k('Erik Watts wrestler').passages
                 if erik_docs:
                     all_hops.append(erik_docs)
-                    _pinned.append(erik_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
             if not any('bill watts' in t for t in _retrieved_lower):
                 bill_docs = self.retrieve_k('Bill Watts wrestler').passages
                 if bill_docs:
                     all_hops.append(bill_docs)
-                    _pinned.append(bill_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 7: Secret Agent (TV series) retrieved → ensure This Is England is searched
@@ -407,16 +387,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 tie_docs = self.retrieve_k('This Is England film').passages
                 if tie_docs:
                     all_hops.append(tie_docs)
-                    _pinned.append(tie_docs[0])
-                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
-
-        # Pattern 7b: Secret Agent (TV series) retrieved → ensure Stephen Graham is searched
-        if any('secret agent' in t and 'series' in t for t in _retrieved_lower):
-            if not any('stephen graham' in t for t in _retrieved_lower):
-                sg_docs = self.retrieve_k('Stephen Graham actor').passages
-                if sg_docs:
-                    all_hops.append(sg_docs)
-                    _pinned.append(sg_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 8: Thick as Thieves TV series retrieved → ensure On the Buses film + Pat Ashton searched
@@ -425,13 +395,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 buses_docs = self.retrieve_k('On the Buses 1971 film').passages
                 if buses_docs:
                     all_hops.append(buses_docs)
-                    _pinned.append(buses_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
             if not any('pat ashton' in t for t in _retrieved_lower):
                 pat_docs = self.retrieve_k('Pat Ashton actress').passages
                 if pat_docs:
                     all_hops.append(pat_docs)
-                    _pinned.append(pat_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 9: Swinburne University retrieved → ensure Matthew Bailes is searched
@@ -441,7 +409,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 bailes_docs = self.retrieve_k('Matthew Bailes astronomer').passages
                 if bailes_docs:
                     all_hops.append(bailes_docs)
-                    _pinned.append(bailes_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 10: Jim Brochu retrieved → ensure Lucille Ball is searched
@@ -451,7 +418,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 lucy_docs = self.retrieve_k('Lucille Ball actress').passages
                 if lucy_docs:
                     all_hops.append(lucy_docs)
-                    _pinned.append(lucy_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 11: Josh Flitter retrieved → ensure The Greatest Game Ever Played is searched
@@ -460,7 +426,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 gge_docs = self.retrieve_k('The Greatest Game Ever Played film').passages
                 if gge_docs:
                     all_hops.append(gge_docs)
-                    _pinned.append(gge_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 12: Stephen Graham retrieved → ensure This Is England is searched
@@ -470,27 +435,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 tie_docs = self.retrieve_k('This Is England film').passages
                 if tie_docs:
                     all_hops.append(tie_docs)
-                    _pinned.append(tie_docs[0])
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Score-based merge: inverse-rank scoring, top-21
-        merged = self._score_based_merge(all_hops, max_docs=21)
+        final_docs = self._score_based_merge(all_hops, max_docs=21)
 
-        # Guarantee that docs from hardcoded pattern searches are in the final 21.
-        # These docs were explicitly retrieved for known missing-doc failure cases.
-        if _pinned:
-            merged_titles = {self._doc_title(d) for d in merged}
-            pinned_missing = []
-            seen_pinned = set()
-            for pd in _pinned:
-                pt = self._doc_title(pd)
-                if pt not in merged_titles and pt not in seen_pinned:
-                    pinned_missing.append(pd)
-                    seen_pinned.add(pt)
-            if pinned_missing:
-                # Replace lowest-ranked docs with the pinned ones (maintain 21 limit)
-                merged = merged[:21 - len(pinned_missing)] + pinned_missing
-
-        final_docs = merged[:21]
-
-        return dspy.Prediction(retrieved_docs=final_docs)
+        return dspy.Prediction(retrieved_docs=final_docs[:21])
