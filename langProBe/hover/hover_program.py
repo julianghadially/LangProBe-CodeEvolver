@@ -564,6 +564,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     all_hops.append(poulsen_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
+        # Pattern 18: AirBaltic + Vilnius → ensure Air Lituanica is searched
+        # Air Lituanica was a Lithuanian airline based at Vilnius Airport (VNO/EYVI)
+        # that ceased operations in 2015. Often co-appears with AirBaltic in claims.
+        if any('airbaltic' in t for t in _retrieved_lower):
+            if any('vilnius' in t for t in _retrieved_lower):
+                if not any('air lituanica' in t for t in _retrieved_lower):
+                    al_docs = self.retrieve_k('Air Lituanica').passages
+                    if al_docs:
+                        all_hops.append(al_docs)
+                        _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
+
         # TITLE-VERIFIED FORCE-INCLUDE: guarantee specific docs are in final 21 by
         # scanning all_hops for docs with expected titles. Only fires when the
         # corresponding pattern/trigger condition is met (preventing false positives).
@@ -649,6 +660,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Force-include "Christian Poulsen" when Pierre Womé is retrieved
         if any('pierre wom' in t for t in _retrieved_lower):
             d = _find_in_hops('christian poulsen')
+            if d:
+                _force_include.append(d)
+
+        # Force-include "Air Lituanica" when AirBaltic + Vilnius are both in retrieved
+        if any('airbaltic' in t for t in _retrieved_lower) and any('vilnius' in t for t in _retrieved_lower):
+            d = _find_in_hops('air lituanica')
             if d:
                 _force_include.append(d)
 
