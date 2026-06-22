@@ -35,8 +35,10 @@ class GenerateClaimQueries(dspy.Signature):
 
     Additional strategy for q3 or q4:
     - If the claim uses phrases like "in this religion", "this culture", "in this country/city" → generate a query for the BROADER TOPIC article (e.g., "Ancient Egyptian religion", "Education in Cork")
-    - If the claim mentions "[a composition/piece] was performed by X" → check if the composition has a famous adaptation (e.g., "Stranger in Paradise (song)" from "Polovtsian Dances")
+    - If the claim mentions "[a composition/piece] was performed by X" → q4 MUST be the famous POPULAR SONG ADAPTATION of the composition (e.g., "Stranger in Paradise song" from "Polovtsian Dances" — NOT the source opera). This adaptation article is often the 3rd required document.
     - If claim says "[place] has several [things]" → also include the overview article (e.g., "Education in Cork" when claim says "Cork has several colleges")
+    - If claim says "[person X] used [inheritance/money] to found/establish [city/institution]" → q4 should be X's spouse or co-founder who also has a Wikipedia article (e.g., for Augustus Chapman Allen who founded Houston → also search for "Charlotte Baldwin Allen" his wife and co-founder)
+    - If claim mentions a specific aircraft/vehicle at a named location → q4 should be the specific named aircraft/vehicle (e.g., "Texas Raiders" B-17 at Conroe North Houston Regional Airport)
 
     CRITICAL: All 5 queries MUST target DIFFERENT Wikipedia articles.
     CRITICAL: Target specific Wikipedia article titles, NOT general concepts or locations.
@@ -76,6 +78,12 @@ class ExtractGapQuery(dspy.Signature):
     - "passage mentions song/film title that claim's performer/choir is associated with" → search for that specific song or film title directly
     - "host of a game show" or "number of shows hosted" → search for the host's name and/or the show title directly
     - IMPORTANT: If already_searched contains multiple variations of a similar query (e.g., airport name twice), STOP generating more airport queries — look for a completely different angle based on the claim's other details
+
+    WORLD KNOWLEDGE — when passages don't contain the clue, use your own knowledge:
+    - If claim involves a classical music piece → you know its famous popular song adaptations (e.g., "Halvtsian Dances" → "Stranger in Paradise song"; search for the adaptation directly)
+    - If claim mentions [person X] founded [city/institution] and X's article is retrieved but spouse not found → search for X's spouse by name (e.g., Augustus Chapman Allen's wife was "Charlotte Baldwin Allen")
+    - If a video game is needed but series article was retrieved → spell out the full title or use the developer/year to find the specific game (e.g., "First Encounter Assault Recon" for F.E.A.R.)
+    - If claim mentions a game/show host who "hosted N shows" → search for that specific host by name
 
     Rules:
     - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
