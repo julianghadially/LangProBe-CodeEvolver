@@ -24,26 +24,34 @@ class GenerateClaimQueries(dspy.Signature):
 
 
 class ExtractGapQuery(dspy.Signature):
-    """Given a claim and passages already retrieved, identify the single most important
-    Wikipedia article NOT yet retrieved.
+    """You are helping retrieve Wikipedia articles for a factual claim.
+    The claim requires approximately 3 specific Wikipedia articles.
 
-    Process:
-    1. List the ~3 specific Wikipedia articles required by the claim (persons, films, songs, seasons, etc.)
-    2. Check each against retrieved passages to find which are MISSING
-    3. Focus on the most important missing article
+    Step 1: Check retrieved_titles — which articles have ALREADY been found?
+    Step 2: Read key_passages carefully — do they MENTION entity names that:
+       a) Are referenced by the claim (directly or by description), AND
+       b) Are NOT yet listed in retrieved_titles?
+    Step 3: Identify the single most important missing article.
+    Step 4: Generate a precise short query for it.
 
-    Key rules:
-    - For persons: search their full name directly (e.g., "Billy Corgan" not "The Smashing Pumpkins")
-    - For sports seasons: use exact format "YEAR-YY TeamName season"
-    - For films: use film title + "(film)" if needed
-    - For songs: use song title + "(song)" if needed
-    - NEVER generate a query that is in already_searched (check carefully!)
-    - NEVER generate a query for a general concept, location, or topic — target a specific Wikipedia article"""
+    CRITICAL patterns — look for these in key_passages:
+    - "X was created/founded by Y" → if claim needs the creator, search for "Y" (person's full name)
+    - "film/show X stars actor Y" → if claim needs that actor, search for "Y"
+    - "owned/produced by company X" → if claim needs that owner, search for "X"
+    - "book/work A written by B" → if claim references the author, search for "B"
+    - "directed by Y" → if claim needs the director, search for "Y"
+
+    Rules:
+    - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
+    - For films: add "(film)" if needed to disambiguate
+    - NEVER repeat a query from already_searched
+    - Target specific Wikipedia article titles, not general topics"""
 
     claim: str = dspy.InputField()
-    passages: str = dspy.InputField(desc="passages already retrieved from hops 1-3 (or 1-4 or 1-5)")
+    retrieved_titles: str = dspy.InputField(desc="pipe-separated list of Wikipedia article titles already retrieved — check these to know what has been found")
+    key_passages: str = dspy.InputField(desc="text excerpts from the top retrieved article per hop — scan these for entity names the claim also needs but are missing from retrieved_titles")
     already_searched: str = dspy.InputField(desc="queries already used — do NOT repeat these")
-    missing_entity: str = dspy.OutputField(desc="the specific missing Wikipedia article title (e.g., 'Billy Corgan', '2004-05 Memphis Grizzlies season')")
+    missing_entity: str = dspy.OutputField(desc="the specific missing Wikipedia article title (e.g., 'Billy Corgan', 'Mars Incorporated', 'Warren Fu')")
     query: str = dspy.OutputField(desc="short search query (1-6 words) for the missing Wikipedia article")
 
 
@@ -74,6 +82,28 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 return True
         return False
 
+    def _get_retrieved_titles(self, *doc_lists) -> str:
+        """Get unique document titles from multiple hop results as pipe-separated string."""
+        titles = []
+        seen = set()
+        for docs in doc_lists:
+            for doc in docs[:5]:  # top 5 from each hop
+                title_norm = self._doc_title(doc)
+                if title_norm not in seen:
+                    seen.add(title_norm)
+                    titles.append(doc.split(" | ")[0].strip())  # original casing
+        return " | ".join(titles)
+
+    def _get_key_passages(self, *doc_lists) -> str:
+        """Get the top passage from each hop, truncated for focus."""
+        passages = []
+        for docs in doc_lists:
+            if docs:
+                # Top passage from each hop, truncated to 500 chars
+                passage = docs[0][:500]
+                passages.append(passage)
+        return "\n\n---\n\n".join(passages)
+
     def forward(self, claim):
         # STEP 1: Generate 3 targeted queries from the claim in one shot
         cq = self.generate_queries(claim=claim)
@@ -84,41 +114,48 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop2_docs = self.retrieve_k(q2).passages
         hop3_docs = self.retrieve_k(q3).passages
 
-        # Build context for gap analysis
-        context_123 = "\n\n".join(hop1_docs[:3] + hop2_docs[:3] + hop3_docs[:3])
+        # Build structured context for gap analysis: titles + focused passages
+        titles_123 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs)
+        passages_123 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs)
         already_searched_123 = f"{q1}; {q2}; {q3}"
 
         # HOP 4: first gap-fill query
         hop4_result = self.extract_gap(
             claim=claim,
-            passages=context_123,
+            retrieved_titles=titles_123,
+            key_passages=passages_123,
             already_searched=already_searched_123,
         )
         hop4_query = hop4_result.query
         hop4_docs = self.retrieve_k(hop4_query).passages
 
         # HOP 5: second gap-fill query
-        context_1234 = "\n\n".join(hop1_docs[:2] + hop2_docs[:2] + hop3_docs[:2] + hop4_docs[:2])
+        titles_1234 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
+        passages_1234 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
         already_searched_1234 = f"{already_searched_123}; {hop4_query}"
         hop5_result = self.extract_gap(
             claim=claim,
-            passages=context_1234,
+            retrieved_titles=titles_1234,
+            key_passages=passages_1234,
             already_searched=already_searched_1234,
         )
         hop5_query = hop5_result.query
         hop5_docs = self.retrieve_k(hop5_query).passages
 
         # HOP 6: third gap-fill query (only if not a duplicate)
-        context_12345 = "\n\n".join(hop1_docs[:2] + hop2_docs[:2] + hop3_docs[:2] + hop4_docs[:2] + hop5_docs[:2])
+        all_queries = [q1, q2, q3, hop4_query, hop5_query]
+        titles_12345 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
+        passages_12345 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
         already_searched_12345 = f"{already_searched_1234}; {hop5_query}"
         hop6_result = self.extract_gap(
             claim=claim,
-            passages=context_12345,
+            retrieved_titles=titles_12345,
+            key_passages=passages_12345,
             already_searched=already_searched_12345,
         )
         hop6_query = hop6_result.query
         hop6_docs = []
-        if not self._is_duplicate_query(hop6_query, [q1, q2, q3, hop4_query, hop5_query]):
+        if not self._is_duplicate_query(hop6_query, all_queries):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
         # Interleaved round-robin merge with deduplication
