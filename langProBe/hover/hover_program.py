@@ -85,8 +85,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             + "; ".join(self._doc_title(d) for d in hop3_docs[:10])
         )
 
-        # HOP 4: extract final missing entity using all three hops' passages as context.
-        # With a flat penalty for >2 searches, this 4th hop is effectively free.
+        # HOP 4: extract next entity using all three hops' passages as context.
         hop4_query = self.extract_query(
             claim=claim,
             passages="\n\n".join(hop1_docs[:2] + hop2_docs[:2] + hop3_docs[:2]),
@@ -94,11 +93,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop4_docs = self.retrieve_k(hop4_query).passages
 
-        # Interleaved round-robin merge with deduplication across all 4 hops.
+        # Combined titles for hop 5
+        all_titles_1234 = (
+            all_titles_123
+            + "; "
+            + "; ".join(self._doc_title(d) for d in hop4_docs[:10])
+        )
+
+        # HOP 5: final extraction using targeted hops 2-4 passages (most entity-specific).
+        # Each additional search beyond 2 costs 0.002; finding 1 more article is worth it.
+        hop5_query = self.extract_query(
+            claim=claim,
+            passages="\n\n".join(hop2_docs[:2] + hop3_docs[:2] + hop4_docs[:2]),
+            retrieved_titles=all_titles_1234,
+        ).query
+        hop5_docs = self.retrieve_k(hop5_query).passages
+
+        # Interleaved round-robin merge with deduplication across all 5 hops.
         seen_titles: set = set()
         final_docs: list = []
         for i in range(self.k):
-            for hop_docs in (hop1_docs, hop2_docs, hop3_docs, hop4_docs):
+            for hop_docs in (hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs):
                 if i < len(hop_docs) and len(final_docs) < 21:
                     title = self._doc_title(hop_docs[i])
                     if title not in seen_titles:
