@@ -85,10 +85,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def _is_duplicate_query(self, new_query: str, previous_queries: list) -> bool:
         """Check if new_query is effectively the same as any previous query."""
+        from difflib import SequenceMatcher
         new_norm = new_query.lower().strip().rstrip('?').strip()
         for prev in previous_queries:
             prev_norm = prev.lower().strip().rstrip('?').strip()
             if new_norm == prev_norm:
+                return True
+            # Fuzzy check: catch near-duplicates (typos, formatting variations)
+            similarity = SequenceMatcher(None, new_norm, prev_norm).ratio()
+            if similarity > 0.85:
                 return True
         return False
 
@@ -124,9 +129,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_docs = self.retrieve_k(q3).passages
         hop4_docs = self.retrieve_k(q4).passages
 
-        # Build context for gap analysis using top-1 passage per hop
+        # Build context for gap analysis using top-2 passages per hop
         titles_1234 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
-        passages_1234 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs)
+        passages_1234 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, top_n=2)
         already_searched_1234 = f"{q1}; {q2}; {q3}; {q4}"
 
         # HOP 5: first gap-fill query
@@ -142,7 +147,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 6: second gap-fill query (only if not a duplicate)
         all_queries = [q1, q2, q3, q4, hop5_query]
         titles_12345 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
-        passages_12345 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
+        passages_12345 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, top_n=2)
         already_searched_12345 = f"{already_searched_1234}; {hop5_query}"
         hop6_result = self.extract_gap(
             claim=claim,
@@ -155,10 +160,28 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if not self._is_duplicate_query(hop6_query, all_queries):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
+        # HOP 7: third gap-fill query (only if not a duplicate)
+        all_queries_up_to_6 = all_queries + [hop6_query] if not self._is_duplicate_query(hop6_query, all_queries) else list(all_queries)
+        titles_up_to_6 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs)
+        passages_up_to_6 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, top_n=2)
+        already_searched_up_to_6 = "; ".join(all_queries_up_to_6)
+        hop7_result = self.extract_gap(
+            claim=claim,
+            retrieved_titles=titles_up_to_6,
+            key_passages=passages_up_to_6,
+            already_searched=already_searched_up_to_6,
+        )
+        hop7_query = hop7_result.query
+        hop7_docs = []
+        if not self._is_duplicate_query(hop7_query, all_queries_up_to_6):
+            hop7_docs = self.retrieve_k(hop7_query).passages
+
         # Interleaved round-robin merge with deduplication
         all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
         if hop6_docs:
             all_hops.append(hop6_docs)
+        if hop7_docs:
+            all_hops.append(hop7_docs)
 
         seen_titles: set = set()
         final_docs: list = []
