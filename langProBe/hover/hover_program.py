@@ -76,13 +76,38 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop3_docs = self.retrieve_k(gap.entity1).passages
         hop4_docs = self.retrieve_k(gap.entity2).passages
 
-        # Interleaved round-robin merge with deduplication.
-        # At each round i, we take position i from hop1, hop2, hop3, hop4
-        # (skipping duplicates by title). All four hops contribute equally.
+        # Tiered merge with deduplication:
+        #   Phase 1 — top 7 unique docs from hop1 (broad claim search, highest precision)
+        #   Phase 2 — top 7 unique docs from hop2 not already in hop1
+        #   Phase 3 — fill remaining 7 slots via round-robin from entity-targeted hops 3+4
+        #
+        # This guarantees hops 1 & 2 maintain their full 7-slot quota (same as the
+        # original 3-hop baseline), while adding 7 entity-targeted slots from hops 3+4.
+        # Strictly better than the 3-hop baseline for "1 doc missing" failures.
         seen_titles: set = set()
         final_docs: list = []
+
+        # Phase 1: top 7 from hop1
+        for doc in hop1_docs:
+            if len(final_docs) >= 7:
+                break
+            title = self._doc_title(doc)
+            if title not in seen_titles:
+                seen_titles.add(title)
+                final_docs.append(doc)
+
+        # Phase 2: top 7 from hop2 (not already seen)
+        for doc in hop2_docs:
+            if len(final_docs) >= 14:
+                break
+            title = self._doc_title(doc)
+            if title not in seen_titles:
+                seen_titles.add(title)
+                final_docs.append(doc)
+
+        # Phase 3: round-robin from hop3+hop4 to fill remaining slots (up to 21)
         for i in range(self.k):
-            for hop_docs in (hop1_docs, hop2_docs, hop3_docs, hop4_docs):
+            for hop_docs in (hop3_docs, hop4_docs):
                 if i < len(hop_docs) and len(final_docs) < 21:
                     title = self._doc_title(hop_docs[i])
                     if title not in seen_titles:
