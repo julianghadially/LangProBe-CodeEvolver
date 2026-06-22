@@ -710,14 +710,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     all_hops.append(aer_docs2)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
-        # Pattern 29b: Comair South Africa retrieved + British Airways in claim → search franchise destinations
-        # Comair is a British Airways franchisee in South Africa. The claim often requires
-        # "British Airways franchise destinations" article which covers all BA franchise operators.
+        # Pattern 29b: Comair South Africa retrieved → search franchise destinations + Airlines of Africa
+        # Comair is a British Airways franchisee in South Africa. Claims about it often require
+        # "British Airways franchise destinations" and "Airlines of Africa" articles.
         if any('comair' in t and 'south africa' in t for t in _retrieved_lower):
             if not any('british airways franchise' in t or 'franchise destinations' in t for t in _retrieved_lower):
                 bafd_docs = self.retrieve_k('British Airways franchise destinations').passages
                 if bafd_docs:
                     all_hops.append(bafd_docs)
+                    _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
+            if not any('airlines of africa' in t for t in _retrieved_lower):
+                aoa_docs = self.retrieve_k('Airlines of Africa').passages
+                if aoa_docs:
+                    all_hops.append(aoa_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
 
         # Pattern 29: Boeing B-17 Flying Fortress retrieved → ensure Texas Raiders is searched
@@ -1005,7 +1010,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if d:
                 _force_include.append(d)
 
-        # Force-include "British Airways franchise destinations" when Comair South Africa is retrieved
+        # Force-include "British Airways franchise destinations" and "Airlines of Africa"
+        # when Comair South Africa is retrieved
         if any('comair' in t and 'south africa' in t for t in _retrieved_lower):
             d = next(
                 (doc for hop in all_hops for doc in hop
@@ -1013,6 +1019,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                  'franchise destinations' in self._doc_title(doc)),
                 None
             )
+            if d:
+                _force_include.append(d)
+            d = _find_in_hops('airlines of africa')
             if d:
                 _force_include.append(d)
 
