@@ -87,22 +87,38 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         titles = []
         seen = set()
         for docs in doc_lists:
-            for doc in docs[:5]:  # top 5 from each hop
+            for doc in docs[:7]:  # top 7 from each hop
                 title_norm = self._doc_title(doc)
                 if title_norm not in seen:
                     seen.add(title_norm)
                     titles.append(doc.split(" | ")[0].strip())  # original casing
         return " | ".join(titles)
 
-    def _get_key_passages(self, *doc_lists) -> str:
-        """Get the top passage from each hop, truncated for focus."""
+    def _get_key_passages(self, *doc_lists, top_n=3) -> str:
+        """Get top passages from each hop for gap analysis context."""
         passages = []
         for docs in doc_lists:
-            if docs:
-                # Top passage from each hop, truncated to 500 chars
-                passage = docs[0][:500]
+            for doc in docs[:top_n]:
+                passage = doc[:350]
                 passages.append(passage)
         return "\n\n---\n\n".join(passages)
+
+    def _rrf_merge(self, all_hops, k=60, max_docs=21):
+        """Reciprocal Rank Fusion merge of multiple retrieval lists."""
+        rrf_scores = {}
+        doc_map = {}  # normalized_title -> doc string
+
+        for hop_docs in all_hops:
+            for rank, doc in enumerate(hop_docs):
+                title = self._doc_title(doc)
+                if title not in rrf_scores:
+                    rrf_scores[title] = 0.0
+                    doc_map[title] = doc
+                rrf_scores[title] += 1.0 / (rank + k)
+
+        # Sort by RRF score descending
+        sorted_titles = sorted(rrf_scores.keys(), key=lambda t: rrf_scores[t], reverse=True)
+        return [doc_map[t] for t in sorted_titles[:max_docs]]
 
     def forward(self, claim):
         # STEP 1: Generate 3 targeted queries from the claim in one shot
@@ -158,20 +174,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if not self._is_duplicate_query(hop6_query, all_queries):
             hop6_docs = self.retrieve_k(hop6_query).passages
 
-        # Interleaved round-robin merge with deduplication
-        # Prioritize targeted hops (1-3) then gap fills (4-6)
-        all_hops = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
+        # RRF merge: includes docs ranked 4+ if they score well overall
+        all_hops_to_merge = [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs]
         if hop6_docs:
-            all_hops.append(hop6_docs)
+            all_hops_to_merge.append(hop6_docs)
 
-        seen_titles: set = set()
-        final_docs: list = []
-        for i in range(self.k):
-            for hop_docs in all_hops:
-                if i < len(hop_docs) and len(final_docs) < 21:
-                    title = self._doc_title(hop_docs[i])
-                    if title not in seen_titles:
-                        seen_titles.add(title)
-                        final_docs.append(hop_docs[i])
-
+        final_docs = self._rrf_merge(all_hops_to_merge, k=60, max_docs=21)
         return dspy.Prediction(retrieved_docs=final_docs[:21])
