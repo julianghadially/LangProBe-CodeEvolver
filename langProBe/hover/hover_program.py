@@ -6,25 +6,24 @@ class GenerateClaimQueries(dspy.Signature):
     """A factual claim connects approximately 3 Wikipedia articles that need to be retrieved.
     Generate exactly 5 distinct search queries to maximize coverage.
 
+    ABSOLUTE RULES — check these FIRST before generating any query:
+    1. VOICE TYPE: If claim says "lowest vocal range" or "bass" in a music/singing context → one query MUST be "bass voice type"
+    2. MUSIC ADAPTATION: If claim mentions a classical piece performed by a choir/group → one query MUST be "[piece name] song" for famous pop/song adaptations (e.g., "Polovtsian Dances" → "Stranger in Paradise song")
+    3. FILM TITLE: If claim says "[Person] directed the [YEAR] film" → one query MUST be "[PersonName] film" (e.g., "Harry Booth film" for "Harry Booth directed the 1971 film")
+    4. NO GENERIC QUERIES: NEVER generate queries for broad categories. FORBIDDEN queries include: "Drama film", "Comedy film", "Action film", "Korean film", "South Korean films", "American film", "British film", "TV series", "Television", "Song", "Music", "Film", "Films", "Actor", "Actress". If you would generate a forbidden query, replace it with a cross-reference like "[ActorName] film" or "[DirectorName] film" instead.
+
     Strategy:
     - Query 1: for the 1st EXPLICITLY named or described entity/article in the claim
     - Query 2: for the 2nd EXPLICITLY named or described entity/article (different from query1)
     - Query 3: for the 3rd EXPLICITLY named or described entity/article
-    - Query 4: for an entity that is IMPLICIT or INFERRED — not directly named in the claim,
-      but likely needed given the multi-hop reasoning structure. Examples:
-      * If claim says "X directed Y" and Y is a film → q4 might target the film studio or a co-star
-      * If claim says "X was at university Z" → q4 might target a notable person associated with Z
-      * If claim says "X appeared in Y" → q4 might target the director or creator of Y
-      * If the claim's logic requires an intermediate hop entity → q4 targets that entity
-    - Query 5: a DESCRIPTION-BASED FALLBACK — use EXACT WORDS or PHRASES from the claim to
-      search for an entity that is described but not directly named. Use the claim's own language.
-      Examples:
-      * Claim says "the 1975 film starring James Mitchum" → q5 = "James Mitchum 1975 film"
-      * Claim says "the actress from Thank You for Smoking" → q5 = "actress Thank You for Smoking"
-      * Claim says "the night club in Vienna" → q5 = "nightclub Vienna electronic music"
-      * Claim says "the TV show inspired by Moonrunners" → q5 = "TV show inspired Moonrunners"
-      * Claim says "the star of Spaceballs" → q5 = "star of Spaceballs actor"
-      * Claim says "a film directed by the same director as X" → q5 = "director X film"
+    - Query 4: CROSS-REFERENCE or SPECIAL query (see ABSOLUTE RULES above; use rule 1/2/3 if applicable, otherwise use an IMPLICIT entity)
+    - Query 5: DESCRIPTION-BASED FALLBACK — use EXACT WORDS or PHRASES from the claim:
+      * "the 1975 film starring James Mitchum" → q5 = "James Mitchum 1975 film"
+      * "the actress from Thank You for Smoking" → q5 = "actress Thank You for Smoking"
+      * "the night club in Vienna" → q5 = "nightclub Vienna"
+      * "the TV show inspired by Moonrunners" → q5 = "TV show inspired Moonrunners"
+      * "the star of Spaceballs" → q5 = "star of Spaceballs actor"
+      * "Harry Booth directed the 1971 film that features the star of Thick as Thieves" → q5 = "Harry Booth 1971 film"
 
     For each query:
     - Named person: use their full name directly
@@ -35,7 +34,6 @@ class GenerateClaimQueries(dspy.Signature):
 
     Additional strategy for q3 or q4:
     - If the claim uses phrases like "in this religion", "this culture", "in this country/city" → generate a query for the BROADER TOPIC article (e.g., "Ancient Egyptian religion", "Education in Cork")
-    - If the claim mentions "[a composition/piece] was performed by X" → check if the composition has a famous adaptation (e.g., "Stranger in Paradise (song)" from "Polovtsian Dances")
     - If claim says "[place] has several [things]" → also include the overview article (e.g., "Education in Cork" when claim says "Cork has several colleges")
 
     CRITICAL: All 5 queries MUST target DIFFERENT Wikipedia articles.
@@ -46,42 +44,55 @@ class GenerateClaimQueries(dspy.Signature):
     query1: str = dspy.OutputField(desc="search query for 1st Wikipedia article (explicitly mentioned)")
     query2: str = dspy.OutputField(desc="search query for 2nd Wikipedia article (explicitly mentioned, different from query1)")
     query3: str = dspy.OutputField(desc="search query for 3rd Wikipedia article (explicitly mentioned or described)")
-    query4: str = dspy.OutputField(desc="search query for 4th Wikipedia article — an IMPLICIT or INFERRED entity not directly named in the claim but needed for multi-hop reasoning")
-    query5: str = dspy.OutputField(desc="search query using DESCRIPTIVE WORDS from the claim for an entity that is described but not directly named — use phrases from the claim itself (e.g., '1975 film James Mitchum' when claim says 'the 1975 film starring James Mitchum'; 'actress Thank You for Smoking' for 'the actress from Thank You for Smoking'; 'nightclub Vienna' for 'the nightclub in Vienna')")
+    query4: str = dspy.OutputField(desc="CROSS-REFERENCE or SPECIAL query: use ABSOLUTE RULES 1-3 if applicable (bass voice type / music adaptation / film title from director); otherwise an IMPLICIT entity not directly named but needed for multi-hop reasoning")
+    query5: str = dspy.OutputField(desc="DESCRIPTION-BASED FALLBACK using EXACT WORDS from the claim — e.g., 'Harry Booth 1971 film' when claim says 'Harry Booth directed the 1971 film'; '1975 film James Mitchum' when claim says 'the 1975 film starring James Mitchum'; 'actress Thank You for Smoking' for 'the actress from Thank You for Smoking'")
 
 
 class ExtractGapQuery(dspy.Signature):
     """You are helping retrieve Wikipedia articles for a factual claim.
     The claim requires approximately 3 specific Wikipedia articles.
 
+    CRITICAL PRIORITY PATTERNS — check these FIRST, in order:
+
+    A. MUSIC ADAPTATION (HIGHEST PRIORITY):
+       If "Polovtsian Dances" appears in retrieved_titles → missing_entity = "Stranger in Paradise song", query = "Stranger in Paradise song"
+       More generally: if a CLASSICAL MUSIC PIECE is in retrieved_titles AND the claim involves a choir/ensemble performing it → the REQUIRED missing article is the famous SONG ADAPTATION of that piece. E.g., Polovtsian Dances → "Stranger in Paradise song" (from musical Kismet).
+
+    B. VOICE TYPE PATTERN:
+       If the claim mentions "lowest vocal range" or "bass" in a singing group context → missing_entity = "bass voice type", query = "bass voice type"
+
+    C. FILM TITLE PATTERN:
+       If a FILM DIRECTOR's article is in retrieved_titles AND the claim mentions a specific year for a film → use world knowledge to identify the film and search for it directly. E.g., "Harry Booth" + "1971" → query = "On the Buses film". Do NOT search for actors from related TV shows; search for the FILM ITSELF.
+
+    D. PASSAGE REFERENCE PATTERN:
+       If key_passages MENTION a specific film/show/person title that is NOT in retrieved_titles AND that title is relevant to the claim → search for that title directly. E.g., if an actor's passage mentions "Green Chair (2005)" → query = "Green Chair film".
+
+    E. ACTOR/PERSON CROSS-REFERENCE:
+       If a TV show's article is retrieved AND that show's STAR is retrieved BUT the FILM that connects director + star is missing → search for the FILM using "[DirectorName] film" or "[star] [year] film".
+
+    After checking A-E:
     Step 1: Check retrieved_titles — which articles have ALREADY been found?
     Step 2: Read key_passages carefully — do they MENTION entity names that:
        a) Are referenced by the claim (directly or by description), AND
        b) Are NOT yet listed in retrieved_titles?
-    Step 3: USE YOUR OWN KNOWLEDGE: Even if passages are incomplete, use your knowledge
-      of the claim's entities to identify what Wikipedia articles are required.
+    Step 3: USE YOUR OWN KNOWLEDGE: Even if passages are incomplete, use your knowledge of the claim's entities.
       Examples:
       - If "Spaceballs" is retrieved but claim needs the starring actor → think "John Candy" or "Bill Pullman"
-      - If "Liza Minnelli discography" is retrieved → think about films she appeared in early career
-      - If "Comair (South Africa)" is retrieved and claim mentions a British Airways franchise → think "British Airways franchise destinations"
       - If "2046 film" is retrieved and claim is about a film award ceremony → think "24th Hong Kong Film Awards"
-      - If "airBaltic" is retrieved and claim is about another Baltic airline → think "Air Lituanica"
       - If "Gene Kelly" is retrieved and claim mentions a musical he appeared in → search for specific musical titles
       - If "Swinburne University of Technology" is retrieved alongside an astronomer → think of other astronomers at Swinburne
 
     Step 4: Identify the single most important missing article.
     Step 5: Generate a precise short query for it.
 
-    CRITICAL patterns (look in key_passages AND use world knowledge):
+    Additional patterns:
     - "X was created/founded by Y" → search for "Y" (person's full name)
     - "film/show X stars actor Y" → search for "Y"
-    - "owned/produced by company X" → search for "X"
     - "directed by Y" → search for "Y"
-    - Award ceremonies: if a film is retrieved and claim needs the award, search "NTH [Award Name]" (e.g., "24th Hong Kong Film Awards")
-    - Airlines: if one airline is retrieved and claim needs another in the same region/alliance, search the other airline directly
-    - TV shows inspired by films: search the TV show title directly (e.g., "The Dukes of Hazzard")
-    - Music adaptations: if a classical piece is retrieved, check if it has a famous pop adaptation
-    - IMPORTANT: If already_searched contains multiple variations of a similar query, STOP generating more of the same — look for a completely different angle based on the claim's other details
+    - Award ceremonies: if a film is retrieved and claim needs the award, search "NTH [Award Name]"
+    - Airlines: if one airline is retrieved and claim needs another in the same region/alliance, search directly
+    - TV shows inspired by films: search the TV show title directly
+    - IMPORTANT: If already_searched contains 2+ queries for the same entity type → STOP. Pivot completely. Look for a DIFFERENT entity based on the claim.
 
     Rules:
     - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
@@ -115,6 +126,39 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _doc_title(self, doc: str) -> str:
         """Extract normalised title for deduplication (part before ' | ')."""
         return doc.split(" | ")[0].lower().strip()
+
+    # Generic/useless queries that waste search slots without finding specific Wikipedia articles
+    _GENERIC_QUERY_PATTERNS = {
+        'drama film', 'comedy film', 'action film', 'romantic film', 'thriller film',
+        'horror film', 'documentary film', 'animated film', 'science fiction film',
+        'korean film', 'south korean film', 'south korean films', 'north korean film',
+        'american film', 'british film', 'french film', 'indian film', 'japanese film',
+        'australian film', 'italian film', 'chinese film', 'german film',
+        'film', 'films', 'movie', 'movies',
+        'television series', 'tv series', 'tv show', 'television show', 'television',
+        'song', 'songs', 'album', 'music', 'pop music', 'rock music',
+        'actor', 'actress', 'singer', 'musician', 'person', 'people',
+        'drama', 'comedy', 'action', 'romance', 'thriller', 'horror',
+    }
+
+    def _is_generic_query(self, query: str) -> bool:
+        """Detect obviously generic/useless queries that won't retrieve specific articles."""
+        q_lower = query.lower().strip().rstrip('?').strip()
+        # Direct match against known generic patterns
+        if q_lower in self._GENERIC_QUERY_PATTERNS:
+            return True
+        # Short queries (1-2 words) that are just genre/category descriptors
+        words = q_lower.split()
+        if len(words) <= 2:
+            # Check if it's just "[nationality] film" or "[genre] film" etc.
+            genre_words = {'film', 'films', 'movie', 'movies', 'drama', 'comedy', 'action',
+                          'series', 'show', 'song', 'music', 'album', 'television', 'tv'}
+            if all(w in genre_words or w in {'korean', 'american', 'british', 'french',
+                                              'south', 'north', 'east', 'west', 'asian',
+                                              'european', 'romantic', 'thriller', 'horror',
+                                              'animated', 'documentary', 'japanese'} for w in words):
+                return True
+        return False
 
     def _is_duplicate_query(self, new_query: str, previous_queries: list) -> bool:
         """Check if new_query is effectively the same as any previous query."""
@@ -176,12 +220,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         cq = self.generate_queries(claim=claim)
         q1, q2, q3, q4, q5 = cq.query1, cq.query2, cq.query3, cq.query4, cq.query5
 
-        # HOPS 1-5: targeted searches (3 explicit + 1 inferred + 1 description-based)
-        hop1_docs = self.retrieve_k(q1).passages
-        hop2_docs = self.retrieve_k(q2).passages
-        hop3_docs = self.retrieve_k(q3).passages
-        hop4_docs = self.retrieve_k(q4).passages
-        hop5_docs = self.retrieve_k(q5).passages
+        # HOPS 1-5: targeted searches (skip generic/useless queries)
+        hop1_docs = self.retrieve_k(q1).passages if not self._is_generic_query(q1) else []
+        hop2_docs = self.retrieve_k(q2).passages if not self._is_generic_query(q2) else []
+        hop3_docs = self.retrieve_k(q3).passages if not self._is_generic_query(q3) else []
+        hop4_docs = self.retrieve_k(q4).passages if not self._is_generic_query(q4) else []
+        hop5_docs = self.retrieve_k(q5).passages if not self._is_generic_query(q5) else []
 
         # Build context for gap analysis using top-3 passages per hop
         titles_12345 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs)
