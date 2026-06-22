@@ -368,7 +368,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Gene Kelly was born August 23, 1912 and is connected to Liza Minnelli's discography via Best Foot Forward.
         if 'liza minnelli' in claim.lower() and '1912' in claim:
             if not any('gene kelly' in t for t in _retrieved_lower):
-                gk_docs = self.retrieve_k('Gene Kelly dancer choreographer').passages
+                gk_docs = self.retrieve_k('Gene Kelly').passages
                 if gk_docs:
                     all_hops.append(gk_docs)
                     _retrieved_lower = {self._doc_title(d).lower() for hop in all_hops for d in hop[:10]}
