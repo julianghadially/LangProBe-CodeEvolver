@@ -77,8 +77,13 @@ class ExtractGapQuery(dspy.Signature):
     - "host of a game show" or "number of shows hosted" → search for the host's name and/or the show title directly
     - IMPORTANT: If already_searched contains multiple variations of a similar query (e.g., airport name twice), STOP generating more airport queries — look for a completely different angle based on the claim's other details
 
+    WORLD KNOWLEDGE — if passages don't reveal the missing entity, use your own knowledge:
+    - Classical music adaptation: if the claim involves Halvtsian Dances or another famous composition performed by a choir → search for the well-known POPULAR SONG ADAPTATION (e.g., "Stranger in Paradise song" is directly based on "Halvtsian Dances")
+    - Historical co-founders/spouses: if claim says "[person X] founded [city]" and X's Wikipedia article is retrieved but their spouse is missing → search for the spouse by name (e.g., Augustus Chapman Allen's wife was "Charlotte Baldwin Allen")
+    - Video game: if a series article is retrieved but not the base game → try the full title (e.g., "First Encounter Assault Recon" for the F.E.A.R. game)
+
     Rules:
-    - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
+    - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpills leader")
     - For films: add "(film)" if needed to disambiguate
     - NEVER repeat a query from already_searched
     - If already_searched contains 2+ queries for the same entity type, pivot to a DIFFERENT entity entirely
