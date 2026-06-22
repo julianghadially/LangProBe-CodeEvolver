@@ -50,7 +50,7 @@ class GenerateClaimQueries(dspy.Signature):
     query5: str = dspy.OutputField(desc="search query using DESCRIPTIVE WORDS from the claim for an entity that is described but not directly named — use phrases from the claim itself (e.g., '1975 film James Mitchum' when claim says 'the 1975 film starring James Mitchum'; 'actress Thank You for Smoking' for 'the actress from Thank You for Smoking'; 'nightclub Vienna' for 'the nightclub in Vienna')")
 
 
-class ExtractGapQueries(dspy.Signature):
+class ExtractGapQuery(dspy.Signature):
     """You are helping retrieve Wikipedia articles for a factual claim.
     The claim requires approximately 3 specific Wikipedia articles.
 
@@ -67,9 +67,10 @@ class ExtractGapQueries(dspy.Signature):
       - If "2046 film" is retrieved and claim is about a film award ceremony → think "24th Hong Kong Film Awards"
       - If "airBaltic" is retrieved and claim is about another Baltic airline → think "Air Lituanica"
       - If "Gene Kelly" is retrieved and claim mentions a musical he appeared in → search for specific musical titles
+      - If "Swinburne University of Technology" is retrieved alongside an astronomer → think of other astronomers at Swinburne
 
-    Step 4: Identify the TWO most important missing articles.
-    Step 5: Generate precise short queries for each.
+    Step 4: Identify the single most important missing article.
+    Step 5: Generate a precise short query for it.
 
     CRITICAL patterns (look in key_passages AND use world knowledge):
     - "X was created/founded by Y" → search for "Y" (person's full name)
@@ -80,24 +81,21 @@ class ExtractGapQueries(dspy.Signature):
     - Airlines: if one airline is retrieved and claim needs another in the same region/alliance, search the other airline directly
     - TV shows inspired by films: search the TV show title directly (e.g., "The Dukes of Hazzard")
     - Music adaptations: if a classical piece is retrieved, check if it has a famous pop adaptation
+    - IMPORTANT: If already_searched contains multiple variations of a similar query, STOP generating more of the same — look for a completely different angle based on the claim's other details
 
     Rules:
-    - Generate EXACTLY 2 queries for 2 DIFFERENT missing entities
-    - NEVER repeat any query from already_searched
-    - If only 1 entity appears missing, use world knowledge for the second query (creative alternative angle or related article)
-    - For persons: use FULL NAME
-    - For films: add "(film)" if needed
-    - Target specific Wikipedia article titles, not general topics
-    - If already_searched contains 2+ queries for same entity type, pivot to completely different angle"""
+    - For persons: use FULL NAME (e.g., "Billy Corgan" NOT "Smashing Pumpkins leader")
+    - For films: add "(film)" if needed to disambiguate
+    - NEVER repeat a query from already_searched
+    - If already_searched contains 2+ queries for the same entity type, pivot to a DIFFERENT entity entirely
+    - Target specific Wikipedia article titles, not general topics"""
 
     claim: str = dspy.InputField()
     retrieved_titles: str = dspy.InputField(desc="pipe-separated list of Wikipedia article titles already retrieved — check these to know what has been found")
     key_passages: str = dspy.InputField(desc="text excerpts from the top retrieved article per hop — scan these for entity names the claim also needs but are missing from retrieved_titles")
     already_searched: str = dspy.InputField(desc="queries already used — do NOT repeat these")
-    missing_entity_1: str = dspy.OutputField(desc="the first missing Wikipedia article title needed by the claim")
-    query1: str = dspy.OutputField(desc="short search query (1-6 words) for the first missing article")
-    missing_entity_2: str = dspy.OutputField(desc="the second missing Wikipedia article title (DIFFERENT from missing_entity_1)")
-    query2: str = dspy.OutputField(desc="short search query (1-6 words) for the second missing article — MUST be different from query1 and from already_searched")
+    missing_entity: str = dspy.OutputField(desc="the specific missing Wikipedia article title (e.g., 'Billy Corgan', 'Mars Incorporated', 'Warren Fu')")
+    query: str = dspy.OutputField(desc="short search query (1-6 words) for the missing Wikipedia article")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -111,7 +109,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.k = 25
         self.generate_queries = dspy.ChainOfThought(GenerateClaimQueries)
-        self.extract_gap = dspy.ChainOfThought(ExtractGapQueries)
+        self.extract_gap = dspy.ChainOfThought(ExtractGapQuery)
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
     def _doc_title(self, doc: str) -> str:
@@ -190,41 +188,64 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         passages_12345 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, top_n=3)
         already_searched_12345 = f"{q1}; {q2}; {q3}; {q4}; {q5}"
 
-        # HOP 6+7: first dual gap-fill round
-        gap1_result = self.extract_gap(
+        # HOP 6: first gap-fill query
+        hop6_result = self.extract_gap(
             claim=claim,
             retrieved_titles=titles_12345,
             key_passages=passages_12345,
             already_searched=already_searched_12345,
         )
-        hop6_query = gap1_result.query1
-        hop7_query = gap1_result.query2
+        hop6_query = hop6_result.query
         hop6_docs = []
-        hop7_docs = []
         if not self._is_duplicate_query(hop6_query, [q1, q2, q3, q4, q5]):
             hop6_docs = self.retrieve_k(hop6_query).passages
-        if not self._is_duplicate_query(hop7_query, [q1, q2, q3, q4, q5, hop6_query]):
+
+        # HOP 7: second gap-fill query
+        all_queries_up_to_6 = [q1, q2, q3, q4, q5, hop6_query]
+        titles_up_to_6 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs)
+        passages_up_to_6 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, top_n=4)
+        already_searched_up_to_6 = "; ".join(all_queries_up_to_6)
+        hop7_result = self.extract_gap(
+            claim=claim,
+            retrieved_titles=titles_up_to_6,
+            key_passages=passages_up_to_6,
+            already_searched=already_searched_up_to_6,
+        )
+        hop7_query = hop7_result.query
+        hop7_docs = []
+        if not self._is_duplicate_query(hop7_query, all_queries_up_to_6):
             hop7_docs = self.retrieve_k(hop7_query).passages
 
-        # HOP 8+9: second dual gap-fill round (uses results from all previous hops)
-        all_queries_up_to_7 = [q1, q2, q3, q4, q5, hop6_query, hop7_query]
+        # HOP 8: third gap-fill query
+        all_queries_up_to_7 = all_queries_up_to_6 + [hop7_query]
         titles_up_to_7 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs)
         passages_up_to_7 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, top_n=4)
         already_searched_up_to_7 = "; ".join(all_queries_up_to_7)
-
-        gap2_result = self.extract_gap(
+        hop8_result = self.extract_gap(
             claim=claim,
             retrieved_titles=titles_up_to_7,
             key_passages=passages_up_to_7,
             already_searched=already_searched_up_to_7,
         )
-        hop8_query = gap2_result.query1
-        hop9_query = gap2_result.query2
+        hop8_query = hop8_result.query
         hop8_docs = []
-        hop9_docs = []
         if not self._is_duplicate_query(hop8_query, all_queries_up_to_7):
             hop8_docs = self.retrieve_k(hop8_query).passages
-        if not self._is_duplicate_query(hop9_query, all_queries_up_to_7 + [hop8_query]):
+
+        # HOP 9: fourth gap-fill query
+        all_queries_up_to_8 = all_queries_up_to_7 + [hop8_query]
+        titles_up_to_8 = self._get_retrieved_titles(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs)
+        passages_up_to_8 = self._get_key_passages(hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs, hop6_docs, hop7_docs, hop8_docs, top_n=4)
+        already_searched_up_to_8 = "; ".join(all_queries_up_to_8)
+        hop9_result = self.extract_gap(
+            claim=claim,
+            retrieved_titles=titles_up_to_8,
+            key_passages=passages_up_to_8,
+            already_searched=already_searched_up_to_8,
+        )
+        hop9_query = hop9_result.query
+        hop9_docs = []
+        if not self._is_duplicate_query(hop9_query, all_queries_up_to_8):
             hop9_docs = self.retrieve_k(hop9_query).passages
 
         # Collect all non-empty hop results
