@@ -6,10 +6,11 @@ from .RAGQAArenaTech_utils import GenerateSearchQuery
 class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     """Multi-hop RAG program for RAGQAArenaTech.
 
-    Retrieval is injected (see ``RAGQAArenaTech_retrieval.EmbeddingRetriever``):
-    the program holds no corpus/index and performs no IO. This keeps the program
-    pure logic the optimizer can freely evolve (hops, query generation, answer
-    synthesis), while the heavy 3.9GB embedding index is loaded once and shared.
+    Retrieval is injected (see ``RAGQAArenaTech_retrieval.HTTPEmbeddingRetriever``):
+    the program holds no corpus/index and performs no IO -- it calls out to a
+    separate warm retriever server. This keeps the program pure logic the optimizer
+    can freely evolve (hops, query generation, answer synthesis), while the heavy
+    3.7GB embedding index lives in a process loaded once, outside the eval.
     """
 
     def __init__(self, retriever, num_docs=5, max_hops=2):

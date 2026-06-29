@@ -35,10 +35,11 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
     - Assessed with SemanticF1: the generated ``response`` is scored for
       recall/precision of key ideas against the gold ``response``.
 
-    Retrieval (OpenAI text-embedding-3-small over a precomputed index.pt) lives in
-    an injected ``EmbeddingRetriever`` that the pipeline owns and passes into the
-    program -- the program itself does no IO. The retriever is a process-wide
-    singleton, so the 3.9GB index loads once and is shared.
+    Retrieval (OpenAI text-embedding-3-small over a precomputed index.pt) is served
+    by a separate warm retriever server; the pipeline owns an injected
+    ``HTTPEmbeddingRetriever`` client and passes it into the program -- the program
+    itself does no IO. The client is a process-wide singleton over a pooled HTTP
+    session. See ``RAGQAArenaTech_retrieval`` / the ``ragqa-retriever-server`` repo.
     """
 
     def __init__(self, program: dspy.Module | None = None, retriever=None):

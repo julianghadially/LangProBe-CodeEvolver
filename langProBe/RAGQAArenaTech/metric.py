@@ -59,19 +59,29 @@ def ragqa_semantic_f1(gold, pred, trace=None):
     return score if trace is None else score >= THRESHOLD
 
 
+def _example_field(example, name):
+    """Read a field from the example row (dspy.Example attr or plain mapping)."""
+    if hasattr(example, name):
+        return getattr(example, name)
+    try:
+        return example[name]
+    except (TypeError, KeyError):
+        return None
+
+
 def ragqa_semantic_f1_feedback(
-    output, question, response, trace=None, pred_name=None, pred_trace=None
+    output, example, trace=None, pred_name=None, pred_trace=None
 ):
     """SemanticF1 score with textual feedback for GEPA / CodeEvolver reflection.
 
-    Follows the CodeEvolver metric contract (see Hover's
-    discrete_retrieval_eval_with_resource_penalty_and_feedback): the prediction is
-    passed as ``output`` and the gold example's row fields are spread as keyword
-    arguments (here ``question`` and ``response``).
+    Follows the CodeEvolver metric contract: the prediction is passed as ``output``
+    and the entire gold example row is passed as ``example`` (a dspy.Example), so
+    the gold fields are read off it -- ``example.question`` and ``example.response``.
+    Settings/config kwargs (``trace``, ``pred_name``, ``pred_trace``) stay separate.
     """
     pred = output  # rename
-    gold_question = question
-    gold_response = response
+    gold_question = _example_field(example, "question")
+    gold_response = _example_field(example, "response")
     score, scores = _judge_scores(gold_question, gold_response, pred)
     response = _response_text(pred)
     recall, precision = float(scores.recall), float(scores.precision)
