@@ -43,11 +43,11 @@ def _response_text(pred):
     return getattr(pred, "response", None) or getattr(pred, "answer", None) or str(pred)
 
 
-def _judge_scores(gold, pred):
+def _judge_scores(question, gold_response, pred):
     """Run the judge; return (f1, scores) where scores has recall/precision/reasoning."""
     scores = _get_judge()(
-        question=gold.question,
-        ground_truth=gold.response,
+        question=question,
+        ground_truth=gold_response,
         system_response=_response_text(pred),
     )
     return f1_score(scores.precision, scores.recall), scores
@@ -55,20 +55,31 @@ def _judge_scores(gold, pred):
 
 def ragqa_semantic_f1(gold, pred, trace=None):
     """SemanticF1 score (float in [0, 1]); bool >= threshold under tracing/bootstrap."""
-    score, _ = _judge_scores(gold, pred)
+    score, _ = _judge_scores(gold.question, gold.response, pred)
     return score if trace is None else score >= THRESHOLD
 
 
-def ragqa_semantic_f1_feedback(gold, pred, trace=None, pred_name=None, pred_trace=None):
-    """SemanticF1 score with textual feedback for GEPA / CodeEvolver reflection."""
-    score, scores = _judge_scores(gold, pred)
+def ragqa_semantic_f1_feedback(
+    output, question, response, trace=None, pred_name=None, pred_trace=None
+):
+    """SemanticF1 score with textual feedback for GEPA / CodeEvolver reflection.
+
+    Follows the CodeEvolver metric contract (see Hover's
+    discrete_retrieval_eval_with_resource_penalty_and_feedback): the prediction is
+    passed as ``output`` and the gold example's row fields are spread as keyword
+    arguments (here ``question`` and ``response``).
+    """
+    pred = output  # rename
+    gold_question = question
+    gold_response = response
+    score, scores = _judge_scores(gold_question, gold_response, pred)
     response = _response_text(pred)
     recall, precision = float(scores.recall), float(scores.precision)
 
     parts = [
         f"SemanticF1={score:.2f} (recall={recall:.2f}, precision={precision:.2f}).",
-        f"Question: {gold.question}",
-        f"Gold response: {gold.response}",
+        f"Question: {gold_question}",
+        f"Gold response: {gold_response}",
         f"System response: {response}",
     ]
     reasoning = getattr(scores, "reasoning", None)
