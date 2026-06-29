@@ -17,12 +17,11 @@ except AttributeError:
 
 COLBERT_URL = "https://julianghadially--colbert-server-wiki-colbertservice-serve.modal.run/api/search"
 
-# gpt-5.4-nano is a reasoning model but runs with reasoning disabled by default
-# (reasoning_effort defaults to "none" -> 0 reasoning tokens). DSPy also fails to
-# auto-detect it as a reasoning model because the version dot ("5.4") breaks its
-# gpt-5 regex, so we configure it explicitly. "low" is the only non-trivial effort
-# this nano model supports (it rejects "minimal"; "medium"/"high" are not honored).
-MODEL = "openai/gpt-5.4-nano"
+# DeepSeek-V4-Flash hosted on DeepInfra, routed through LiteLLM/DSPy. No
+# reasoning_effort is set, so the provider's default ("normal") effort is used.
+# The DeepInfra key is read by LiteLLM from the DEEPINFRA_API_KEY env var at call
+# time -- never passed into dspy.LM(...), so it stays out of the OTel trace files.
+MODEL = "deepinfra/deepseek-ai/DeepSeek-V4-Flash"
 
 
 
@@ -35,7 +34,7 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.lm = dspy.LM(MODEL, reasoning_effort="low")
+        self.lm = dspy.LM(MODEL)
         self.rm = CountingRM(dspy.ColBERTv2(url=COLBERT_URL))
         self.program = HoverMultiHop()
 

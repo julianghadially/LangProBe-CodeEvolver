@@ -1,4 +1,4 @@
-from ..benchmark import Benchmark
+from ...benchmark import Benchmark
 import dspy
 import ujson
 import urllib.request

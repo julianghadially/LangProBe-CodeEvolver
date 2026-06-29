@@ -77,15 +77,24 @@ def run_evaluation(
                 getattr(example, "question", getattr(example, "claim", example))
             )
 
-        gold_answer = getattr(example, "answer", None)
+        # Fall back to 'response' (used by RAG-style programs like RAGQAArenaTech)
+        # when there's no 'answer' field, so the CSV captures gold/pred text.
+        gold_answer = getattr(example, "answer", None) or getattr(
+            example, "response", None
+        )
         label = getattr(example, "label", None)
+        predicted_answer = (
+            getattr(prediction, "answer", None)
+            or getattr(prediction, "response", None)
+            or str(prediction)
+        )
 
         row: dict[str, Any] = {
             "idx": idx,
             "input": input_text,
             "gold_answer": gold_answer,
             "label": label,
-            "predicted_answer": getattr(prediction, "answer", str(prediction)),
+            "predicted_answer": predicted_answer,
             "score": _extract_score(score),
         }
 

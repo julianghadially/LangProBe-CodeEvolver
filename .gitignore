@@ -9,6 +9,8 @@ scratchpad.ipynb
 langProBe/AppWorld/data/
 langProBe/AppWorld/experiments/
 langProBe/AppWorld/.conda/
+# RAGQAArenaTech retrieval database (4.5GB corpus + embedding index) -- never commit
+langProBe/RAGQAArenaTech/data/
 *.png
 
 # result files
@@ -20,6 +22,7 @@ langProBe/AppWorld/.conda/
 .evaluation_*/
 mlflow.db
 simple_eval/results/gepa*
+simple_eval/results/
 mlruns
 mlartifacts
 gepa_optimize/output_promptonly_gepa/gepa_logs/
