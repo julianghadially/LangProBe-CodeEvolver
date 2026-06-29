@@ -17,7 +17,6 @@ from .RAGQAArenaTech_retrieval import get_default_retriever
 # The DeepInfra key is read by LiteLLM from the DEEPINFRA_API_KEY env var at call
 # time -- never passed into dspy.LM(...), so it stays out of the OTel trace files.
 MODEL = "deepinfra/deepseek-ai/DeepSeek-V4-Flash"
-MODEL = "openai/gpt-5.4-nano"
 
 # DSPy caches LM completions in memory AND on disk (~/.dspy_cache) by default.
 # CodeEvolver runs this program directly via its mounted evaluator, bypassing the
@@ -44,7 +43,7 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self, program: dspy.Module | None = None, retriever=None):
         super().__init__()
-        self.lm = dspy.LM(MODEL, reasoning_effort="low")
+        self.lm = dspy.LM(MODEL)
         # The pipeline owns the retrieval database and injects it into the program,
         # so the inner program is pure logic the optimizer can freely swap/evolve.
         self.retriever = retriever if retriever is not None else get_default_retriever()
