@@ -33,7 +33,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         n_queries=3,
         k_per_query=3,
         max_context=12,
-        rerank_keep=8,
+        rerank_keep=10,
     ):
         super().__init__()
         self.retriever = retriever
