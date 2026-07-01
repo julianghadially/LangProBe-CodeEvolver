@@ -16,4 +16,5 @@ firecrawl==4.14.0
 numpy==2.2.6
 datasets==4.5.0
 openinference-instrumentation-dspy
+mlflow==3.14.0
 ujson

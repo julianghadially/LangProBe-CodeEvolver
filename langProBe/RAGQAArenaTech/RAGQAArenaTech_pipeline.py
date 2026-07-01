@@ -44,7 +44,11 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self, program: dspy.Module | None = None, retriever=None):
         super().__init__()
-        self.lm = dspy.LM(MODEL)
+        self.lm = dspy.LM(
+            MODEL,
+            reasoning_effort="high",
+            allowed_openai_params=["reasoning_effort"],
+        )
         # The pipeline owns the retrieval database and injects it into the program,
         # so the inner program is pure logic the optimizer can freely swap/evolve.
         self.retriever = retriever if retriever is not None else get_default_retriever()
