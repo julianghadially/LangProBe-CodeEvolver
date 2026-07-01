@@ -57,12 +57,23 @@ def discrete_retrieval_eval_with_resource_penalty(example, pred, trace=None):
     penalty = calculate_search_penalty(search_count)
     return max(0.0, success - penalty)
 
+def _example_field(example, name):
+    """Read a field from the example row (dspy.Example attr or plain mapping)."""
+    if hasattr(example, name):
+        return getattr(example, name)
+    try:
+        return example[name]
+    except (TypeError, KeyError):
+        return None
 
 def discrete_retrieval_eval_with_resource_penalty_and_feedback(
-    output, supporting_facts, trace=None, pred_name=None, pred_trace=None
+    output, example, trace=None, pred_name=None, pred_trace=None
 ):
     """Retrieval success penalized by search count, with feedback for reflection."""
-    pred = output #rename
+    pred = output  # rename
+    # The full dataset row arrives as `example` (attr + item access); gold
+    # fields are read off of it.
+    supporting_facts = _example_field(example, "supporting_facts")
     gold_titles = set(
         map(
             dspy.evaluate.normalize_text,
