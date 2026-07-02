@@ -7,6 +7,19 @@ MAIN_RESERVE = 15
 MAX_GAP_TITLES = 3
 GAP_PASSAGES_PER_TITLE = 3
 PASSAGE_SNIPPET_CHARS = 600
+# Gap-retrieved bridge docs use a LONGER snippet window than main-hop docs in
+# rounds AFTER the first gap fire. Gap titles are EXPLICIT bridges the model
+# already named as missing; reading deeper into their bodies (a film article's
+# cast/crew list, an org's member roster, an article's "see also") can surface
+# a further two-deep bridge for the NEXT round's IdentifyMissing — the
+# SNIPPET-DEPTH tail class (memory iter-18: ex1 worldview, ex5 robinsons
+# galleria, ex30 ishqbaaz). Memory iter-7 confirmed widening the MAIN snippets
+# 600->1200 was a net loss (over-suggestion of main-doc bridges), so this is
+# confined to gap docs (bounded by MAX_GAP_TITLES * GAP_PASSAGES_PER_TITLE per
+# round) and applies only in round 2+ (round 1 has no gap docs). Unlike iter-18
+# R2, ALL retrieved gap docs are exposed (no docs-per-hop truncation) so the
+# depth mechanism isn't muted by a rank-5 cutoff that hides half the bridges.
+GAP_PASSAGE_SNIPPET_CHARS = 1800
 SNIPPET_DOCS_PER_HOP = 5
 MAX_GAP_ITERATIONS = 2
 
@@ -290,11 +303,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         previously_seen = set()
 
         for _ in range(MAX_GAP_ITERATIONS):
-            # Snippets across main hops + gap docs retrieved so far.
-            hop_docs_for_snippets = list(main_hops) + [
+            # Snippets across main hops + gap docs retrieved so far. Main-hop
+            # docs use the validated 600-char window (iter-7 confirmed widening
+            # main snippets past 600 was a net loss via main-doc over-suggestion
+            # tax). Gap-retrieved bridge docs use the wider
+            # GAP_PASSAGE_SNIPPET_CHARS window so a deeper entity mention (a
+            # prior-round bridge article's cast list, member roster, "see also")
+            # can surface a two-deep bridge for this round's IdentifyMissing.
+            # Applies only when gap docs exist (round 2+); main hops never see
+            # the wider window. ALL retrieved gap docs are exposed (bounded by
+            # the 2*MAX_GAP_TITLES*GAP_PASSAGES_PER_TITLE cap), avoiding the
+            # docs-per-hop truncation that muted iter-18 R2's depth mechanism.
+            snippets = self._build_snippets(main_hops)
+            flat_gap_hops = [
                 sl for sl in gap_hops_by_iter for sl in sl
             ]
-            snippets = self._build_snippets(hop_docs_for_snippets)
+            if flat_gap_hops:
+                gap_snips = self._build_snippets(
+                    [flat_gap_hops], docs_per_hop=len(flat_gap_hops),
+                    snippet_chars=GAP_PASSAGE_SNIPPET_CHARS,
+                )
+                snippets = snippets + "\n" + gap_snips
 
             titles_str = "\n".join(retrieved_titles) if retrieved_titles else ""
             prev_str = "\n".join(previously_suggested) if previously_suggested else ""
