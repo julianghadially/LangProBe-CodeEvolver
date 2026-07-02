@@ -57,26 +57,56 @@ class IdentifyMissing(dspy.Signature):
       4. Also extract works/roles/items NAMED WITHIN passage snippets —
          filmography/discography entries, cast lists, "remake of"/spin-off/source
          works, season rosters, "directed by", "fronted by", "founded by".
-      5. SPECIFIC OVER GENERIC: the claim's "bridge" entity is almost always the
+      5. SPECIFIC OVER GENERIC: the claim's "bridge" entity is usually the
          SPECIFIC named work/show/episode/role/org, not the generic
          network/channel/studio/publisher/platform that aired or released it.
          Prefer the specific named thing even when a snippet only names the
          channel. Do NOT add a network/platform/studio title unless it is itself
-         the claimed bridge.
-      6. PRECISION FIRST, then COMPLETENESS: only suggest titles you are
+         the claimed bridge. EXCEPTION: when the claim itself asks about a broad
+         TOPIC or subject area (e.g. "X religion", "X education", "X history"),
+         the bridge is often the broad overview/concept article on that topic —
+         prefer it over enumerating specific sub-entities (deities, schools,
+         events) that the topic article would cover.
+      6. EVIDENCE-BOUND — NO OUTSIDE KNOWLEDGE: name ONLY entities that appear
+         LITERALLY in a passage snippet OR are named verbatim in the claim. Do
+         NOT use your outside knowledge to identify what a retrieved article is
+         about if its snippet was not provided — if a retrieved title has no
+         snippet here, you cannot know its contents, so do NOT guess its cast,
+         members, or subjects from memory. Inventing a plausible-sounding entity
+         from memory and naming its article is the most common wrong-bridge
+         failure mode.
+      7. COMPLETENESS OVER SALIENCE: enumerate EVERY entity MENTIONED in a
+         snippet that plausibly relates to the claim and has a standalone
+         article, not just the most prominent one. Supporting-fact golds are
+         frequently the LESS salient participant — the runner-up (not the
+         winner), the supporting cast member, the secondary band, the item
+         listed last in a roster. If a snippet names multiple participants in the
+         claim's event/category, list each one whose own article is missing; do
+         not silently dismiss the less-prominent ones as "not directly relevant".
+      8. THE PERSON IS OFTEN THE BRIDGE: if the claim names a person (director,
+         author, actor, founder, performer), consider whether that PERSON's own
+         standalone article is missing — the person's own article is frequently
+         the supporting fact, not just their works. Do NOT assume retrieving only
+         their films/works/roles suffices; if the person article itself is not in
+         `retrieved_titles`, suggest it.
+      9. PRECISION FIRST, then COMPLETENESS: only suggest titles you are
          reasonably confident exist as standalone Wikipedia articles. Listing
          multiple plausible candidates (alternate name-forms, different-sense
          disambiguations) is BETTER than one exact guess — but never INVENT a
          title that is not a real Wikipedia article, and never echo one in
          `retrieved_titles` or `previously_suggested_titles`.
-      7. STOP EARLY: if you cannot identify any genuinely new missing bridge that
-         exists as a standalone article, output an empty string. Do not pad with
-         marginal or already-suggested titles.
+      10. STOP EARLY: if you cannot identify any genuinely new missing bridge that
+          exists as a standalone article, output an empty string. Do not pad with
+          marginal or already-suggested titles.
 
     Output:
-      - missing_titles: a comma-separated list of up to 3 NEW canonical Wikipedia
-        article titles to retrieve next, ordered by how likely each is the claim's
-        missing bridge. None of these may appear in `retrieved_titles` or
+      - missing_titles: up to 3 NEW canonical Wikipedia article titles to
+        retrieve next, ordered by how likely each is the claim's missing bridge.
+        EMIT EXACTLY ONE TITLE PER LINE (never comma-separated). Many Wikipedia
+        titles themselves contain commas (e.g. "Murray Hill, Manhattan",
+        "Washington, D.C.", "Skittles, Mars, Incorporated"), so
+        comma-separation is ambiguous and will be mis-parsed — use one title per
+        line only. None may appear in `retrieved_titles` or
         `previously_suggested_titles`. Empty if no genuinely new bridge remains.
     """
 
@@ -85,7 +115,7 @@ class IdentifyMissing(dspy.Signature):
     previously_suggested_titles: str = dspy.InputField(desc="Canonical Wikipedia titles you named in prior gap rounds, one per line. NEVER repeat these.")
     passage_snippets: str = dspy.InputField(desc="Literal truncated text excerpts from a sample of retrieved articles (including prior gap rounds). Scan these for entity MENTIONS by text span.")
 
-    missing_titles: str = dspy.OutputField(desc="Comma-separated NEW canonical Wikipedia titles to retrieve next, up to 3, none already in retrieved_titles or previously_suggested_titles. Empty if no genuinely new bridge remains.")
+    missing_titles: str = dspy.OutputField(desc="Up to 3 NEW canonical Wikipedia titles to retrieve next, ONE TITLE PER LINE (never comma-separated — titles may themselves contain commas). None already in retrieved_titles or previously_suggested_titles. Empty if no genuinely new bridge remains.")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -280,11 +310,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             except Exception:
                 missing_titles_raw = ""
 
-            # Parse candidate titles, skipping empties, already-retrieved, and
-            # anything already suggested in a prior round (the prompt forbids
-            # repeating, but it sometimes does — guard anyway).
+            # Parse candidate titles split ONE PER LINE (the prompt instructs the
+            # LM to emit exactly one title per line, because Wikipedia titles
+            # themselves may contain commas — splitting on commas corrupts
+            # titles like "Murray Hill, Manhattan" / "Skittles, Mars,
+            # Incorporated" into garbage queries. Fall back to newline/semicolon
+            # tokenisation only.)
             new_titles = []
-            for raw in [t.strip() for t in missing_titles_raw.replace("\n", ",").split(",")]:
+            for raw in [t.strip() for t in missing_titles_raw.replace(";", "\n").splitlines()]:
                 if not raw or raw in seen_titles or raw in previously_seen:
                     continue
                 previously_seen.add(raw)
