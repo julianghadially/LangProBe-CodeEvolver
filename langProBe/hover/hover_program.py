@@ -95,9 +95,12 @@ class IdentifyMissing(dspy.Signature):
          disambiguations) is BETTER than one exact guess — but never INVENT a
          title that is not a real Wikipedia article, and never echo one in
          `retrieved_titles` or `previously_suggested_titles`.
-      10. STOP EARLY: if you cannot identify any genuinely new missing bridge that
-          exists as a standalone article, output an empty string. Do not pad with
-          marginal or already-suggested titles.
+10. STOP EARLY: if you cannot identify any genuinely new missing bridge that
+           exists as a standalone article, output an empty string. Do not pad with
+           marginal or already-suggested titles. NEVER emit a refusal message, an
+           apology, "I cannot help", or any non-English text — if there is nothing
+           new to suggest, the missing_titles field is simply empty. The output is
+           parsed by a machine, so any prose other than the titles breaks it.
 
     Output:
       - missing_titles: up to 3 NEW canonical Wikipedia article titles to
@@ -134,6 +137,52 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
         self.identify_missing = dspy.ChainOfThought(IdentifyMissing)
+
+    # Heuristic refusal markers (matched loosely against the *output* text the
+    # LM produces). DeepSeek-V4-Flash occasionally emits a non-English refusal
+    # (Chinese "你好..." / "无法..." / "抱歉...") or an English "I cannot / I'm
+    # unable" rather than the structured JSON payload the dspy adapter expects.
+    # When that happens, dspy's JSONAdapter raises AdapterParseError, which —
+    # for the unguarded main-hop call sites below — propagates out of `forward`
+    # and the whole pipeline scores a free ZERO. Catching + retrying converts a
+    # recurring class of free zeros without changing any retrieval behaviour.
+    _REFUSAL_MARKERS = (
+        "我不能", "无法", "抱歉", "你好", "我无法",  # Chinese
+        "i cannot", "i can't", "i'm unable", "i am unable", "as an ai",
+        "i'm sorry, but", "i do not have", "i don't have",
+    )
+
+    @classmethod
+    def _looks_like_refusal(cls, text):
+        if not text:
+            return False
+        low = text.strip().lower()
+        if not low:
+            return True  # blank completion = effectively a refusal when we expected a field
+        return any(m in low for m in cls._REFUSAL_MARKERS)
+
+    def _lm_call(self, predictor, field, default, **kwargs):
+        """Call a dspy ChainOfThought predictor and extract `field`.
+
+        Defensive wrapper: LM refusals / non-JSON outputs surface as
+        ``AdapterParseError`` from dspy's adapter, or as a field whose raw
+        completion is itself a refusal string. We retry the call once (a redraw
+        often avoids the refusal), and on a second failure degrade to
+        ``default`` so the pipeline keeps running instead of crashing to a free
+        zero. ``default`` is returned verbatim (callers pass "" or the claim so
+        downstream retrieval still proceeds)."""
+        for attempt in range(2):
+            try:
+                resp = predictor(**kwargs)
+                value = getattr(resp, field, None)
+                if value is None:
+                    value = ""
+                value = str(value)
+                if not self._looks_like_refusal(value):
+                    return value
+            except Exception:
+                pass  # fall through to retry / default
+        return default
 
     @staticmethod
     def _doc_title(passage):
@@ -248,21 +297,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def forward(self, claim):
         # HOP 1
         hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        summary_1 = self._lm_call(
+            self.summarize1, "summary", "",
+            claim=claim, passages=hop1_docs,
+        )
 
         # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_query = self._lm_call(
+            self.create_query_hop2, "query", claim,
+            claim=claim, summary_1=summary_1,
+        )
         hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        summary_2 = self._lm_call(
+            self.summarize2, "summary", "",
+            claim=claim, context=summary_1, passages=hop2_docs,
+        )
 
         # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
-        ).query
+        hop3_query = self._lm_call(
+            self.create_query_hop3, "query", hop2_query or claim,
+            claim=claim, summary_1=summary_1, summary_2=summary_2,
+        )
         hop3_docs = self.retrieve_k(hop3_query).passages
 
         main_hops = [hop1_docs, hop2_docs, hop3_docs]
@@ -299,16 +354,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             titles_str = "\n".join(retrieved_titles) if retrieved_titles else ""
             prev_str = "\n".join(previously_suggested) if previously_suggested else ""
 
-            try:
-                gap_resp = self.identify_missing(
-                    claim=claim,
-                    retrieved_titles=titles_str,
-                    previously_suggested_titles=prev_str,
-                    passage_snippets=snippets,
-                )
-                missing_titles_raw = (gap_resp.missing_titles or "").strip()
-            except Exception:
-                missing_titles_raw = ""
+            missing_titles_raw = self._lm_call(
+                self.identify_missing, "missing_titles", "",
+                claim=claim,
+                retrieved_titles=titles_str,
+                previously_suggested_titles=prev_str,
+                passage_snippets=snippets,
+            ).strip()
 
             # Parse candidate titles split ONE PER LINE (the prompt instructs the
             # LM to emit exactly one title per line, because Wikipedia titles
