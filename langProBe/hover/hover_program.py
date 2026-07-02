@@ -66,23 +66,60 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _doc_title(passage):
         return passage.split(" | ")[0]
 
-    def _round_robin_dedup(self, hop_docs):
-        """Round-robin across hops (each ColBERT-ranked), dedup by title, cap at MAX_DOCS.
+    def _rank_aware_dedup(self, hop_docs):
+        """Rank-aware merge of ColBERT-ranked passages, dedup by title, cap at MAX_DOCS.
 
-        Balanced representation per hop avoids one hop monopolising the budget, so refined
-        follow-up hops get their fair share of the 21 slots allotted to search candidates."""
+        hop_docs = [hop1, hop2, hop3] + gap_docs_list (each additional hop is the
+        passages retrieved for one gap-title query, already truncated to top-3).
+
+        Pure round-robin across all hops lets the (often 2-5) per-title gap dumps
+        consume a rotation slot every round, which evicts moderate-rank main-hop
+        gold docs (e.g. a hop3 rank-5 passage) before they can be considered. This
+        reorders the fill so that:
+
+          Tier A - rank-0 passage of each gap hop. This is the dedicated article the
+                   gap hop was issued to fetch (the highest-confidence bridge),
+                   so it is reserved a slot first to preserve the recall gains the
+                   gap hop was added for.
+          Tier B - ALL main-hop passages, interleaved BY RANK across hop1/2/3
+                   (round 0 takes each hop's top passage, round 1 the next, ...).
+                   Main hops already hold most gold; interleaving by rank lets
+                   top-rank refined-hop docs land before main budget is eaten by
+                   gap context, and lets moderate-rank gold (rank 5-7) survive.
+          Tier C - remaining gap-hop passages (rank 1, 2 of each gap query), folded
+                   in only if budget remains, so extra gap context cannot evict an
+                   as-yet-unmerged main-hop passage.
+
+        Cross-query rank comparison is invalid (relevance ranks are within-query),
+        so we do NOT globally sort by raw rank; per-tier interleaving preserves
+        hop diversity instead."""
+        main_hops = hop_docs[:3]
+        gap_hops = hop_docs[3:]
         seen = set()
         docs = []
-        max_len = max((len(h) for h in hop_docs), default=0)
-        for i in range(max_len):
-            for hop in hop_docs:
-                if i < len(hop):
-                    title = self._doc_title(hop[i])
-                    if title not in seen:
-                        seen.add(title)
-                        docs.append(hop[i])
-                        if len(docs) >= MAX_DOCS:
-                            return docs
+
+        def _push(passage):
+            title = self._doc_title(passage)
+            if title not in seen:
+                seen.add(title)
+                docs.append(passage)
+
+        # Tier A: each gap query's top match (the desired dedicated article).
+        for gap in gap_hops:
+            if gap and len(docs) < MAX_DOCS:
+                _push(gap[0])
+        # Tier B: main-hop passages interleaved by rank (top ranks first).
+        max_main = max((len(h) for h in main_hops), default=0)
+        for i in range(max_main):
+            for hop in main_hops:
+                if i < len(hop) and len(docs) < MAX_DOCS:
+                    _push(hop[i])
+        # Tier C: remaining gap passages (rank 1, 2) only if budget remains.
+        max_gap = max((len(g) for g in gap_hops), default=0)
+        for i in range(1, max_gap):
+            for gap in gap_hops:
+                if i < len(gap) and len(docs) < MAX_DOCS:
+                    _push(gap[i])
         return docs[:MAX_DOCS]
 
     def forward(self, claim):
@@ -133,7 +170,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ]
 
         return dspy.Prediction(
-            retrieved_docs=self._round_robin_dedup(
+            retrieved_docs=self._rank_aware_dedup(
                 [hop1_docs, hop2_docs, hop3_docs] + gap_docs_list
             )
         )
