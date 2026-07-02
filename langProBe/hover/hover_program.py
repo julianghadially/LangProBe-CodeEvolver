@@ -314,7 +314,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             flat_gap_hops = [sl for sl in gap_hops_by_iter for sl in sl]
             if flat_gap_hops:
                 gap_snips = self._build_snippets(
-                    [flat_gap_hops], snippet_chars=GAP_PASSAGE_SNIPPET_CHARS
+                    flat_gap_hops, snippet_chars=GAP_PASSAGE_SNIPPET_CHARS
                 )
                 snippets = snippets + "\n" + gap_snips
 
