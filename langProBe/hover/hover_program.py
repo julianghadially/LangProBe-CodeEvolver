@@ -3,10 +3,11 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 MAX_DOCS = 21
 
+MAIN_RESERVE = 15
 MAX_GAP_TITLES = 3
 GAP_PASSAGES_PER_TITLE = 3
 PASSAGE_SNIPPET_CHARS = 600
-SNIPPET_DOCS_PER_HOP = 5
+SNIPPET_DOCS_PER_HOP = 8
 
 
 class IdentifyMissing(dspy.Signature):
@@ -97,12 +98,63 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         """Round-robin across hops (each ColBERT-ranked), dedup by title, cap at MAX_DOCS.
 
         Balanced representation per hop avoids one hop monopolising the budget, so refined
-        follow-up hops get their fair share of the 21 slots allotted to search candidates."""
+        follow-up hops get their fair share of the 21 slots allotted to search candidates.
+        NOTE: when the last list is the gap hop, prefer `_main_first_merge` instead, which
+        protects rank-5-7 main-hop gold from being evicted by a low-rank gap dump."""
         seen = set()
         docs = []
         max_len = max((len(h) for h in hop_docs), default=0)
         for i in range(max_len):
             for hop in hop_docs:
+                if i < len(hop):
+                    title = self._doc_title(hop[i])
+                    if title not in seen:
+                        seen.add(title)
+                        docs.append(hop[i])
+                        if len(docs) >= MAX_DOCS:
+                            return docs
+        return docs[:MAX_DOCS]
+
+    def _main_first_merge(self, main_hops, gap_hop):
+        """Merge that protects main-hop gold from gap-hop displacement.
+
+        Phase 1 reserves the first ``MAIN_RESERVE`` of the cap for the main hops only
+        (round-robin across main hops in ColBERT rank order), so a rank-5-7 main-hop
+        gold document can never be evicted by a low-rank gap dump. Phase 2 fills the
+        remaining tail slots from the rank-interleaved gap pool. Phase 3 (only reached
+        if the gap pool was too small to fill the cap) resumes the main-hop round-robin
+        for whatever ranks were skipped, so a small gap pool never wastes budget."""
+        seen = set()
+        docs = []
+        max_main = max((len(h) for h in main_hops), default=0)
+
+        # Phase 1: reserve the first MAIN_RESERVE slots for main hops only.
+        for i in range(max_main):
+            for hop in main_hops:
+                if i < len(hop):
+                    title = self._doc_title(hop[i])
+                    if title not in seen:
+                        seen.add(title)
+                        docs.append(hop[i])
+                        if len(docs) >= MAIN_RESERVE:
+                            break
+            if len(docs) >= MAIN_RESERVE:
+                break
+
+        # Phase 2: tail slots from the rank-interleaved gap pool.
+        if gap_hop:
+            for passage in gap_hop:
+                title = self._doc_title(passage)
+                if title not in seen:
+                    seen.add(title)
+                    docs.append(passage)
+                    if len(docs) >= MAX_DOCS:
+                        return docs
+
+        # Phase 3: if gap pool was small and there is leftover budget, resume
+        # the main-hop round-robin for ranks not yet taken.
+        for i in range(max_main):
+            for hop in main_hops:
                 if i < len(hop):
                     title = self._doc_title(hop[i])
                     if title not in seen:
@@ -191,5 +243,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if len(seen_gap_titles) >= MAX_GAP_TITLES:
                 break
 
-        merged_hops = main_hop_docs + ([gap_hop] if gap_hop else [])
-        return dspy.Prediction(retrieved_docs=self._round_robin_dedup(merged_hops))
+        return dspy.Prediction(
+            retrieved_docs=self._main_first_merge(main_hop_docs, gap_hop)
+            if gap_hop else self._round_robin_dedup(main_hop_docs)
+        )
