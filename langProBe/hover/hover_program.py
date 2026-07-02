@@ -4,6 +4,41 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 MAX_DOCS = 21
 
 
+class IdentifyMissing(dspy.Signature):
+    """Identify Wikipedia article titles for entities referenced in the claim or in
+    the retrieved-passage summaries that do NOT already have their own dedicated
+    article among retrieved_titles.
+
+    Reason step by step:
+    1. Extract the salient entities named in the claim and summaries (persons,
+       organizations, places, bands, films, albums, songs, books, etc.).
+    2. For each entity, check whether its dedicated Wikipedia article is ALREADY in
+       retrieved_titles by EXACT canonical-title match.
+    3. Beware partial / disambiguated matches: a title like "X (footballer)" or
+       "X (film)" covers ONLY that one sense. A different person or work also named
+       "X" is still MISSING and needs its own dedicated article.
+    4. Output the canonical Wikipedia title for each missing dedicated article - the
+       most likely natural title (e.g. a person's commonly used name). Do NOT invent
+       works or people that the evidence suggests don't exist; only name entities you
+       believe have their own standalone Wikipedia article.
+    5. Prioritize "bridge" entities the claim depends on that are referenced only
+       inside another retrieved passage (e.g. a creator, frontman, or actor named
+       inside a work's article).
+
+    Output at most 3 titles, comma-separated, in Wikipedia's canonical lowercase
+    form (no quotes, no numbering). Leave empty if no dedicated article is missing.
+    """
+
+    claim: str = dspy.InputField(desc="The claim being supported.")
+    summaries: str = dspy.InputField(desc="Summaries of already-retrieved passages.")
+    retrieved_titles: str = dspy.InputField(
+        desc="Comma-separated Wikipedia article titles already retrieved."
+    )
+    missing_titles: str = dspy.OutputField(
+        desc="Comma-separated canonical Wikipedia titles of missing dedicated articles (max 3)."
+    )
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -25,9 +60,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
         # GAP HOP: identify Wikipedia articles for entities named in the claim/summaries
         # but whose own article title is not yet among the retrieved titles, then fetch them.
-        self.identify_missing = dspy.ChainOfThought(
-            "claim, summaries, retrieved_titles -> missing_titles"
-        )
+        self.identify_missing = dspy.ChainOfThought(IdentifyMissing)
 
     @staticmethod
     def _doc_title(passage):
