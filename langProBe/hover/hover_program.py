@@ -46,7 +46,7 @@ class IdentifyMissing(dspy.Signature):
         desc="Comma-separated Wikipedia article titles already retrieved."
     )
     missing_titles: str = dspy.OutputField(
-        desc="Comma-separated canonical Wikipedia titles of missing dedicated articles (max 3)."
+        desc="Comma-separated canonical Wikipedia titles of missing dedicated articles (max 5)."
     )
 
 
