@@ -537,15 +537,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                         round_pool.append(s[i])
             gap_pool_by_iter.append(round_pool)
 
-        # FINAL SELECTION: LM listwise rerank of the deduped union of all
-        # candidates (main hops + gap passages). The validated main-first
-        # reserved merge is the exception fallback so a parse failure or empty
-        # emission degrades to the prior best backbone instead of risking a
-        # free zero.
-        reranked = self._rerank_pool(claim, main_hops, gap_hops_flat)
-        if reranked is not None:
-            retrieved_docs = reranked
-        elif gap_pool_by_iter:
+        # CONTROL: heuristic-merge-only final selection (reranker disabled) to
+        # isolate the LM reranker's marginal value on an identical seed.
+        if gap_pool_by_iter:
             retrieved_docs = self._main_first_merge(
                 main_hops, gap_pool_by_iter, gap_hops_flat
             )
