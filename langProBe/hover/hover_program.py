@@ -89,12 +89,22 @@ class IdentifyMissing(dspy.Signature):
          the supporting fact, not just their works. Do NOT assume retrieving only
          their films/works/roles suffices; if the person article itself is not in
          `retrieved_titles`, suggest it.
-      9. PRECISION FIRST, then COMPLETENESS: only suggest titles you are
-         reasonably confident exist as standalone Wikipedia articles. Listing
-         multiple plausible candidates (alternate name-forms, different-sense
+      9. PRECISION FIRST, then COMPLETENESS: BEFORE emitting any title, ask
+         yourself "would I BET this title has its OWN standalone Wikipedia
+         article (not a redirect, not a section of another article)?" Only
+         emit titles where the answer is yes. A surname-only or partial-name
+         mention in a snippet is NOT sufficient evidence on its own — only
+         name the bridge if you can reconstruct its likely CANONICAL article
+         title from what is literally in the snippet (the full name, or a
+         disambiguated form a real article would use). Listing multiple
+         plausible candidates (alternate name-forms, different-sense
          disambiguations) is BETTER than one exact guess — but never INVENT a
          title that is not a real Wikipedia article, and never echo one in
-         `retrieved_titles` or `previously_suggested_titles`.
+         `retrieved_titles` or `previously_suggested_titles`. REMEMBER: every
+         WRONG suggestion you emit this round wastes one of the 6 reserved
+         gap-tail slots AND consumes your next round's LM attention re-reading
+         its snippet — so an EMPTY output is BETTER than a marginal guess.
+         When in doubt, output nothing and let the main-hop gold stand.
       10. STOP EARLY: if you cannot identify any genuinely new missing bridge that
           exists as a standalone article, output an empty string. Do not pad with
           marginal or already-suggested titles.
