@@ -9,6 +9,7 @@ GAP_PASSAGES_PER_TITLE = 3
 PASSAGE_SNIPPET_CHARS = 600
 SNIPPET_DOCS_PER_HOP = 5
 MAX_GAP_ITERATIONS = 2
+RESCUE_DEEP_OFFSET = SNIPPET_DOCS_PER_HOP
 
 
 class IdentifyMissing(dspy.Signature):
@@ -245,24 +246,134 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 snippets.append(f"{title} :: {body}")
         return "\n".join(snippets)
 
+    def _lm_call(self, fn, default):
+        """Free-insurance exception-retry guard for a single LM call.
+
+        Retries ``fn`` ONCE on a real raised ``Exception``; returns ``default`` if
+        it raises again. Net-neutral-by-construction: the only behavioural effect
+        is to convert an AdapterParseError / free-zero refusal into a
+        degraded-but-functional result on retry success (no text-pattern refusal
+        screener — that catastrophically regressed in iter-13 R1)."""
+        try:
+            return fn()
+        except Exception:
+            pass
+        try:
+            return fn()
+        except Exception:
+            return default
+
+    def _gap_round(self, claim, hop_docs_for_snippets, retrieved_titles,
+                   previously_suggested, previously_seen, seen_titles,
+                   gap_hops_flat):
+        """Execute ONE cycle of the adaptive gap-retrieval loop.
+
+        Runs IdentifyMissing over the snippet pool built from
+        ``hop_docs_for_snippets``, parses new titles with dedup against
+        ``seen_titles`` / ``previously_seen`` (mutating ``previously_seen`` in
+        place), retrieves up to ``GAP_PASSAGES_PER_TITLE`` passages per new title
+        (extending ``gap_hops_flat`` and the running ``retrieved_titles`` /
+        ``seen_titles`` state in place), and builds the rank-interleaved
+        ``round_pool`` for this round's contribution to the main-first merge.
+
+        Returns ``(new_titles, per_title_slices, round_pool)``. The CALLER takes
+        responsibility for appending ``new_titles`` to ``previously_suggested``,
+        ``per_title_slices`` to ``gap_hops_by_iter``, and ``round_pool`` to
+        ``gap_pool_by_iter`` (so it can decide whether to early-break / whether
+        the rescue should fire)."""
+        snippets = self._build_snippets(hop_docs_for_snippets)
+
+        titles_str = "\n".join(retrieved_titles) if retrieved_titles else ""
+        prev_str = "\n".join(previously_suggested) if previously_suggested else ""
+
+        try:
+            gap_resp = self.identify_missing(
+                claim=claim,
+                retrieved_titles=titles_str,
+                previously_suggested_titles=prev_str,
+                passage_snippets=snippets,
+            )
+            missing_titles_raw = (gap_resp.missing_titles or "").strip()
+        except Exception:
+            missing_titles_raw = ""
+
+        # Parse candidate titles split ONE PER LINE (the prompt instructs the
+        # LM to emit exactly one title per line, because Wikipedia titles
+        # themselves may contain commas — splitting on commas corrupts titles
+        # like "Murray Hill, Manhattan" / "Skittles, Mars, Incorporated" into
+        # garbage queries. Fall back to newline/semicolon tokenisation only.)
+        new_titles = []
+        for raw in [t.strip() for t in missing_titles_raw.replace(";", "\n").splitlines()]:
+            if not raw or raw in seen_titles or raw in previously_seen:
+                continue
+            previously_seen.add(raw)
+            new_titles.append(raw)
+            if len(new_titles) >= MAX_GAP_TITLES:
+                break
+
+        if not new_titles:
+            return new_titles, [], []
+
+        # Retrieve each new title verbatim; record per-title top-N slices AND a
+        # rank-interleaved pool for this round's contribution to the main-first
+        # merge.
+        per_title_slices = []  # [ [passage, ...], [passage, ...], ... ]
+        for raw in new_titles:
+            try:
+                gap_docs = self.retrieve_k(raw).passages
+            except Exception:
+                gap_docs = []
+            slice_docs = gap_docs[:GAP_PASSAGES_PER_TITLE]
+            per_title_slices.append(slice_docs)
+            gap_hops_flat.extend(slice_docs)
+            # Add the retrieved titles (from the top of each slice) to the
+            # running retrieved set so the NEXT round and the seen_titles
+            # guard reflect expansion.
+            for passage in gap_docs:
+                title = self._doc_title(passage)
+                if title not in seen_titles:
+                    seen_titles.add(title)
+                    retrieved_titles.append(title)
+
+        # Rank-interleaved pool for this round: round-robin across titles by
+        # ColBERT rank.
+        round_pool = []
+        max_len = max((len(s) for s in per_title_slices), default=0)
+        for i in range(max_len):
+            for s in per_title_slices:
+                if i < len(s):
+                    round_pool.append(s[i])
+
+        return new_titles, per_title_slices, round_pool
+
     def forward(self, claim):
         # HOP 1
         hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize1(
-            claim=claim, passages=hop1_docs
-        ).summary  # Summarize top k docs
+        summary_1 = self._lm_call(
+            lambda: self.summarize1(claim=claim, passages=hop1_docs).summary,
+            "",
+        )  # Summarize top k docs
 
         # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        hop2_query = self._lm_call(
+            lambda: self.create_query_hop2(claim=claim, summary_1=summary_1).query,
+            claim,
+        )
         hop2_docs = self.retrieve_k(hop2_query).passages
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=hop2_docs
-        ).summary
+        summary_2 = self._lm_call(
+            lambda: self.summarize2(
+                claim=claim, context=summary_1, passages=hop2_docs
+            ).summary,
+            "",
+        )
 
         # HOP 3
-        hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
-        ).query
+        hop3_query = self._lm_call(
+            lambda: self.create_query_hop3(
+                claim=claim, summary_1=summary_1, summary_2=summary_2
+            ).query,
+            claim,
+        )
         hop3_docs = self.retrieve_k(hop3_query).passages
 
         main_hops = [hop1_docs, hop2_docs, hop3_docs]
@@ -294,74 +405,43 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop_docs_for_snippets = list(main_hops) + [
                 sl for sl in gap_hops_by_iter for sl in sl
             ]
-            snippets = self._build_snippets(hop_docs_for_snippets)
 
-            titles_str = "\n".join(retrieved_titles) if retrieved_titles else ""
-            prev_str = "\n".join(previously_suggested) if previously_suggested else ""
-
-            try:
-                gap_resp = self.identify_missing(
-                    claim=claim,
-                    retrieved_titles=titles_str,
-                    previously_suggested_titles=prev_str,
-                    passage_snippets=snippets,
-                )
-                missing_titles_raw = (gap_resp.missing_titles or "").strip()
-            except Exception:
-                missing_titles_raw = ""
-
-            # Parse candidate titles split ONE PER LINE (the prompt instructs the
-            # LM to emit exactly one title per line, because Wikipedia titles
-            # themselves may contain commas — splitting on commas corrupts
-            # titles like "Murray Hill, Manhattan" / "Skittles, Mars,
-            # Incorporated" into garbage queries. Fall back to newline/semicolon
-            # tokenisation only.)
-            new_titles = []
-            for raw in [t.strip() for t in missing_titles_raw.replace(";", "\n").splitlines()]:
-                if not raw or raw in seen_titles or raw in previously_seen:
-                    continue
-                previously_seen.add(raw)
-                new_titles.append(raw)
-                if len(new_titles) >= MAX_GAP_TITLES:
-                    break
+            new_titles, per_title_slices, round_pool = self._gap_round(
+                claim, hop_docs_for_snippets, retrieved_titles,
+                previously_suggested, previously_seen, seen_titles, gap_hops_flat,
+            )
 
             if not new_titles:
                 break  # IdentifyMissing considers the evidence complete.
 
             previously_suggested.extend(new_titles)
-
-            # Retrieve each new title verbatim; record per-title top-N slices
-            # AND a rank-interleaved pool for this round's contribution to the
-            # main-first merge.
-            per_title_slices = []  # [ [passage, ...], [passage, ...], ... ]
-            for raw in new_titles:
-                try:
-                    gap_docs = self.retrieve_k(raw).passages
-                except Exception:
-                    gap_docs = []
-                slice_docs = gap_docs[:GAP_PASSAGES_PER_TITLE]
-                per_title_slices.append(slice_docs)
-                gap_hops_flat.extend(slice_docs)
-                # Add the retrieved titles (from the top of each slice) to the
-                # running retrieved set so the NEXT round and the seen_titles
-                # guard reflect expansion.
-                for passage in gap_docs:
-                    title = self._doc_title(passage)
-                    if title not in seen_titles:
-                        seen_titles.add(title)
-                        retrieved_titles.append(title)
-
             gap_hops_by_iter.append(per_title_slices)
-
-            # Rank-interleaved pool for this round: round-robin across titles
-            # by ColBERT rank.
-            round_pool = []
-            max_len = max((len(s) for s in per_title_slices), default=0)
-            for i in range(max_len):
-                for s in per_title_slices:
-                    if i < len(s):
-                        round_pool.append(s[i])
             gap_pool_by_iter.append(round_pool)
+
+        # ZERO-EMISSION-GATED DEEP-RANK SNIPPET RESCUE — fires ONLY when the
+        # base loop produced no gap retrieval across the rounds (only reached
+        # when round-1 emitted zero genuinely-new titles, since round-2 itself
+        # early-breaks on zero new titles). Re-runs IdentifyMissing ONCE over a
+        # PERTURBED snippet pool built from main-hop passages at ranks
+        # [SNIPPET_DOCS_PER_HOP : SNIPPET_DOCS_PER_HOP + SNIPPET_DOCS_PER_HOP]
+        # per hop — the ColBERT-ranked window below the top-5 the standard
+        # _build_snippets exposes, surfacing a deeper-rank bridge mention
+        # truncated out of the standard snippet window. Strictly a stop-early
+        # over-suppression repair: never fires when the base loop already built
+        # a gap pool.
+        if not gap_pool_by_iter:
+            rescue_hop_docs_for_snippets = [
+                h[RESCUE_DEEP_OFFSET:RESCUE_DEEP_OFFSET + SNIPPET_DOCS_PER_HOP]
+                for h in main_hops
+            ]
+            new_titles, per_title_slices, round_pool = self._gap_round(
+                claim, rescue_hop_docs_for_snippets, retrieved_titles,
+                previously_suggested, previously_seen, seen_titles, gap_hops_flat,
+            )
+            if new_titles:
+                previously_suggested.extend(new_titles)
+                gap_hops_by_iter.append(per_title_slices)
+                gap_pool_by_iter.append(round_pool)
 
         if gap_pool_by_iter:
             retrieved_docs = self._main_first_merge(
