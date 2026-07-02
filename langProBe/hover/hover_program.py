@@ -104,7 +104,16 @@ class IdentifyMissing(dspy.Signature):
          WRONG suggestion you emit this round wastes one of the 6 reserved
          gap-tail slots AND consumes your next round's LM attention re-reading
          its snippet — so an EMPTY output is BETTER than a marginal guess.
-         When in doubt, output nothing and let the main-hop gold stand.
+         When in doubt about whether a vague borderline mention is a real
+         bridge, output nothing and let the main-hop gold stand.
+         IMPORTANT: Wikipedia is exhaustive — named dog/cat breeds, plant
+         cultivars, obscure short films, minor sports teams, small places,
+         and almost every named person with a public role usually DO have a
+         standalone article. So "would I bet it has an article?" should
+         default to YES the moment the snippet NAMES the entity explicitly
+         (full name, or a unique proper noun). Reserve the NO/empty-output
+         path for cases where only a partial surname / generic role / common
+         word is mentioned and you cannot reconstruct the canonical title.
       10. STOP EARLY: if you cannot identify any genuinely new missing bridge that
           exists as a standalone article, output an empty string. Do not pad with
           marginal or already-suggested titles.
