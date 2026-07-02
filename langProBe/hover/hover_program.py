@@ -9,7 +9,6 @@ GAP_PASSAGES_PER_TITLE = 3
 PASSAGE_SNIPPET_CHARS = 600
 SNIPPET_DOCS_PER_HOP = 5
 MAX_GAP_ITERATIONS = 2
-RERANK_SNIPPET_CHARS = 600
 
 
 class IdentifyMissing(dspy.Signature):
@@ -119,60 +118,6 @@ class IdentifyMissing(dspy.Signature):
     missing_titles: str = dspy.OutputField(desc="Up to 3 NEW canonical Wikipedia titles to retrieve next, ONE TITLE PER LINE (never comma-separated — titles may themselves contain commas). None already in retrieved_titles or previously_suggested_titles. Empty if no genuinely new bridge remains.")
 
 
-class RerankPassages(dspy.Signature):
-    """You are the FINAL SELECTION step of a Wikipedia document-retrieval pipeline
-    that supports a factual claim. A candidate pool of Wikipedia articles (each
-    with its title and opening-text excerpt) has been retrieved across several
-    hops. From this pool you must KEEP the at-most-21 articles most useful as
-    SUPPORTING FACTS for the claim, ordered most-relevant first.
-
-    The retrieval metric rewards keeping the articles whose standalone Wikipedia
-    page contains a fact used to support (a piece of) the claim. It does NOT reward
-    generic background, container, or merely-adjacent articles. Quantity beyond the
-    true supporting set is not itself helpful — but a borderline relevant article
-    IS worth keeping over a clearly-irrelevant one, because the final budget is 21
-    and the supporting set is often composed of SEVERAL less-salient participants.
-
-    Reasoning:
-      1. Decompose the claim into the distinct entities / propositions that each
-         need a supporting article (the people, works, orgs, places, events, and
-         relations the claim asserts).
-      2. For each numbered candidate, judge from its TITLE and excerpt whether it
-         is the SUBJECT of one of the claim's supporting facts. An article is
-         relevant when the claim is ABOUT it, or about a fact it contains.
-      3. Prefer the SPECIFIC named entity (a named person, work, place, event)
-         over a mere container/channel/parent topic — BUT keep the broad overview
-         article when the claim is itself about a broad topic ("X religion",
-         "X education").
-      4. Keep every candidate that IS the standalone article of a distinct claim
-         entity; do NOT drop a borderline candidate merely because a higher-ranked
-         candidate also touches the claim. Supporting-fact sets are frequently the
-         LESS salient participants: the runner-up, the supporting cast, the
-         secondary entity listed last. When in doubt, KEEP it.
-      5. Exclude pure background / adjacent articles whose excerpt only
-         contextually mentions the topic without being the subject of a claim
-         fact, and exclude exact duplicate senses.
-
-    Inputs:
-      - claim: the claim being supported.
-      - candidate_passages: a numbered list, one per line, each formatted
-        "N. Title :: excerpt". Refer to a candidate by its number N (starting at 1).
-
-    Output:
-      - ranked_ids: a comma-separated list of the at-most-21 candidate NUMBERS you
-        decide to keep, MOST relevant FIRST. Use each number at most once and only
-        numbers that appear in the input list. Return as close to 21 as the
-        relevance genuinely supports (fewer is acceptable only when the pool is
-        smaller or most remaining candidates are clearly irrelevant), but prefer
-        filling remaining budget with borderline-relevant candidates over leaving
-        it empty.
-    """
-
-    claim: str = dspy.InputField()
-    candidate_passages: str = dspy.InputField(desc="Numbered candidate articles, one per line, formatted 'N. Title :: excerpt'. Refer to a candidate by its number N (1-indexed).")
-    ranked_ids: str = dspy.OutputField(desc="Comma-separated candidate NUMBERS to keep, most relevant first, at most 21, each number at most once, only numbers present in candidate_passages.")
-
-
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -189,11 +134,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
         self.identify_missing = dspy.ChainOfThought(IdentifyMissing)
-        # LM listwise reranker for final passage selection from the pooled
-        # candidates. Replaces the rank-position heuristic merge as the
-        # selection step; the heuristic merge is retained as an exception
-        # fallback so a parse failure degrades to the prior best backbone.
-        self.rerank = dspy.ChainOfThought(RerankPassages)
 
     @staticmethod
     def _doc_title(passage):
@@ -225,10 +165,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         round so earlier, higher-confidence bridges are preferred). Phase 3 (only
         reached if the gap pool was too small to fill the cap) resumes the main-hop
         round-robin for whatever ranks were skipped, so a small gap pool never
-        wastes budget.
-
-        Retained as the exception fallback for the LM reranker (which supersedes it
-        as the primary selection step)."""
+        wastes budget."""
         seen = set()
         docs = []
         max_main = max((len(h) for h in main_hops), default=0)
@@ -307,117 +244,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     body = body[:snippet_chars] + "…"
                 snippets.append(f"{title} :: {body}")
         return "\n".join(snippets)
-
-    def _rerank_pool(self, claim, main_hops, gap_hops_flat):
-        """Final selection via an LM listwise rerank of the deduped union of all
-        retrieved candidates (main hops + gap passages), capped at MAX_DOCS.
-
-        Returns ``None`` on total reranker failure so the caller can degrade to the
-        proven heuristic merge. When the pool is already <= MAX_DOCS it is returned
-        unchanged. Otherwise the LM is given a numbered list ("N. Title :: excerpt")
-        and returns ranked candidate numbers; any unfilled slots up to MAX_DOCS are
-        padded from the remaining candidates in pool order (main-hop rank first) so
-        the cap is always filled when the pool allows it."""
-        seen = set()
-        candidates = []
-        # Main-hop passages first (ColBERT rank order within each hop, hops in
-        # hop order), then gap passages in retrieval order — so pool ordering is a
-        # reasonable default even before the LM reranks.
-        for hop in main_hops:
-            for passage in hop:
-                title = self._doc_title(passage)
-                if title not in seen:
-                    seen.add(title)
-                    candidates.append(passage)
-        for passage in gap_hops_flat:
-            title = self._doc_title(passage)
-            if title not in seen:
-                seen.add(title)
-                candidates.append(passage)
-
-        if not candidates:
-            return []
-        if len(candidates) <= MAX_DOCS:
-            return candidates[:MAX_DOCS]
-
-        # Build the numbered candidate list the LM will rank.
-        lines = []
-        for i, passage in enumerate(candidates, 1):
-            if " | " in passage:
-                title, body = passage.split(" | ", 1)
-            else:
-                title, body = passage, ""
-            body = body.strip()
-            if len(body) > RERANK_SNIPPET_CHARS:
-                body = body[:RERANK_SNIPPET_CHARS] + "…"
-            lines.append(f"{i}. {title.strip()} :: {body}")
-        candidate_str = "\n".join(lines)
-
-        try:
-            resp = self.rerank(claim=claim, candidate_passages=candidate_str)
-            raw = (resp.ranked_ids or "").strip()
-        except Exception:
-            return None
-        if not raw:
-            return None
-
-        # Parse an ordered list of candidate numbers; tolerate stray characters,
-        # "N."/"N)" decorations, ranges ("3-7"), and "and"/"/" separators.
-        chosen = []
-        chosen_titles = set()
-
-        def take(n):
-            if not (1 <= n <= len(candidates)):
-                return False
-            passage = candidates[n - 1]
-            title = self._doc_title(passage)
-            if title in chosen_titles:
-                return False
-            chosen_titles.add(title)
-            chosen.append(passage)
-            return True
-
-        for tok in raw.replace("\n", ",").replace("/", ",").replace(";", ",").split(","):
-            tok = tok.strip().lower().lstrip("and ").strip()
-            # "3-7" style range
-            if "-" in tok:
-                a, _, b = tok.partition("-")
-                try:
-                    lo, hi = int(a), int(b)
-                except ValueError:
-                    continue
-                if lo > hi:
-                    lo, hi = hi, lo
-                for n in range(lo, hi + 1):
-                    if take(n) and len(chosen) >= MAX_DOCS:
-                        break
-                continue
-            digits = ""
-            for ch in tok:
-                if ch.isdigit():
-                    digits += ch
-                else:
-                    break
-            if digits:
-                take(int(digits))
-            if len(chosen) >= MAX_DOCS:
-                break
-
-        if not chosen:
-            # LM emitted nothing parseable — treat as failure.
-            return None
-
-        # Pad any unfilled slots up to MAX_DOCS from remaining candidates in pool
-        # order, so the final budget is filled whenever the pool allows it.
-        if len(chosen) < MAX_DOCS:
-            for passage in candidates:
-                title = self._doc_title(passage)
-                if title not in chosen_titles:
-                    chosen_titles.add(title)
-                    chosen.append(passage)
-                    if len(chosen) >= MAX_DOCS:
-                        break
-        return chosen[:MAX_DOCS]
 
     def forward(self, claim):
         # HOP 1
@@ -537,8 +363,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                         round_pool.append(s[i])
             gap_pool_by_iter.append(round_pool)
 
-        # CONTROL: heuristic-merge-only final selection (reranker disabled) to
-        # isolate the LM reranker's marginal value on an identical seed.
         if gap_pool_by_iter:
             retrieved_docs = self._main_first_merge(
                 main_hops, gap_pool_by_iter, gap_hops_flat
