@@ -21,12 +21,23 @@ class IdentifyMissing(dspy.Signature):
        most likely natural title (e.g. a person's commonly used name). Do NOT invent
        works or people that the evidence suggests don't exist; only name entities you
        believe have their own standalone Wikipedia article.
-    5. Prioritize "bridge" entities the claim depends on that are referenced only
+    5. Proactively list works, roles, and items NAMED WITHIN the retrieved summaries that
+       have their own dedicated article but are NOT in retrieved_titles - especially entries in
+       a person's filmography or discography, cast lists, 'remake of'/'adaptation of' source
+       works, spin-offs, and source materials. The claim may reference such a work only
+       indirectly (e.g. 'the film that X is a remake of'); name the source-work article from
+       the retrieved passage if it is mentioned there. Output canonical Wikipedia titles even
+       when the claim does not state them verbatim.
+    6. Prioritize "bridge" entities the claim depends on that are referenced only
        inside another retrieved passage (e.g. a creator, frontman, or actor named
        inside a work's article).
 
-    Output at most 3 titles, comma-separated, in Wikipedia's canonical lowercase
-    form (no quotes, no numbering). Leave empty if no dedicated article is missing.
+    Output up to 5 candidate titles, comma-separated, in Wikipedia's canonical lowercase
+    form (no quotes, no numbering). Listing several plausible candidates (e.g. a most-likely
+    title plus alternate name-forms or a different-sense disambiguation of an ambiguous
+    name) is BETTER than a single exact guess, because the retrieval index matches the
+    exact canonical article and broad coverage is cheap. Leave empty if no dedicated
+    article is missing.
     """
 
     claim: str = dspy.InputField(desc="The claim being supported.")
@@ -114,11 +125,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Defensive coalescing: DeepSeek occasionally emits None for an output field,
         # which would otherwise raise TypeError when concatenated/coerced below.
         summaries = (summary_1 or "") + "\n" + (summary_2 or "")
-        missing_titles_str = self.identify_missing(
-            claim=claim,
-            summaries=summaries,
-            retrieved_titles=", ".join(sorted(unique_titles)),
-        ).missing_titles
+        try:
+            missing_titles_str = self.identify_missing(
+                claim=claim,
+                summaries=summaries,
+                retrieved_titles=", ".join(sorted(unique_titles)),
+            ).missing_titles
+        except Exception:
+            missing_titles_str = ""
         missing_titles_str = missing_titles_str or ""
         missing_titles = []
         for raw in missing_titles_str.replace("\n", ",").split(","):
@@ -126,10 +140,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if title and title not in unique_titles:
                 unique_titles.add(title)
                 missing_titles.append(title)
-                if len(missing_titles) >= 3:
+                if len(missing_titles) >= 5:
                     break
         gap_docs_list = [
-            self.retrieve_k(title).passages for title in missing_titles
+            self.retrieve_k(title).passages[:3] for title in missing_titles
         ]
 
         return dspy.Prediction(
