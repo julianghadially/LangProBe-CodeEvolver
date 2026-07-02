@@ -67,59 +67,51 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return passage.split(" | ")[0]
 
     def _rank_aware_dedup(self, hop_docs):
-        """Rank-aware merge of ColBERT-ranked passages, dedup by title, cap at MAX_DOCS.
+        """Round-robin merge that consolidates the gap retrievals into ONE pool.
 
-        hop_docs = [hop1, hop2, hop3] + gap_docs_list (each additional hop is the
-        passages retrieved for one gap-title query, already truncated to top-3).
+        hop_docs = [hop1, hop2, hop3] + gap_docs_list, where each gap hop is the
+        passages retrieved for one gap-title query (already truncated to top-3).
 
-        Pure round-robin across all hops lets the (often 2-5) per-title gap dumps
-        consume a rotation slot every round, which evicts moderate-rank main-hop
-        gold docs (e.g. a hop3 rank-5 passage) before they can be considered. This
-        reorders the fill so that:
+        Why consolidate: the previous pure round-robin passed each per-title gap
+        retrieval as its OWN hop, so N gap titles gave the gap hop N votes per
+        rotation. With the iter-3 gap-hop cap of 3 titles, that meant 6 hops total
+        and gap took ~half of the 21 slots, evicting moderate-rank main-hop gold
+        (e.g. a hop3 rank-5 passage) before it could be considered, and -(when a
+        gap title was a wrong "disambiguation-style" guess)- letting 3 wrong-gap
+        ranks evict an additional main gold.
 
-          Tier A - rank-0 passage of each gap hop. This is the dedicated article the
-                   gap hop was issued to fetch (the highest-confidence bridge),
-                   so it is reserved a slot first to preserve the recall gains the
-                   gap hop was added for.
-          Tier B - ALL main-hop passages, interleaved BY RANK across hop1/2/3
-                   (round 0 takes each hop's top passage, round 1 the next, ...).
-                   Main hops already hold most gold; interleaving by rank lets
-                   top-rank refined-hop docs land before main budget is eaten by
-                   gap context, and lets moderate-rank gold (rank 5-7) survive.
-          Tier C - remaining gap-hop passages (rank 1, 2 of each gap query), folded
-                   in only if budget remains, so extra gap context cannot evict an
-                   as-yet-unmerged main-hop passage.
-
-        Cross-query rank comparison is invalid (relevance ranks are within-query),
-        so we do NOT globally sort by raw rank; per-tier interleaving preserves
-        hop diversity instead."""
+        We instead merge all gap retrievals into a single rank-interleaved pool
+        (round 0 of the pool takes each gap title's rank-0 passage, etc.), so the
+        gap hop contributes exactly ONE vote per round-robin rotation. The
+        round-robin then runs across [hop1, hop2, hop3, gap_pool]: 4 hops, so main
+        gets ~3/4 of the 21 slots (rank 0-5 of each main hop survives) and the gap
+        pool gets ~1/4 (still surfaces every gap-rank-0 bridge candidate first).
+        Same ColBERT rank ordering and dedup-by-title as before. No structural
+        change for the no-gap case (gap_pool empty -> old 3-hop interleave)."""
         main_hops = hop_docs[:3]
         gap_hops = hop_docs[3:]
+        # Build ONE rank-interleaved pool across all gap-title retrievals:
+        # rank-0 of every gap title first, then rank-1 of every title, etc.
+        gap_pool = []
+        max_gap = max((len(g) for g in gap_hops), default=0)
+        for i in range(max_gap):
+            for gap in gap_hops:
+                if i < len(gap):
+                    gap_pool.append(gap[i])
+        merge_hops = main_hops + ([gap_pool] if gap_pool else [])
+
         seen = set()
         docs = []
-
-        def _push(passage):
-            title = self._doc_title(passage)
-            if title not in seen:
-                seen.add(title)
-                docs.append(passage)
-
-        # Tier A: each gap query's top match (the desired dedicated article).
-        for gap in gap_hops:
-            if gap and len(docs) < MAX_DOCS:
-                _push(gap[0])
-        # Tier B: main-hop passages interleaved by rank (top ranks first).
-        max_main = max((len(h) for h in main_hops), default=0)
-        for i in range(max_main):
-            for hop in main_hops:
-                if i < len(hop) and len(docs) < MAX_DOCS:
-                    _push(hop[i])
-        # Tier C: remaining gap passages (rank 1, 2) only if budget remains.
-        max_gap = max((len(g) for g in gap_hops), default=0)
-        for i in range(1, max_gap):
-            for gap in gap_hops:
-                if i < len(gap) and len(docs) < MAX_DOCS:
-                    _push(gap[i])
+        max_len = max((len(h) for h in merge_hops), default=0)
+        for i in range(max_len):
+            for hop in merge_hops:
+                if i < len(hop):
+                    title = self._doc_title(hop[i])
+                    if title not in seen:
+                        seen.add(title)
+                        docs.append(hop[i])
+                        if len(docs) >= MAX_DOCS:
+                            return docs
         return docs[:MAX_DOCS]
 
     def forward(self, claim):
