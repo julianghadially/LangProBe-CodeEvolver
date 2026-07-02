@@ -5,7 +5,7 @@ MAX_DOCS = 21
 
 MAX_GAP_TITLES = 3
 GAP_PASSAGES_PER_TITLE = 3
-PASSAGE_SNIPPET_CHARS = 240
+PASSAGE_SNIPPET_CHARS = 600
 SNIPPET_DOCS_PER_HOP = 5
 
 
@@ -41,7 +41,16 @@ class IdentifyMissing(dspy.Signature):
          filmography/discography entries, cast lists, "remake of"/spin-off/source
          works, season rosters, "directed by", "fronted by", "founded by" — even
          when the claim references them indirectly.
-      4. AIM FOR COMPLETENESS but PRECISION FIRST: only suggest titles you are
+      4. SPECIFIC OVER GENERIC: the claim's "bridge" entity is almost always the
+         SPECIFIC named work/show/episode/role/organization — e.g. the named TV
+         series "Ishqbaaz", the named album "Marzemino", the named film "Sing
+         Street". Generic infrastructure around it — the network/channel/studio/
+         publisher/platform that aired/published/released it (Star Plus, BBC,
+         Columbia Records, 21st Century Fox, etc.) is rarely the missing bridge;
+         prefer the specific named thing even when the snippet only mentions the
+         channel. Do NOT add a network/platform/studio title unless it is itself
+         the claimed bridge.
+      5. AIM FOR COMPLETENESS but PRECISION FIRST: only suggest titles you are
          reasonably confident exist as standalone Wikipedia articles. Listing
          multiple plausible candidates (alternate name-forms, different-sense
          disambiguations) is BETTER than one exact guess — but never INVENT a
