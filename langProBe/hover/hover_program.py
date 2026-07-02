@@ -39,6 +39,18 @@ class IdentifyMissing(dspy.Signature):
          EXACT canonical title only — a disambiguated near-name such as
          "Dave Evans (singer)" covers ONLY that sense; do not assume "Dave Evans"
          alone is the same article.
+      1b. DISAMBIGUATE AMBIGUOUS NAMES ON EMISSION: when the entity you are
+         naming has a BARE name that is inherently ambiguous (a common word
+         or a name shared by multiple Wikipedia articles) AND the claim or a
+         snippet pins a specific sense, emit the DISAMBIGUATED canonical
+         Wikipedia title form so ColBERT retrieves the correct sense's article
+         rather than the ambiguous base page — e.g. "Skittles (confectionery)"
+         not "Skittles" (when the claim is about the candy), "Dave Evans
+         (singer)" not "Dave Evans", "Robert Jordan (novelist)" only if that is
+         the real article's exact title. If the bare form IS itself the real
+         standalone article (most people/places), emit it bare. If you are UNSURE
+         of the exact parenthetical disambiguator, emit the bare form rather
+         than inventing a wrong parenthetical — never fabricate a title.
       2. Scan `passage_snippets` for any named entity MENTIONED inside a passage
          but whose own standalone article is NOT in `retrieved_titles`. Voice
          your entity extraction aloud, citing the snippet fragments where the
@@ -102,11 +114,11 @@ class IdentifyMissing(dspy.Signature):
     Output:
       - missing_titles: up to 3 NEW canonical Wikipedia article titles to
         retrieve next, ordered by how likely each is the claim's missing bridge.
-        EMIT EXACTLY ONE TITLE PER LINE (never comma-separated). Many Wikipedia
-        titles themselves contain commas (e.g. "Murray Hill, Manhattan",
-        "Washington, D.C.", "Skittles, Mars, Incorporated"), so
-        comma-separation is ambiguous and will be mis-parsed — use one title per
-        line only. None may appear in `retrieved_titles` or
+        EMIT EXACTLY ONE TITLE PER LINE (never comma-separated — Wikipedia titles
+        may themselves contain commas, e.g. "Murray Hill, Manhattan",
+        "Washington, D.C.", "Mars, Incorporated"). Prefer the disambiguated form
+        "X (sense)" when (and only when) the bare name is ambiguous and the
+        claim/snippet pins the sense. None may appear in `retrieved_titles` or
         `previously_suggested_titles`. Empty if no genuinely new bridge remains.
     """
 
