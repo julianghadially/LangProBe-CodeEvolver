@@ -78,12 +78,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             for hop_docs in (hop1_docs, hop2_docs, hop3_docs)
             for p in hop_docs
         }
-        summaries = summary_1 + "\n" + summary_2
+        # Defensive coalescing: DeepSeek occasionally emits None for an output field,
+        # which would otherwise raise TypeError when concatenated/coerced below.
+        summaries = (summary_1 or "") + "\n" + (summary_2 or "")
         missing_titles_str = self.identify_missing(
             claim=claim,
             summaries=summaries,
             retrieved_titles=", ".join(sorted(unique_titles)),
         ).missing_titles
+        missing_titles_str = missing_titles_str or ""
         missing_titles = []
         for raw in missing_titles_str.replace("\n", ",").split(","):
             title = raw.strip()
