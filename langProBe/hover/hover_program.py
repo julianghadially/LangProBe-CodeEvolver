@@ -315,8 +315,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             # the 2*MAX_GAP_TITLES*GAP_PASSAGES_PER_TITLE cap), avoiding the
             # docs-per-hop truncation that muted iter-18 R2's depth mechanism.
             snippets = self._build_snippets(main_hops)
+            # Flatten all gap passages acquired by prior rounds into a single
+            # hop of passages (a flat list of "title | body" strings) so the
+            # wider gap window is applied uniformly to every retrieved bridge
+            # doc without a docs-per-hop cutoff.
             flat_gap_hops = [
-                sl for sl in gap_hops_by_iter for sl in sl
+                passage
+                for round_slices in gap_hops_by_iter
+                for slice_docs in round_slices
+                for passage in slice_docs
             ]
             if flat_gap_hops:
                 gap_snips = self._build_snippets(
