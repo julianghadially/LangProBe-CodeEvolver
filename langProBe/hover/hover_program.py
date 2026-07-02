@@ -23,6 +23,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
+        # GAP HOP: identify Wikipedia articles for entities named in the claim/summaries
+        # but whose own article title is not yet among the retrieved titles, then fetch them.
+        self.identify_missing = dspy.ChainOfThought(
+            "claim, summaries, retrieved_titles -> missing_titles"
+        )
 
     @staticmethod
     def _doc_title(passage):
@@ -67,6 +72,32 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
+        # GAP HOP: fetch dedicated articles for named entities not yet retrieved.
+        unique_titles = {
+            self._doc_title(p)
+            for hop_docs in (hop1_docs, hop2_docs, hop3_docs)
+            for p in hop_docs
+        }
+        summaries = summary_1 + "\n" + summary_2
+        missing_titles_str = self.identify_missing(
+            claim=claim,
+            summaries=summaries,
+            retrieved_titles=", ".join(sorted(unique_titles)),
+        ).missing_titles
+        missing_titles = []
+        for raw in missing_titles_str.replace("\n", ",").split(","):
+            title = raw.strip()
+            if title and title not in unique_titles:
+                unique_titles.add(title)
+                missing_titles.append(title)
+                if len(missing_titles) >= 3:
+                    break
+        gap_docs_list = [
+            self.retrieve_k(title).passages for title in missing_titles
+        ]
+
         return dspy.Prediction(
-            retrieved_docs=self._round_robin_dedup([hop1_docs, hop2_docs, hop3_docs])
+            retrieved_docs=self._round_robin_dedup(
+                [hop1_docs, hop2_docs, hop3_docs] + gap_docs_list
+            )
         )
