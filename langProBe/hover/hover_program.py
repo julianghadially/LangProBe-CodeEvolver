@@ -1,3 +1,5 @@
+import re
+
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
@@ -58,18 +60,21 @@ class IdentifyMissing(dspy.Signature):
          `retrieved_titles`.
 
     Output:
-      - missing_titles: a comma-separated list of up to 3 canonical Wikipedia
-        article titles whose dedicated article should be retrieved next. Order by
-        how likely the article is the claim's missing bridge. If nothing is
-        missing, output an empty string. Output ONLY titles already-mentioned-in
-        evidence; do not invent.
+      - missing_titles: a NEWLINE-SEPARATED list of up to 3 canonical Wikipedia
+        article titles whose dedicated article should be retrieved next — put
+        EXACTLY ONE title on each line, and never separate titles with a comma,
+        because many Wikipedia titles themselves contain a comma
+        (e.g. "Mars, Incorporated", "Washington, D.C."). Order by how likely
+        the article is the claim's missing bridge. If nothing is missing, output
+        an empty string. Output ONLY titles already-mentioned-in evidence; do
+        not invent.
     """
 
     claim: str = dspy.InputField()
     retrieved_titles: str = dspy.InputField(desc="Canonical Wikipedia titles already retrieved, one per line. NEVER re-suggest these.")
     passage_snippets: str = dspy.InputField(desc="Literal truncated text excerpts from a sample of retrieved articles. Scan these for entity MENTIONS by text span.")
 
-    missing_titles: str = dspy.OutputField(desc="Comma-separated canonical Wikipedia titles to retrieve next, up to 3. Empty if none.")
+    missing_titles: str = dspy.OutputField(desc="NEWLINE-separated canonical Wikipedia titles to retrieve next, up to 3, ONE title per line (never separate titles with a comma since titles like 'Mars, Incorporated' contain commas). Empty if none.")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -179,7 +184,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         gap_hop = []
         seen_gap_titles = set()
-        for raw in [t.strip() for t in missing_titles_raw.replace("\n", ",").split(",")]:
+        for raw in [t.strip() for t in re.split(r"[\n\r]+", missing_titles_raw)]:
             if not raw or raw in seen_titles:
                 continue
             seen_gap_titles.add(raw)
