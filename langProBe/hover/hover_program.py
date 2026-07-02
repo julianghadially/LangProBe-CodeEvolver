@@ -6,6 +6,7 @@ MAX_DOCS = 21
 MAIN_RESERVE = 15
 MAX_GAP_TITLES = 3
 GAP_PASSAGES_PER_TITLE = 3
+GAP_PASSAGES_PER_PROBE = 3
 PASSAGE_SNIPPET_CHARS = 600
 SNIPPET_DOCS_PER_HOP = 5
 MAX_GAP_ITERATIONS = 2
@@ -108,6 +109,18 @@ class IdentifyMissing(dspy.Signature):
         comma-separation is ambiguous and will be mis-parsed — use one title per
         line only. None may appear in `retrieved_titles` or
         `previously_suggested_titles`. Empty if no genuinely new bridge remains.
+      - probe_query: if you would otherwise output EMPTY missing_titles, but the
+        claim references an entity or relationship whose standalone Wikipedia
+        article MIGHT exist and is NOT yet in `retrieved_titles`, emit ONE short
+        natural-language SEARCH QUERY (NOT a title) that would surface that
+        article via full-text Wikipedia search. Examples: a claim naming a duo
+        ("Peter and Gordon") → "Peter and Gordon duo member"; a claim about a
+        college mentioned only by abbreviation/garble ("NMIO") → the college's
+        proper name as a phrase; "the other film in Josh Flitter's filmography".
+        Keep it to <= 8 words, proper-noun-rich, no stopwords padding. Empty if
+        you can name a title (then use missing_titles) OR if there is genuinely
+        no remaining suspect bridge. This query is a fallback retrieval channel
+        for bridges you SUSPECT but cannot name exactly — do NOT use it to pad.
     """
 
     claim: str = dspy.InputField()
@@ -116,6 +129,7 @@ class IdentifyMissing(dspy.Signature):
     passage_snippets: str = dspy.InputField(desc="Literal truncated text excerpts from a sample of retrieved articles (including prior gap rounds). Scan these for entity MENTIONS by text span.")
 
     missing_titles: str = dspy.OutputField(desc="Up to 3 NEW canonical Wikipedia titles to retrieve next, ONE TITLE PER LINE (never comma-separated — titles may themselves contain commas). None already in retrieved_titles or previously_suggested_titles. Empty if no genuinely new bridge remains.")
+    probe_query: str = dspy.OutputField(desc="ONE short natural-language search query (<=8 words, NOT a title) for a bridge you SUSPECT has a standalone article but cannot name exactly. Emit ONLY when missing_titles is empty AND a remaining suspect bridge exists. Empty otherwise.")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -307,13 +321,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     passage_snippets=snippets,
                 )
                 missing_titles_raw = (gap_resp.missing_titles or "").strip()
+                probe_query_raw = (gap_resp.probe_query or "").strip()
             except Exception:
                 missing_titles_raw = ""
+                probe_query_raw = ""
 
             # Parse candidate titles split ONE PER LINE (the prompt instructs the
             # LM to emit exactly one title per line, because Wikipedia titles
-            # themselves may contain commas — splitting on commas corrupts
-            # titles like "Murray Hill, Manhattan" / "Skittles, Mars,
+            # themselves may contain commas — splitting on commas corrupts titles
+            # like "Murray Hill, Manhattan" / "Skittles, Mars,
             # Incorporated" into garbage queries. Fall back to newline/semicolon
             # tokenisation only.)
             new_titles = []
@@ -326,7 +342,34 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     break
 
             if not new_titles:
-                break  # IdentifyMissing considers the evidence complete.
+                # PROBE-QUERY FALLBACK — when IdentifyMissing could NOT name any
+                # exact bridge title (would otherwise STOP-EARLY) but suspects a
+                # bridge exists, it emits a natural-language search query. Retrieve
+                # it as a single gap search and treat the result as this round's
+                # gap contribution so the NEXT round can re-scan the enriched
+                # snippet pool. Bounds: probe fires ONLY when titles empty (so it
+                # never stacks on top of productive title rounds), one query per
+                # round, sliced GAP_PASSAGES_PER_PROBE. Distinct channel from the
+                # title-as-query path — targets the can't-name-exact-title class
+                # (e.g. bridge known only by description).
+                probe_q = probe_query_raw.replace(";", " ").strip()
+                if not probe_q or probe_q in previously_seen:
+                    break  # no titles AND no probe → evidence complete.
+                previously_seen.add(probe_q)
+                try:
+                    gap_docs = self.retrieve_k(probe_q).passages
+                except Exception:
+                    gap_docs = []
+                slice_docs = gap_docs[:GAP_PASSAGES_PER_PROBE]
+                gap_hops_flat.extend(slice_docs)
+                for passage in gap_docs:
+                    title = self._doc_title(passage)
+                    if title not in seen_titles:
+                        seen_titles.add(title)
+                        retrieved_titles.append(title)
+                gap_hops_by_iter.append([slice_docs])
+                gap_pool_by_iter.append(slice_docs)
+                continue  # let the next round re-scan the enriched pool.
 
             previously_suggested.extend(new_titles)
 
