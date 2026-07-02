@@ -17,7 +17,7 @@ from requests.adapters import HTTPAdapter
 # ``pool_maxsize`` must be >= the eval thread count so concurrent threads each
 # get a reused connection rather than spilling over into new ones.
 _SESSION = requests.Session()
-_adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32)
+_adapter = HTTPAdapter(pool_connections=32, pool_maxsize=100)
 _SESSION.mount("https://", _adapter)
 _SESSION.mount("http://", _adapter)
 
@@ -40,7 +40,7 @@ class CountingRM:
         num_retrievals = rm.get_count()
     """
 
-    def __init__(self, rm, timeout=60, max_retries=2, retry_backoff=60):
+    def __init__(self, rm, timeout=240, max_retries=2, retry_backoff=60):
         self._rm = rm
         self._local = threading.local()
         self.timeout = timeout

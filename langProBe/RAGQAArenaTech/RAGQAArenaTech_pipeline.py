@@ -7,16 +7,20 @@ wrapper owns LM configuration, the retrieval database (injected into the program
 and a stable ``forward(question)`` interface; the inner program is pure logic.
 """
 
+import os
+
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 from .RAGQAArenaTech_program import SimplifiedBaleen
 from .RAGQAArenaTech_retrieval import get_default_retriever
 
-# DeepSeek-V4-Flash hosted on DeepInfra, routed through LiteLLM/DSPy. No
-# reasoning_effort is set, so the provider's default ("normal") effort is used.
-# The DeepInfra key is read by LiteLLM from the DEEPINFRA_API_KEY env var at call
-# time -- never passed into dspy.LM(...), so it stays out of the OTel trace files.
-MODEL = "deepinfra/deepseek-ai/DeepSeek-V4-Flash"
+# Arm DeepSeek-V4-Flash through GMI Cloud, routed through LiteLLM/DSPy, using LiteLLM's OpenAI-compatible route:
+# model="openai/<id>" + api_base=<GMI endpoint>.
+# Note reasoning is enabled via the standard OpenAI `reasoning_effort` param (tested with mlflow)
+# The GMI key MUST be passed explicitly otherwise it would fall back to OPENAI_API_KEY.
+# Note: the key is redacted from traces by DSPy+OpenInference. checked with Opentelemetry.
+MODEL = "openai/deepseek-ai/DeepSeek-V4-Flash"
+GMI_API_BASE = "https://api.gmi-serving.com/v1"
 
 # DSPy caches LM completions in memory AND on disk (~/.dspy_cache) by default.
 # CodeEvolver runs this program directly via its mounted evaluator, bypassing the
@@ -46,6 +50,8 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.lm = dspy.LM(
             MODEL,
+            api_base=GMI_API_BASE,
+            api_key=os.environ["GMI_API_KEY"],
             reasoning_effort="high",
             allowed_openai_params=["reasoning_effort"],
         )
