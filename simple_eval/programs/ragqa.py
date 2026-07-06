@@ -10,7 +10,7 @@ from typing import Callable, List, Tuple
 import dspy
 
 from langProBe.RAGQAArenaTech.RAGQAArenaTech_pipeline import RAGQAArenaTechPipeline
-from langProBe.RAGQAArenaTech.metric import ragqa_semantic_f1
+from langProBe.RAGQAArenaTech.metric import ragqa_cfc, ragqa_semantic_f1
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -94,11 +94,16 @@ def load_program_ragqa(program_path: str | None) -> dspy.Module:
 def select_metric_ragqa(metric_name: str | None) -> Tuple[Callable, str]:
     """Return the RAGQAArenaTech metric and its normalized name.
 
-    Uses the canonical scorer in langProBe/RAGQAArenaTech/metric.py: SemanticF1
-    (key-idea recall/precision of the generated response vs the gold response),
-    judged by the metric module's JUDGE_LM. The GEPA/CodeEvolver feedback variant
-    (ragqa_semantic_f1_feedback) lives alongside it in the same module.
+    Metrics live in langProBe/RAGQAArenaTech/metric.py:
+      - "semantic_f1" (default): SemanticF1 -- key-idea recall/precision of the
+        generated response vs the gold response, judged by the module's JUDGE_LM.
+      - "cfc": Completeness/Faithfulness/Conciseness composite
+        (0.5*completeness + 0.25*faithfulness + 0.25*conciseness). Faithfulness
+        reads the retrieved passages off pred.context. The GEPA/CodeEvolver feedback
+        variant (ragqa_cfc_feedback) lives alongside it in the same module.
     """
+    if metric_name and metric_name.lower() in {"cfc", "completeness_faithfulness_conciseness"}:
+        return ragqa_cfc, "cfc"
     return ragqa_semantic_f1, "semantic_f1"
 
 

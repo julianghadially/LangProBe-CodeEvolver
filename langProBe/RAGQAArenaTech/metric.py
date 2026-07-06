@@ -19,7 +19,12 @@ import re
 
 import dspy
 from dspy.teleprompt.gepa.gepa import ScoreWithFeedback
-from dspy.evaluate.auto_evaluation import SemanticRecallPrecision, f1_score
+from dspy.evaluate.auto_evaluation import (
+    AnswerCompleteness,
+    AnswerGroundedness,
+    SemanticRecallPrecision,
+    f1_score,
+)
 
 # Judge LM, kept consistent with the original SemanticF1 wiring in
 # langProBe/RAGQAArenaTech/__init__.py.
@@ -407,6 +412,244 @@ def ragqa_pairwise_winrate_feedback(
         parts.append(
             "The system answer beat the human reference (more truthful/helpful/"
             "complete). Preserve this grounding and coverage."
+        )
+
+    return ScoreWithFeedback(score=score, feedback=" ".join(parts))
+
+
+
+# ======================================================================================
+# COMPLETENESS / FAITHFULNESS / CONCISENESS (CFC)
+# ======================================================================================
+#
+# A composite metric with more optimization headroom than the (saturated) LFRQA pairwise
+# win-rate. The total is a weighted sum of three components, each in [0, 1]:
+#
+#   total = 0.50 * completeness   -- fraction of the GROUND-TRUTH answer covered by the
+#                                    response (are we saying everything we should?).
+#         + 0.25 * faithfulness   -- fraction of the response SUPPORTED BY the retrieved
+#                                    passages (are our claims grounded in evidence?).
+#         + 0.25 * conciseness    -- a length penalty that punishes over-long answers.
+#
+#   * Completeness   -> DSPy's AnswerCompleteness (auto_evaluation.py): LLM judge that
+#     enumerates key ideas in gold vs. response and reports `completeness`.
+#   * Faithfulness   -> DSPy's AnswerGroundedness (auto_evaluation.py): LLM judge that
+#     enumerates the response's check-worthy claims and reports the fraction `groundedness`
+#     deducible from the retrieved context. Needs the retrieved passages -- SimplifiedBaleen
+#     now carries them on `pred.context` (see RAGQAArenaTech_program.py).
+#   * Conciseness    -> pure-Python char-length penalty; NO LLM call (deterministic, free).
+#
+# Both judges reuse JUDGE_LM ("openai/gpt-5.4-mini"), consistent with the metrics above.
+
+CFC_WEIGHTS = {"completeness": 0.5, "faithfulness": 0.25, "conciseness": 0.25}
+
+# Conciseness "line with a cliff" knees (ratio = len(response) / len(gold), in chars):
+#   ratio <= 1.3          -> no penalty              (the first 30% over gold is exempt)
+#   1.3 < ratio < 3.0     -> penalty = (ratio-1)/2   (a line anchored at (1.0, 0), so it
+#                                                     jumps to 0.15 at 1.3+ -- the cliff)
+#   ratio >= 3.0          -> full penalty (1.0)
+CONCISENESS_EXEMPT_RATIO = 1.3
+CONCISENESS_FULL_RATIO = 3.0
+
+# A "good" composite answer under bootstrap/trace mode (matches the file's 0.66 convention).
+CFC_THRESHOLD = 0.66
+
+_completeness_judge = None
+_groundedness_judge = None
+
+
+def _get_completeness_judge():
+    """Lazily build the DSPy AnswerCompleteness judge on JUDGE_LM."""
+    global _completeness_judge
+    if _completeness_judge is None:
+        judge = dspy.ChainOfThought(AnswerCompleteness)
+        judge.set_lm(dspy.LM(JUDGE_LM))
+        _completeness_judge = judge
+    return _completeness_judge
+
+
+def _get_groundedness_judge():
+    """Lazily build the DSPy AnswerGroundedness (faithfulness) judge on JUDGE_LM."""
+    global _groundedness_judge
+    if _groundedness_judge is None:
+        judge = dspy.ChainOfThought(AnswerGroundedness)
+        judge.set_lm(dspy.LM(JUDGE_LM))
+        _groundedness_judge = judge
+    return _groundedness_judge
+
+
+def _context_text(pred, pred_trace=None):
+    """Return the retrieved passages the answer was generated from, as one string.
+
+    Primary source: ``pred.context`` (a list[str]), which SimplifiedBaleen attaches to
+    the returned prediction. Fallback: recover the ``respond`` predictor's ``context``
+    input from ``pred_trace``. Returns "" if unavailable (an evolved program may have
+    dropped it) -- the caller then scores faithfulness as 0.0 and flags it in feedback.
+    """
+    ctx = getattr(pred, "context", None)
+    if not ctx and pred_trace:
+        # pred_trace is a list of (predictor, inputs, outputs); the answer generator's
+        # inputs carry the passage list under "context".
+        for step in pred_trace:
+            try:
+                inputs = step[1]
+            except (TypeError, IndexError):
+                continue
+            if isinstance(inputs, dict) and inputs.get("context"):
+                ctx = inputs["context"]
+                break
+    if not ctx:
+        return ""
+    if isinstance(ctx, (list, tuple)):
+        return "\n\n".join(str(p) for p in ctx)
+    return str(ctx)
+
+
+def _conciseness_score(response, gold_response):
+    """Length-penalty conciseness score in [0, 1]: a straight line with a cliff.
+
+    Penalizes responses that run long relative to the gold answer's character count.
+    See CONCISENESS_* knees above for the exact shape. Being *shorter* than gold is
+    never penalized here (under-coverage is already handled by completeness).
+    """
+    gold_len = len(gold_response or "")
+    if gold_len == 0:
+        return 1.0  # undefined ratio -> don't penalize
+    ratio = len(response or "") / gold_len
+    if ratio <= CONCISENESS_EXEMPT_RATIO:
+        penalty = 0.0
+    elif ratio >= CONCISENESS_FULL_RATIO:
+        penalty = 1.0
+    else:
+        penalty = (ratio - 1.0) / (CONCISENESS_FULL_RATIO - 1.0)
+    return max(0.0, min(1.0, 1.0 - penalty))
+
+
+def _cfc_components(question, gold_response, response, context_text):
+    """Compute (completeness, faithfulness, conciseness) plus judge discussions.
+
+    Returns (comp, faith, concise, meta) where meta carries the judges' short
+    discussion text and the char-length ratio for feedback."""
+    comp_out = _get_completeness_judge()(
+        question=question, ground_truth=gold_response, system_response=response
+    )
+    completeness = max(0.0, min(1.0, float(comp_out.completeness)))
+
+    faith_grounded = False
+    if context_text:
+        faith_grounded = True
+        ground_out = _get_groundedness_judge()(
+            question=question,
+            retrieved_context=context_text,
+            system_response=response,
+        )
+        faithfulness = max(0.0, min(1.0, float(ground_out.groundedness)))
+        ground_discussion = getattr(ground_out, "discussion", "")
+    else:
+        # Retrieval evidence not exposed on the prediction -> a RAG answer with no
+        # grounding evidence cannot be judged faithful. Flag it so the optimizer keeps
+        # carrying the retrieved context.
+        faithfulness = 0.0
+        ground_discussion = (
+            "No retrieved context was exposed on the prediction (pred.context missing), "
+            "so faithfulness could not be assessed and is scored 0.0."
+        )
+
+    conciseness = _conciseness_score(response, gold_response)
+
+    gold_len = len(gold_response or "")
+    ratio = (len(response or "") / gold_len) if gold_len else 0.0
+    meta = {
+        "completeness_discussion": getattr(comp_out, "discussion", ""),
+        "groundedness_discussion": ground_discussion,
+        "length_ratio": ratio,
+        "faith_grounded": faith_grounded,
+    }
+    return completeness, faithfulness, conciseness, meta
+
+
+def _cfc_total(completeness, faithfulness, conciseness):
+    return (
+        CFC_WEIGHTS["completeness"] * completeness
+        + CFC_WEIGHTS["faithfulness"] * faithfulness
+        + CFC_WEIGHTS["conciseness"] * conciseness
+    )
+
+
+def ragqa_cfc(gold, pred, trace=None):
+    """CFC composite score (float in [0, 1]); bool >= threshold under tracing/bootstrap."""
+    response = _response_text(pred)
+    completeness, faithfulness, conciseness, _ = _cfc_components(
+        gold.question, gold.response, response, _context_text(pred)
+    )
+    score = _cfc_total(completeness, faithfulness, conciseness)
+    return score if trace is None else score >= CFC_THRESHOLD
+
+
+def ragqa_cfc_feedback(output, example, trace=None, pred_name=None, pred_trace=None):
+    """CFC composite score with textual feedback for GEPA / CodeEvolver reflection.
+
+    Same CodeEvolver metric contract as the metrics above: the prediction is ``output``
+    and the gold example row is ``example`` (fields ``question`` and ``response``). The
+    retrieved passages are read off ``output.context`` (with a ``pred_trace`` fallback).
+    """
+    pred = output
+    gold_question = _example_field(example, "question")
+    gold_response = _example_field(example, "response")
+    response = _response_text(pred)
+    context_text = _context_text(pred, pred_trace)
+
+    completeness, faithfulness, conciseness, meta = _cfc_components(
+        gold_question, gold_response, response, context_text
+    )
+    score = _cfc_total(completeness, faithfulness, conciseness)
+
+    parts = [
+        f"CFC={score:.2f} "
+        f"(completeness={completeness:.2f} [50%], "
+        f"faithfulness={faithfulness:.2f} [25%], "
+        f"conciseness={conciseness:.2f} [25%]).",
+        f"Response is {meta['length_ratio']:.2f}x the length of the gold answer "
+        f"(conciseness is exempt up to {CONCISENESS_EXEMPT_RATIO:g}x, full penalty at "
+        f"{CONCISENESS_FULL_RATIO:g}x).",
+        f"Question: {gold_question}",
+        f"Gold response (reference): {gold_response}",
+        f"System response: {response}",
+    ]
+    if meta["completeness_discussion"]:
+        parts.append(f"Completeness analysis: {meta['completeness_discussion']}")
+    if meta["groundedness_discussion"]:
+        parts.append(f"Faithfulness analysis: {meta['groundedness_discussion']}")
+
+    # Directional guidance: point the optimizer at the weakest component.
+    weakest = min(
+        ("completeness", completeness),
+        ("faithfulness", faithfulness),
+        ("conciseness", conciseness),
+        key=lambda kv: kv[1],
+    )[0]
+    if weakest == "completeness":
+        parts.append(
+            "Completeness is the weakest component: the response omits key ideas present "
+            "in the gold answer -- retrieve and cover more of the relevant content."
+        )
+    elif weakest == "faithfulness":
+        if not meta["faith_grounded"]:
+            parts.append(
+                "Faithfulness is the weakest component AND no retrieved context was "
+                "available -- ensure the program carries the retrieved passages on the "
+                "prediction (pred.context) and grounds every claim in them."
+            )
+        else:
+            parts.append(
+                "Faithfulness is the weakest component: some claims are not supported by "
+                "the retrieved passages -- ground every claim in the evidence and drop "
+                "unsupported statements."
+            )
+    else:
+        parts.append(
+            "Conciseness is the weakest component: the response is too long relative to "
+            "the gold answer -- say the same key ideas in fewer characters."
         )
 
     return ScoreWithFeedback(score=score, feedback=" ".join(parts))

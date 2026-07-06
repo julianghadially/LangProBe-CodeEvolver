@@ -32,4 +32,9 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
             query = self.generate_query[hop](context=context, question=question).query
             passages = self.search(query, k=self.num_docs)
             context = deduplicate(context + passages)
-        return self.respond(context=context, question=question)
+        pred = self.respond(context=context, question=question)
+        # Carry the retrieved passages on the prediction so downstream metrics
+        # (e.g. faithfulness/groundedness) can see the evidence the answer was
+        # generated from. Mirrors hover_program.py's dspy.Prediction(retrieved_docs=...).
+        pred.context = context
+        return pred
