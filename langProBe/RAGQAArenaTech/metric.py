@@ -13,6 +13,10 @@ surfaces the judge's reasoning and a directional hint so the optimizer learns *w
 a response scored low.
 """
 
+import json
+import os
+import re
+
 import dspy
 from dspy.teleprompt.gepa.gepa import ScoreWithFeedback
 from dspy.evaluate.auto_evaluation import SemanticRecallPrecision, f1_score
@@ -111,6 +115,298 @@ def ragqa_semantic_f1_feedback(
         parts.append(
             "Precision is the weaker side: the response includes ideas not in the gold "
             "answer -- be more focused and faithful to the retrieved evidence."
+        )
+
+    return ScoreWithFeedback(score=score, feedback=" ".join(parts))
+
+
+
+# ======================================================================================
+# PAIRWISE LFRQA WIN-RATE -- RAG-QA Arena's own metric (arXiv:2407.13998)
+# ======================================================================================
+#
+# Faithful reproduction of the model-based pairwise evaluation from the official repo
+# (github.com/awslabs/rag-qa-arena): `code/data_processors.py::LFRQADataProcessor`,
+# `code/compute_correlation.py`, `code/report_results.py`, and the verbatim prompt
+# assets in `templates/` (vendored under ./rqa_arena_eval/).
+#
+# Protocol (exactly as the paper):
+#   1. The judge sees a QUERY and TWO answers (the system answer vs. the human LFRQA
+#      "faithful_answer"). It sees NO retrieved passages (the LFRQA-comparison template
+#      has no passages field -- faithful).
+#   2. The system prompt carries the truthfulness/helpfulness rubric
+#      (rqa_arena_eval/pairwise_lfrqa_system.txt, verbatim); three in-context examples
+#      (rqa_arena_eval/pairwise_lfrqa_examples.json, verbatim, labels 1/2/0) are
+#      injected as user/assistant turns; the final user turn is the rendered template
+#      (rqa_arena_eval/pairwise template below, verbatim from pairwise_lfrqa.cfg).
+#   3. Position bias: the paper assigns the system answer to slot 1 or slot 2
+#      *deterministically by the parity of the query word count*
+#      (`len(query.split(' ')) % 2 == 0`), and judges each query EXACTLY ONCE. We
+#      replicate this exactly (see `_pairwise_slot_order`). It is NOT a bidirectional
+#      both-orders average.
+#   4. The judge outputs `<rating>0|1|2</rating>`: 1 => prefer answer 1, 2 => prefer
+#      answer 2, 0 => not sure (tie). We map the rating back through the slot order to
+#      a win / tie / loss for the SYSTEM answer.
+#   5. The paper reports two dataset-level numbers: W (win rate) and W+T (win+tie).
+#
+# ------------------------------------------------------------------------------------
+# DEVIATIONS FROM THE PAPER (all called out, per request):
+#
+#   [D1] Single scalar per example. DSPy/CodeEvolver metrics must return ONE float per
+#        example, but the paper reports W and W+T as two separate aggregates. We map
+#        win=1.0 / tie=0.5 / loss=0.0, so the dataset MEAN of this metric equals
+#        `W + 0.5*T` (the midpoint of W and W+T). To recover W and W+T separately, use
+#        `ragqa_pairwise_outcome(...)` which returns the raw 'win'/'tie'/'loss' string.
+#
+#   [D2] Bool/trace mode. `dspy.Evaluate` bootstrap/trace mode needs a bool; we treat a
+#        WIN (score == 1.0) as the positive label (`>= PAIRWISE_THRESHOLD`). This is a
+#        DSPy-framework requirement, absent from the paper.
+# ------------------------------------------------------------------------------------
+
+# [D2] Paper's model-based evaluator.
+PAIRWISE_JUDGE_LM = "openai/gpt-5.4-mini"
+# [D4] Deterministic judging.
+PAIRWISE_JUDGE_TEMPERATURE = 0.0
+# [D3] 1 == single evaluator == paper's headline setup. >1 draws N votes + majority.
+PAIRWISE_JUDGE_SAMPLES = 1
+# [D6] A "win" (1.0) is the positive label under bootstrap/trace mode.
+PAIRWISE_THRESHOLD = 1.0
+
+# Verbatim from templates/pairwise_lfrqa.cfg (`{x.question}` etc. -> str.format fields).
+_PAIRWISE_TEMPLATE = """Query is in the <query></query> tags. Answer 1 is in <answer 1></answer 1>, and Answer 2 is in <answer 2></answer 2>.
+
+<query>
+{question}
+</query>
+
+<answer 1>
+{response1}
+</answer 1>
+
+<answer 2>
+{response2}
+</answer 2>
+
+Review the rubric in <rubric> tags,
+- if you prefer <answer 1>, output 1.
+- if you prefer <answer 2>, output 2.
+- if you are not sure, output 0.
+
+First, think step by step, put your thinking in <thinking></thinking> tags. Your thinking must be shorter than 50 words. Then, provide your rating inside <rating></rating> tags. Remember your rating should be 0 if you are not sure, and your rating must be either 0, 1, or 2. """
+
+_ASSET_DIR = os.path.join(os.path.dirname(__file__), "rqa_arena_eval")
+_RATING_TAG_RE = re.compile(r"<rating>.*?</rating>", re.DOTALL)
+
+_pairwise_judge = None
+_pairwise_system = None
+_pairwise_examples = None
+
+
+def _get_pairwise_judge():
+    """Lazily build the pairwise judge LM ([D2]/[D4])."""
+    global _pairwise_judge
+    if _pairwise_judge is None:
+        _pairwise_judge = dspy.LM(
+            PAIRWISE_JUDGE_LM, temperature=PAIRWISE_JUDGE_TEMPERATURE
+        )
+    return _pairwise_judge
+
+
+def _load_pairwise_assets():
+    """Load the verbatim system prompt + 3 in-context examples once."""
+    global _pairwise_system, _pairwise_examples
+    if _pairwise_system is None:
+        with open(os.path.join(_ASSET_DIR, "pairwise_lfrqa_system.txt")) as f:
+            _pairwise_system = f.read()
+        with open(os.path.join(_ASSET_DIR, "pairwise_lfrqa_examples.json")) as f:
+            _pairwise_examples = json.load(f)
+    return _pairwise_system, _pairwise_examples
+
+
+def _render_pairwise(question, response1, response2):
+    return _PAIRWISE_TEMPLATE.format(
+        question=question, response1=response1, response2=response2
+    )
+
+
+# Faithful port of utils.py::process_response (strips thinking/answer scaffolding).
+def _process_response(response):
+    s = str(response)
+    for open_t, close_t in (
+        ("<thinking>", "</thinking>"),
+        ("Thinking: ", "Answer: "),
+        ("Thoughts: ", "Answer: "),
+        ("Thought: ", "Answer: "),
+    ):
+        i, j = s.find(open_t), s.find(close_t)
+        if 0 <= i <= j:
+            s = s[j + len(close_t):]
+    s = s.strip()
+    for tag in ("Answer: ", "Answer:\n", "<answer>", "</answer>"):
+        s = s.replace(tag, "")
+    if s in ("FAIL TO GENERATE ANS.",):
+        return "I couldn't find an answer."
+    return s
+
+
+def _pairwise_slot_order(question, system_answer, gold_answer):
+    """Paper's deterministic position assignment ([position bias], step 3).
+
+    Even query word count -> system answer is slot 1, LFRQA is slot 2.
+    Odd  query word count -> LFRQA is slot 1, system answer is slot 2.
+    Returns (response1, response2, system_slot) where system_slot in {1, 2}.
+    """
+    if len(question.split(" ")) % 2 == 0:
+        return system_answer, gold_answer, 1
+    return gold_answer, system_answer, 2
+
+
+def _parse_rating(completion):
+    """Extract the judge's rating in {0, 1, 2} from `<rating>..</rating>` ([D5]).
+
+    Mirrors compute_correlation.py: take the first `<rating>` match, then the highest
+    of {0,1,2} whose digit appears inside it. Missing tag -> None (caller: tie)."""
+    m = _RATING_TAG_RE.findall(str(completion))
+    if not m:
+        return None
+    tag = m[0]
+    rating = None
+    for i in (0, 1, 2):
+        if str(i) in tag:
+            rating = i
+    return rating
+
+
+def _judge_once(question, response1, response2):
+    """One judge call over the assembled (system + 3 ICL turns + final) messages."""
+    system, examples = _load_pairwise_assets()
+    messages = [{"role": "system", "content": system}]
+    for ex in examples:
+        messages.append(
+            {"role": "user",
+             "content": _render_pairwise(ex["query"], ex["response_1"], ex["response_2"])}
+        )
+        messages.append(
+            {"role": "assistant",
+             "content": f"<thinking>{ex['thinking']}</thinking><rating>{ex['label']}</rating>"}
+        )
+    messages.append({"role": "user", "content": _render_pairwise(question, response1, response2)})
+    out = _get_pairwise_judge()(messages=messages)
+    return out[0] if isinstance(out, list) else str(out)
+
+
+def _pairwise_judge_call(question, gold_response, system_response):
+    """Run the paper's pairwise comparison for one row.
+
+    Returns (outcome, score, rating, completion) where outcome in
+    {'win','tie','loss'} for the SYSTEM answer and score in {1.0, 0.5, 0.0} ([D1])."""
+    pred = _process_response(system_response)
+    reference = _process_response(gold_response)
+    response1, response2, system_slot = _pairwise_slot_order(question, pred, reference)
+
+    # [D3] one vote (paper's headline), or N-sample majority if configured.
+    votes, last_completion = [], ""
+    for _ in range(max(1, PAIRWISE_JUDGE_SAMPLES)):
+        try:
+            last_completion = _judge_once(question, response1, response2)
+        except Exception:
+            last_completion = ""  # [D5] judge failure -> tie
+        votes.append(_parse_rating(last_completion))
+
+    rating = _majority_rating(votes)  # None on tie/no-majority/unparseable
+    if rating is None or rating == 0:
+        return "tie", 0.5, (rating if rating is not None else 0), last_completion
+    if rating == system_slot:
+        return "win", 1.0, rating, last_completion
+    return "loss", 0.0, rating, last_completion
+
+
+def _majority_rating(votes):
+    """[D3] Majority over judge votes; None if tie/no-majority (-> caller treats as tie).
+
+    With a single vote (paper's default) this returns that vote unchanged (a bare
+    None stays None -> tie)."""
+    valid = [v for v in votes if v is not None]
+    if not valid:
+        return None
+    if len(valid) == 1:
+        return valid[0]
+    from collections import Counter
+    counts = Counter(valid).most_common()
+    if len(counts) > 1 and counts[0][1] == counts[1][1]:
+        return None  # no majority -> tie
+    return counts[0][0]
+
+
+def ragqa_pairwise_outcome(gold, pred, trace=None):
+    """Raw pairwise outcome 'win'/'tie'/'loss' for the system answer vs. LFRQA.
+
+    Exposed so callers can compute the paper's W and W+T separately ([D1]):
+        W   = mean(outcome == 'win')
+        W+T = mean(outcome in {'win','tie'})
+    """
+    outcome, _, _, _ = _pairwise_judge_call(
+        gold.question, gold.response, _response_text(pred)
+    )
+    return outcome
+
+
+def ragqa_pairwise_winrate(gold, pred, trace=None):
+    """Pairwise win-rate score (win=1.0 / tie=0.5 / loss=0.0); bool WIN under tracing."""
+    _, score, _, _ = _pairwise_judge_call(
+        gold.question, gold.response, _response_text(pred)
+    )
+    return score if trace is None else score >= PAIRWISE_THRESHOLD
+
+
+def _extract_thinking(completion):
+    m = re.search(r"<thinking>(.*?)</thinking>", str(completion), re.DOTALL)
+    return m.group(1).strip() if m else ""
+
+
+def ragqa_pairwise_winrate_feedback(
+    output, example, trace=None, pred_name=None, pred_trace=None
+):
+    """Pairwise win-rate with textual feedback for GEPA / CodeEvolver reflection.
+
+    Same CodeEvolver metric contract as ``ragqa_semantic_f1_feedback``: the prediction
+    is ``output`` and the gold example row is ``example`` (fields ``question`` and
+    ``response`` -- the LFRQA faithful answer)."""
+    pred = output
+    gold_question = _example_field(example, "question")
+    gold_response = _example_field(example, "response")
+    response = _response_text(pred)
+    outcome, score, rating, completion = _pairwise_judge_call(
+        gold_question, gold_response, response
+    )
+
+    parts = [
+        f"Pairwise vs LFRQA: {outcome.upper()} (score={score:.1f}, judge rating={rating}).",
+        f"Question: {gold_question}",
+        f"Gold (LFRQA) answer: {gold_response}",
+        f"System response: {response}",
+    ]
+    thinking = _extract_thinking(completion)
+    if thinking:
+        parts.append(f"Judge thinking: {thinking}")
+
+    # Directional guidance for the optimizer (mirrors the SemanticF1 feedback style).
+    if outcome == "loss":
+        parts.append(
+            "The judge preferred the human answer -- it was more truthful/helpful/"
+            "complete. Improve factual grounding and coverage of the query without "
+            "adding unsupported claims (untruthful content is penalized first)."
+        )
+    elif outcome == "tie":
+        parts.append(
+            "Judged a tie. To WIN, add truthful, query-relevant coverage the human "
+            "answer lacks -- but keep every claim grounded, since any untruthful "
+            "information is penalized ahead of completeness."
+        )
+    else:
+        parts.append(
+            "The system answer beat the human reference (more truthful/helpful/"
+            "complete). Preserve this grounding and coverage."
         )
 
     return ScoreWithFeedback(score=score, feedback=" ".join(parts))
