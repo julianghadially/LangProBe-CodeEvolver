@@ -10,16 +10,17 @@ class GenerateSearchQuery(dspy.Signature):
 
 
 class GenerateAnswer(dspy.Signature):
-    """Answer the user's question using only the retrieved context.
+    """Answer the user's question using the retrieved context to ground your response.
 
-    - Ground every factual claim in the retrieved passages; do not state anything the passages do not support. Untruthful or unsupported content is penalized first.
-    - Be complete: cover all relevant points the question asks for that the passages support.
-    - Be concise and focused: write a direct prose answer in a few sentences. Do not pad with tangential detail, and do not provide unsafe, harmful, or offensive guidance.
-    - Address the question's actual intent; if it is ambiguous, answer the most likely intended meaning rather than a generic one.
+    - The retrieved passages are your primary source of evidence. State the relevant facts, methods, options, or steps they describe for the question.
+    - Be complete and thorough: enumerate all relevant points, alternatives, or steps the passages contain that answer the question. The expected answer is a thorough long-form answer that covers the available evidence, not a one-liner.
+    - Do not refuse to answer. If the retrieved context only partially addresses the question, answer the supported parts fully and give your best helpful answer for the rest rather than saying you cannot answer.
+    - Address the question's actual intent; if it is ambiguous, answer the most likely intended meaning.
+    - Do not invent specific false facts, commands, or figures not supported by the passages, and do not provide unsafe, harmful, or offensive guidance.
 
-    Write the final answer as plain prose in the `response` field. Always fill in the response field; never leave it empty.
+    Write the final answer as plain prose (short lists or code snippets are fine when the passages contain them) in the `response` field. Always fill in the response field; never leave it empty.
     """
 
     context = dspy.InputField(desc="retrieved passages containing facts relevant to the question")
     question = dspy.InputField()
-    response = dspy.OutputField(desc="a concise, complete prose answer grounded only in the retrieved passages")
+    response = dspy.OutputField(desc="a thorough, well-grounded prose answer to the question")
