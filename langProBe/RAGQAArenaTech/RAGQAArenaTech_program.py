@@ -1,6 +1,24 @@
+import re
+
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
 from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateAnswer
+
+# Some completions return the adapter's *literal* template placeholder (e.g.
+# "{response text}", "{response}", "{answer}") instead of filling in the field.
+# These strip to a non-empty string so the `not response` guard misses them, and
+# the metric dumps the placeholder as the system answer -- a guaranteed loss. A
+# short, single brace-wrapped token like these is never a real answer.
+_PLACEHOLDER_RE = re.compile(r"^\{[^{}\n]{0,40}\}\s*$")
+
+
+def _is_blank_or_placeholder(text):
+    if text is None:
+        return True
+    s = str(text).strip()
+    if not s:
+        return True
+    return bool(_PLACEHOLDER_RE.match(s))
 
 
 class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
@@ -53,10 +71,10 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         """
         pred = self.respond(context=context, question=question)
         response = getattr(pred, "response", None)
-        if not response or not str(response).strip():
+        if _is_blank_or_placeholder(response):
             pred = self.respond(context=context, question=question)
             response = getattr(pred, "response", None)
-        if not response or not str(response).strip():
+        if _is_blank_or_placeholder(response):
             # Last-resort fallback: a concise, grounded sentence from the context.
             if context:
                 response = (
