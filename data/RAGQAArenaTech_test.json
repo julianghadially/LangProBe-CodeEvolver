@@ -798,5 +798,405 @@
   {
     "question": "is it normal for auditors to require all company passwords?",
     "response": "The consensus of opinion is that this is neither normal nor professional. \nEngaging with a security company for penetration testing requires careful considerations that are not evident in the described situation.  \nIt is not recommended to proceed with this company since such behavior casts doubt on their professionalism, as a legitimate pentesting process should never start without a comprehensive contract or NDA in place.  \nPrior to any penetration test there should be a Scoping and Rules of Engagement document(s) that is signed by both parties.  \nAdditionally, the request for sensitive information without the appropriate legal framework is abnormal and potential grounds for terminating any agreements.  \nFurthermore, a responsible security company shouldn't need any more of the requested information to perform a pentest and should stop you from providing it.  \nIf this is supposed to be a black box test, they should not get or require any passwords.  \nIf you're not a CEO or CTO, it's crucial not to give the auditors any passwords."
+  },
+  {
+    "question": "how to compare two dates in a shell?",
+    "response": "For chronologically comparing dates in the year-month-day format, using a standard string comparison suffices. \nIt's also possible to convert the dates into Unix timestamps for comparison, as timestamps can be easily compared once converted."
+  },
+  {
+    "question": "error opening a zip file: no such file or directory?",
+    "response": "If you encounter issues with a zip file, it is advisable to reacquire the file by re-downloading or re-copying it from the original source and attempt to open it again.  \nShould the file still appear problematic, then it's likely that filename.zip is either not actually a .zip file, or is corrupted.  \nChecking if the file is genuinely a zip file through the terminal can help determine if the file is valid, and using commands to repair permissions and unzip the file can potentially resolve issues."
+  },
+  {
+    "question": "where do whatsapp voice notes saved on android?",
+    "response": "Your voice files are also stored in the Whatsapp folder. \nThe specific path for your voice notes is: WhatsApp/Media/WhatsAppVoiceNotes/"
+  },
+  {
+    "question": "how do i transfer files from linux to iphone?",
+    "response": "You can use the iOS app GoodReader, or install the VLC app from the app store and use its wifi transfer feature."
+  },
+  {
+    "question": "is tethering bad for your phone?",
+    "response": "There is no substantial evidence to suggest that tethering is detrimental to device hardware.  \nTethering should be a manageable task for any Android device that supports it and shouldn't cause harm to the hardware, with the possible exception of some battery wear from overheating."
+  },
+  {
+    "question": "bash - how to run a command after the previous finished?",
+    "response": "You can either join commands with ; or have them on separate lines: command1; command2 or command1 command2. \n\nYou could us a for loop: for P in {1..3} ; do wget -q http://exemple.com/page${P}.php ; done."
+  },
+  {
+    "question": "will ipv6 make private ip addresses become obsolete?",
+    "response": "IPv6 NAT is possible and practical although some argue it is unnecessary. \nSome people think that private addressing will not become obsolete because there will always be a need for big private networks that are not directly connected to the internet."
+  },
+  {
+    "question": "how to check who last logged in linux?",
+    "response": "The command \"last\" reads from a file, typically /var/log/wtmp, and lists successful login attempts, showing the most recent first. \nTo find out the last time a file was updated, you should use the \"stat\" command. \nAdditionally, the \"lastlog\" command is noted for its ability to filter user logins within specific date ranges."
+  },
+  {
+    "question": "how can i deal with a team member who dislikes making comments in code?",
+    "response": "One effective method to improve a developer's ability to write clearer code is to conduct frequent code reviews and refactoring sessions.  \nRegular code review practices can also entail having the developers explain and defend their code in front of their peers and superiors, which can significantly enhance coding skills.  \nMoreover, in addition to reviewing, pair programming is highly effective for honing developer skills, although it may be more challenging to put into practice.  \nTo enforce quality standards for code, constantly asking questions during code reviews and documenting the answers can drive developers to make their coding intentions clearer, either through more comments or by refactoring their code."
+  },
+  {
+    "question": "why are salted hashes more secure for password storage?",
+    "response": "The salt is added before the hash, making the hash completely different for every salt.  \nThis enhances security because when multiple users have the same password, they will have different hashes.  \nA large number of iterations in password hashing algorithms like PBKDF2 or Scrypt is to deliberately slow down attackers, which reduces the key space they can explore in a given time frame. \nSimply salting MD5 hashes isn't sufficient in today's security environment; instead, one should use well-established security options like crypt, bcrypt, PBKDF2, or scrypt, which involve multiple rounds of hashing. \nSalting prevents the cracking of multiple accounts with the same weak password and makes it hard for attackers to identify which passwords are easy to compromise.  \nA salted hash defeats rainbow table attacks because it makes the required rainbow table impractically large.  \nUnique salts per password hash compel attackers to target each password individually, preventing a wide-scale breach, as even similar passwords contain completely different hashes.  \nBy a factor of 2N, the storage requirement and the time to compute a rainbow table are increased by a salt. \nThe presence of salt in password hashing adds a layer of protection against rainbow table attacks by requiring attackers to resort to brute-force methods. \nWhile salts enhance security for medium-strength passwords, their effectiveness depends on the compromise of password hashes, which is already a severe security breach. \nThe primary benefit is evident when users reuse passwords across different systems, making medium-security passwords harder to reverse. \nEven a moderately secure password, when coupled with a salt, can withstand extended brute-force attacks, providing users with an opportunity to change compromised passwords and enhance overall security."
+  },
+  {
+    "question": "whats to stop someone from 3d print cloning a key?",
+    "response": "The simple answer is absolutely nothing, other than honor, as sense of morality, knowing the difference between right and wrong, respect for other people, and their property, and when that fails, a .357 Magnum and a bad attitude usually suffices. \n\nPeople without TV/Youtube may see nothing at all to stop them, but others will be aware of the cost; printing a key is a waste money and effort, when your average basic bump key set is cheaper, re-usable and works for 80% of the locks, or the locks can be picked, or bypassed entirely (go through the window). \n\nIf concerned about 3D printing, have a key/lock solution with atypical features, such as electronics or some interactivity that can't be replicated with your standard 3D printer."
+  },
+  {
+    "question": "how do i launch finder from terminal or command line",
+    "response": "To open a specific directory in Finder using Terminal, you need to type the command 'open' followed by the directory name."
+  },
+  {
+    "question": "how to get the complete and exact list of mounted filesystems in linux?",
+    "response": "Util-linux, as of version 2.18 released in July 2010, includes a feature,\"findmnt\", for displaying mounted file systems."
+  },
+  {
+    "question": "how to set path for finder-launched applications",
+    "response": "Adding particular configurations like export PATH=some_path:another_path launchctl setenv PATH $PATH to the .bash_profile has been successful for users who were unable to get their desired results with Eclipse on an older OS version.  \nFor Mountain Lion users, modifying the Info.plist of the application has proven to be effective. \nHowever, on Mountain Lion itself, setting the $PATH via launchctl proved futile, and the only effective method was through /etc/launchd.conf, although it applied the path to all users on the laptop. \nOn Yosemite, use the command sudo launchctl config user path and reboot your machine to become effective. \nIn macOS Catalina, a user was able to successfully set a customized path across the system by running a script."
+  },
+  {
+    "question": "keyboard shortcut for locking screen in macos sierra?",
+    "response": "Apple has removed this shortcut due to security concerns and Bluetooth issues, but users can opt for Hot Corners as an alternative solution instead. \nIf one wishes to put their computer to sleep, they can press the power button for about half a second; however, there's a risk of initiating a restart if the button is held down too long, and other methods may be necessary for keyboards lacking a power button.  \nFor Sierra and preceding versions, using keychain settings or Hot Corners is recommended to lock the screen. \nAlternatively, lock the screen by using the CTRL+Shift+Power Button or CTRL+Shift+Eject-Key. \nIndividuals can create a custom keyboard shortcut to lock the screen using Automator to execute a shell script; the shortcut should function upon pressing, although the service may have to be accessed through the menu bar initially. \nHammerspoon offers another scriptable method to define key bindings for locking the screen or starting the screen saver.  \nA user can put their Mac to sleep using the \"hs.caffeinate.lockScreen()\" command or the \"\u2318 command + option + \u233d\u23fb\" keyboard shortcut on macOS Sierra, but the screen saver approach is preferred.  \nMacBook Pro users with the Touch Bar can allocate one of the virtual keys for locking the Mac, which is configurable through the System Preferences Keyboard section.  \nLastly, macOS High Sierra (10.13) has introduced a built-in 'Lock Screen' feature in the Apple menu, which can be quickly accessed with a straightforward keyboard shortcut."
+  },
+  {
+    "question": "how to find out from the logs what caused system shutdown?",
+    "response": "To investigate user logins and ascertain who may have been involved with a system halt, you can run the `last` command to check the login information for all users. \nAdditionally, system shutdowns can be tracked through the log files, particularly when they occur due to programmatically privileged requests or ACPI events. \nIn cases of overheating, logging details may be located in the `/var/log/syslog` file. \nMoreover, the `/var/log/auth.log` file could also contain relevant information about system shutdowns."
+  },
+  {
+    "question": "can i connect an android phone to an external monitor, keyboard and mouse?",
+    "response": "To meet these needs, the Motorola 'Atrix' phone is a device that has been recently showcased, with its release anticipated for later in the year.  \nSamsung Galaxy S can connect to a TV through the use of a Micro USB to HDMI cable.  \nSamsung also offers a dock for the Galaxy Tab, which enables it to connect to a full-size keyboard, positioning the screen similarly to that of a laptop.  \nAdditionally, various Android devices, including the Galaxy Tab, have video or HDMI out features, and Bluetooth can be used for keyboard connections.  \nThe Asus EEE Pad Transformer is another device that aligns with user requirements and is currently available.  \nYou can find demonstrations online, like the one for Ubuntu for Android, showing how an Android phone can be turned into a fully functional desktop while simultaneously functioning as an Android phone. \nThe Samsung Galaxy Nexus setup allows for the use of Bluetooth peripherals and an external monitor, providing a simple solution without the need for special drivers or applications."
+  },
+  {
+    "question": "how does changing your password every 90 days increase security?",
+    "response": "The necessity of password changes depends on the context and what is being protected.  \nThey are not a comprehensive solution and negatively impact usability but could make sense in certain scenarios.  \nThey do address issues that could arise if an attacker obtained password hashes and limit the damage if an old backup is lost.  \nWithout password expiry, there is potentially an unlimited time window for attackers to attempt dictionary, brute-force, or common password attacks.  \nExpiration policies can help prevent issues for people who reuse passwords across different systems.  \nIt forces the user to come in contact with a possibly inactive account; they may not know whether their account has been breached otherwise.  \nPassword resets can signal to users the importance of password security.  \nAutomatic expiration can also safeguard against non-compliance and may provide a limited time for attackers to break a password before it becomes invalid.  \nSome argue that if strong passwords are used, frequent changes are less necessary.  \nOthers say that it is mainly a compliance-driven requirement with marginal security benefits, and is not something you should rely on for security. \nRecently, NIST's new guidelines recommend against \"expiration without reason\". \nSome maintain that password expiration policies are considered bothersome to users, are ineffective in mitigating brute-force attacks because only in an intermediate, balanced scenario would a password change make any difference.  \nFurther, changing passwords could be seen as increasing the security risk through use of post-it notes, increasing numbers or shift-numbers for ordinary users. \nA study by Microsoft found that forcing users to change their password every six months isn't very useful: at least 41% of passwords can be broken offline from previous passwords for the same accounts in a matter of seconds, and five online password guesses in expectation suffices to break 17% of accounts, concluding that the evidence suggests it may be appropriate to do away with password expiration altogether."
+  },
+  {
+    "question": "how to find applications path from command line?",
+    "response": "Either use whereis or which to get the path to the installed program, for example, whereis git will give you the path to the command. \n\nIf it is in your path, then you can run either type git or which git, and if it is not in your path, then it's best to look for it with locate -b git, which will find anything named 'git'. \n\nAlternatively, and for older systems, use the old standby find, possibly with a -print option: find / -name git -print. \n\nThe POSIX standard way to do this is command -v git. \n\nIf you happen to forget the program name, you can use apropos with a synonym or description of your utility, so apropos \"version control\" will find git."
+  },
+  {
+    "question": "copy text from one tmux pane to another (using vim)",
+    "response": "In the context of copying and pasting text, it's possible to use the system clipboard with \"*y and \"*p rather than the normal (y) and (p) commands. \nWhen working directly in Vim, `vim copy paste` is usually preferable to avoid issues like copying irrelevant text such as line numbers or marks in the gutter. \nAnother approach is `Enter Copy Mode: <prefix>+[ Start copy: <Space> Copy text: <Enter> Paste text: <prefix>+]` is an effective method. \nIn Tmux, using keyboard shortcuts like Ctrl+Alt+C and Ctrl+Alt+V will also work."
+  },
+  {
+    "question": "how do you force a 5 ghz wifi connection?",
+    "response": "In OS X 10.9 Mavericks it's not possible to force a frequency band without using additional tools or methods. \niStumbler can be used to give you an option to manually select the 5GHz signal. \nAlternatively, you can set up a separate network name for this band and ensure that it's the closest signal to your access point. \nAnother approach to differentiate connections is to use the same SSID for both frequencies but assign different passwords for the 5GHz and 2.4GHz networks. \nTo make devices prefer the 5GHz signal automatically, increase its transmission power while reducing the 2.4GHz signal strength, though this could impact devices that only support 2.4GHz. \nOn OS X Mavericks, setting the channel number for the 5GHz band through the airport command can help \"set\" the preferred WiFi band. \nAdditionally, using Airtool to force your wireless interface to work on a specific 5GHz channel is another solution, effective on OS X 10.10. \nIn macOS Sierra 10.12.3, if networks share the same SSID, the channel for the 5GHz network can be set directly on the airport card. \nFinally, one complicated option for controlling the network on 10.11.x is to first disable roaming and then physically penalize the 2.4 GHz signal with a mesh, for example made of chicken wire, to encourage connection to the 5 GHz band."
+  },
+  {
+    "question": "are no caller id calls dangerous?",
+    "response": "Unidentified calls don't seem to present a significant risk. \nHowever, you should keep interaction to a minimum, if you take such a call. \nScammers are experts at getting people to engage in order to trick them into a scam, so saying absolutely nothing is also an option. \nHowever, sometimes legitimate companies have proper reasons for hiding their number. \nIf this is the case, you can always terminate the call and phone the company in question back via their phone number, which should be available on their website."
+  },
+  {
+    "question": "where do files go when the rm command is issued?",
+    "response": "The file gets unlinked, so the data is still sitting there on disk, but the link to it is removed, meaning the file is effectively nowhere, gone, vanished. \n\nIn Unix-style filesystems (including on Linux), files are not really \"at\" any particular place; if there are still hardlinks, the files are wherever the hardlinks you didn't delete are, but if there are no hardlinks left, the files are gone. \n\nFiles removed with rm are gone, but given that most filesystems only remove the reference to the data and indicate that the blocks as free, but the file's data is never deleted, so you could try to locate your data reading directly from the device, for example by searching for the not-yet-overwritten blocks by certain patterns."
+  },
+  {
+    "question": "what happens when you mount over an existing folder with contents?",
+    "response": "When a hard drive is mounted over the existing /tmp directory, the contents of /tmp become hidden from view."
+  },
+  {
+    "question": "can i see my cpu and memory usage meters in the menu bar?",
+    "response": "iStat Menus offers the required functionality and is purchasable for USD 14.39 for one license or $17.99 for a pack usable on up to five Macs.  \nAnother alternative is MenuMeters, valued for its features and, despite being free, accepting donations.  \nFor those preferring customization, Geektool enables the creation of unique geeklets or the use of existing ones from the internet.  \nSystemPal, contrasting iStat by being quick, tiny, configurable, and powerful, is obtainable in the Mac App Store.  \nAs a free, open-source option, CpuInfo is available on GitHub, though it is limited to displaying CPU information only.  \nSimilarly, iGlance is another open-source alternative.  \nAnother recommendation is Stats, a Simple macOS system monitor for the menu bar, an excellent open-source project installable via Homebrew.  \nMenu Bar Stats 3 is also recommended as a useful tool.  \nFor those who might not know, the Activity Monitor dock icon can be swapped with a graph detailing CPU usage, CPU history, network activity, or disk activity.  \nLastly, eul, admired for its sleek design and configurability with widgets, can be installed through brew or from the Mac App Store."
+  },
+  {
+    "question": "what does ` (backquote/backtick) mean in commands?",
+    "response": "In the context of commands, the backquote/backtick  means that whatever inside the backticks is interpreted as the result of that command and runs the contents of the enclosed string.  \nConsequently, everything you type between backticks is evaluated or executed by the shell before the main command."
+  },
+  {
+    "question": "how do you hide your best friends on snapchat?",
+    "response": "You cannot hide the best friends list in snapchat, although you could block the users to remove their name from the list."
+  },
+  {
+    "question": "set default mail client in osx without adding an email account?",
+    "response": "RCDefaultApp is a free solution that integrates as a control panel, letting you set defaults for applications on your system.  \nMicrosoft provides the SetDefaultMailApp tool, which is straightforward to use.  \nYou could employ the system's Python interpreter with a specific command to change the default mail app.  \nAnother method involves using Brew to install duti, which allows setting the default mail client via the command line.  \nSwiftDefaultApps is an updated replacement for RCDefaultApp and can be installed via Brew.  \nMSFT Mail Changer app for Mac provides an easy-to-use interface to change your default mail client without requiring installation.  \nAlternatively, if installing third-party apps isn't an option, adding a junk mail account can help you bypass certain limitations and access the Preference pane to make the necessary changes."
+  },
+  {
+    "question": "how to set up reverse tethering over usb?",
+    "response": "SimpleRT is an effective tool for use with Linux for reverse tethering.  \nThe Android Usb Port Forwarding app offers functionalities for the same purpose.  \nWindows users with rooted phones can utilize Another resourceful tool found on the xda-developers forum, named Android Reverse Tethering.  \nFor those seeking an app solution, the Reverse Tether app is available on the Play Store providing free limited trial use, with full features for a fee.  \nRooted Android phone users can connect their Android device via USB, and activate USB tethering by navigating to Settings \u2192 More...\u2192 Tethering & mobile hotspot \u2192 USB tethering.  \nImportantly, ReverseTethering NoRoot's app exists, allowing reverse tethering without root requirements on unrooted Android devices.  \nMoreover, for Windows, Linux or Mac PC, gnirehtet is a project that permits reverse tethering by downloading and running a command from the gnirehtet zip-file without the need to pre-install an app."
+  },
+  {
+    "question": "how to add repository from shell in debian?",
+    "response": "The add-apt-repository command, which can now be found in the software-properties-common package, simply executes a couple of commands to add the repository: append the repository to /etc/apt/sources.list and add the repository key to the machine. \n\nIf you're running a non-ancient version of Debian (Etch or later), you can just drop a file in /etc/apt/sources.list.d/."
+  },
+  {
+    "question": "how do you empty the buffers and cache on a linux system?",
+    "response": "Use the command: # echo 1 > /proc/sys/vm/drop_caches."
+  },
+  {
+    "question": "where is the apk file downloaded from google play store?",
+    "response": ".apk files are downloaded and stored somewhere in a subfolder on your device called /data.  \nHowever, in order to access this folder, you will need to root your device."
+  },
+  {
+    "question": "how to know number of cores of a system in linux?",
+    "response": "When determining the number of cores and processors in a system, one should consider sockets and cores per socket.  \nUsing the command 'cat /proc/cpuinfo' can provide a detailed output for each core.  \nAlternatively, the 'nproc' command can be used to obtain this information without requiring root privileges.  \nTo find the number of cores online, one can use the command 'grep -c processor /proc/cpuinfo 8'.  \nAnother method is to execute 'echo $((`cat /sys/devices/system/cpu/present | sed 's/0-//'` + 1))'.  \nThe 'getconf _NPROCESSORS_ONLN' command is also a reliable option, as it is a part of glibc."
+  },
+  {
+    "question": "combined `mkdir` and `cd`?",
+    "response": "The commands `eval {mkdir,cd}\\ FOLDER\\;` and `mkdir foo && cd \"$_\"` provide methods for script or command line usage to create and immediately navigate into a directory.  \nThe use of `$_`, a special parameter, after a command references the last argument from the previous command, aiding in streamlining the navigation process.  \nDouble quotes are necessary around `$_` in certain shells, such as bash, to ensure the correct handling of directory names that contain spaces."
+  },
+  {
+    "question": "how can i mount an smb share from the command line?",
+    "response": "In relation to mounting file systems, a useful command is: \"mount -t smbfs\" with your password and username (if required), machine name, share name and destination folder. \nFor automatic mounting at system boot, alterations to \"/etc/auto_master\" and the creation of \"/etc/auto_smb\" with appropriate mount points and options are recommended. \nThe utility of \"Using AppleScript\" is a good option for its integration with Keychain through the execution of a custom Bash function."
+  },
+  {
+    "question": "what is the difference between -m conntrack --ctstate and -m state --state",
+    "response": "The state is a part of conntrack and just a simpler version of it."
+  },
+  {
+    "question": "can i configure my linux system for more aggressive file system caching?",
+    "response": "You can use some newer fs such as ext4 or btrfs try to change your io scheduler, or use something like systemd to preload while booting. \n\nYou can set the read-ahead size with blockdev --setra sectors /dev/sda1. \n\nNote, too high rates can cause a crash, and this will use up to 90% of your free memory as write cache, or you can go all out and use tmpfs; tmpfs is good because it allows falling back to disk should you need the RAM. \n\nFirst optimize the load-stuff-from-storage-to-cache part. \n\nThe most important setting for an SSD is slice_idle which must be set to 0-1. \n\nA very simple and very effective approach is: echo \"2000\" > /proc/sys/vm/vfs_cache_pressure; decreasing vfs_cache_pressure causes the kernel to prefer to retain dentry and inode caches. \n\nIncreasing vfs_cache_pressure beyond 100 causes the kernel to prefer to reclaim dentries and inodes. \n\nFor an ext4 system, you could disable journaling entirely; to stop disk reads from triggering disk writes, mount with the relatime or the noatime option as when you read a file, the \"last accessed time\" metadata for that file is usually updated, and the noatime option will disable that behavior."
+  },
+  {
+    "question": "is it normal for people to not work?",
+    "response": "One possible reason for lackluster work attitudes could be the example set by management, which influences employee behavior.  \nMany individuals may be doing just enough to avoid termination, satisfied with just receiving their paycheck.  \nIn roles where extra effort doesn't equate to additional rewards, employees may not find the incentive to push themselves harder, setting a lower standard to avoid increased expectations.  \nOrganizational inefficiencies, such as excessive bureaucracy, can also hinder motivation by slowing workflows, contrasting with the dynamic nature of less structured environments like startups.  \nIt's important to note that not all jobs, like software development, are marked by continuous active work; much of the time can be spent planning and problem-solving rather than coding.  \nIf individuals appear unproductive, it could indicate underlying systemic issues.  \nEffectiveness in work is complex and cannot be solely judged on immediate output; factors like employee contentment play a significant role.  \nMoreover, developer productivity can vary based on experience and the nature of the job, with less coding but more thoughtful work expected from senior roles.  \nEvery industry has varied work ethics, and adapting or seeking a better-suited environment is important.  \nFurthermore, productivity styles can differ, with some professionals interspersing bursts of intense work with periods of apparent inactivity, which may be misconstrued as laziness.  \nIt's important to avoid quick judgments about work ethic, someone surfing might be spawning multiple background threads and thinking about the best way to tackle a problem, or someone else might seem inactive because they're waiting for their code to compile.  \nIn making the distinction between professionals and workers: professionals often need time to think and innovate, differentiating them from more routine task-oriented workers.  \nFeeling unobligated to work hard can sometimes stem from a lack of engagement or appreciation by management, and there can be a strategic aspect to pacing one's work to manage expectations.  \nPair programming is recommended for increasing focus and reducing distractions. \nIt's also worth noting that workplace culture and personal values heavily influence work habits, and finding a rewarding and challenging job can lead to a better work-life balance.  \nIt is considered normal for some individuals to put in less effort while others work at their maximum capability.  \nOur culture pays people for working a 40 hour (or X hour) week rather than on a task basis, which is a terrible idea because it offers no motivation."
+  },
+  {
+    "question": "how to check if my hd is case sensitive or not?",
+    "response": "To read the File System Personality using a terminal, execute the command 'diskutil info /'.  \nThis command is also handy if you're using Disk Utility, which shows the same information in its info window.  \nThe Terminal.app is the quickest way to perform this action by issuing 'diskutil info /Volumes/NAME-OF-VOLUME' or adding a grep command to filter for 'User Visible'.  \nIf the ls command displays both files, abc1 and ABC2, then your drive is case insensitive. \nA practical test to determine if your drive's file system is case insensitive is by using touch to create two files with names differing only by case and then utilizing ls to check if both appear.  \nAdditionally, running 'diskutil info <device>' will clearly indicate the File System Personality.  \nEchoing text to a temporary file in a specific case format and then using cat to read it back is another method to verify if the file system is case-sensitive.  \nLastly, using touch to create files with similar names with case variations can help test case sensitivity based on the number of files shown by ls."
+  },
+  {
+    "question": "how to split the terminal into more than one view?",
+    "response": "You can do it in screen using the terminal multiplexer, which allows vertical and horizontal splits with keyboard shortcuts and can unsplit and switch between different areas after starting new sessions.  \nAnother option is splitvt, which is primarily used for splitting terminals.  \nAdditionally, tmux is highlighted as a proficient terminal multiplexer for splitting screens, toggling between panes, and handling multiple windows with various layouts.  \nTerminator is recommended for users seeking more features, such as grid arrangements, tabs, drag and drop, and simultaneous typing across terminals, and it integrates well with Screen and Tmux. \nTmux is a Terminal Multiplexer with clear distinctions among sessions, windows, and panes.  \nVertical Split for GNU Screen is available and provides functionality similar to the horizontal split command.  \nFor those preferring ease of copy-pasting and efficient tab management within a window manager, terminator and tilix are recommended alternatives.  \nKDE's Konsole has built-in split view functionality alongside navigation through split views and tabs. \nLastly, Vim can serve as a basic terminal multiplexer with commands for opening split terminals."
+  },
+  {
+    "question": "adb is not working in android studio?",
+    "response": "Android Studio does not include ADB; instead, you need to get it through the Android SDK, which is typically set up the first time you run Android Studio version 0.9.x or newer.  \nWhen using a physical device with Android Studio, ensure that debugging mode is activated, which permits Android Studio to access the device."
+  },
+  {
+    "question": "are in app purchases shared in family sharing?",
+    "response": "In-App purchases are not shared in Family sharing, meaning they are not included, which is clearly stated on the Apple website."
+  },
+  {
+    "question": "are programmers good at math?",
+    "response": "Some say that in most instances, good programming and an interest in mathematics are distinct abilities, and proficiency in one does not necessitate competence in the other.  \nOne programmer noted that the very worst very worst programmers they had ever worked with had PhD's in math. \nSome prominent programmers, like Jeff Atwood, do not necessarily have a strong inclination towards mathematics. \nWhile a fundamental understanding of algorithms is crucial for becoming a standout programmer, and a basic comfort with or knowledge of math will help you in your work, you don't necessarily need to excel in mathematics.  \nA lack of mathematical inclination does not preclude success in programming, though familiarity with principles like logic and geometry can enhance one's work with databases. \nThe idea that math is essential for programming is sometimes considered a myth, mainly propagated by academic environments, rather than by the reality of working as a programmer. \nSome say that the level mathematical ability required depends completely on what you're programming. \nBut many believe math to be essential for programming, stating that mathematics is an abstract notation for modeling real world situations, which is exactly what programming is. \nThey add that high-level programming may not require extensive math; however, more in-depth understanding is mandatory for low-level programming.  \nProgramming, they say, has firm mathematical roots, and comfort with numerical concepts is important, further advising that you have to either learn math, or create your own\u2013either way, it is important to be good at it in some form or another. \nThe essence of being \"good at math\" may equate to the ability to construct and manipulate mental models rather than the memorization of facts, which is crucial for programming as well, proving to some that a programmer with good math skills will be a far better programmer than the one who lacks. \nMathematical knowledge can facilitate certain programming tasks, as seen in a Javascript acceleration and deceleration simulation using the Fibonacci sequence. \nA comfort level with algebra seems almost non-negotiable for being a proficient programmer, but extensive math experience beyond that may not be frequently necessary.  \nSome say that it's pretty hard to be good at programming if you don't understand some basic concepts in Discrete Mathematics like set theory and Boolean logic. \nDirectly learning algebra from programming is not uncommon, as it helps in understanding algebraic expressions, and mathematics can give a valuable foundation for software developers.  \nProficiency in mathematics can result in superior programming skills, as programming is essentially applied math: both fields reward clear, analytical thinking. \nLikewise, interest in programming can boost mathematical ability, illustrating a practical application for math concepts in coding. \nWhile some say that business programming might not involve intricate mathematics, they assert that the development of 3D graphics engines and developing data structures rely heavily on mathematical concepts. \nBut others counter that even business programming requirements necessitate some math skills, particularly databases, algorithms, and query processing, which are fundamentally mathematical."
+  },
+  {
+    "question": "how to get execution time of a script effectively?",
+    "response": "For a simple measurement, use the command \"time yourscript.sh\" when calling the script.  \nIf you are exiting a script and wish to call times without arguments, you can use ksh or zsh, where \"time\" also measures wall clock time.  \nIn the absence of the \"time\" command, you can use 'date +%s' to capture the start and end times to calculate the duration.  \nAlternatively, Python can be used to format the output to show minutes and seconds using this: \"start=$(date +%s) end=$(date +%s) runtime=$(python -c \"print '%u:%02u' % ((${end} - ${start})/60, (${end} - ${start})%60)\")\".  \nTools like 'perf stat' offer detailed performance analysis, and running 'perf stat' reveals the average execution time.  \nThe \"time [any command]\" syntax allows you to monitor various types of commands in a user-friendly manner.  \nThe bash time built-in also works well for timing commands, with the option to format the output.  \nFor more technically demanding situations requiring millisecond precision, bash can manipulate file descriptors and process substitution to achieve this without calling external programs.  \nFinally, there is also the \"/usr/bin/time -v command\" for a built-in alternative."
+  },
+  {
+    "question": "precedence of the shell logical operators &&, ||",
+    "response": "In most programming languages, operators of equal precedence are left-associative, which means operations are performed from left to right.  \nSpecifically, in Bash, the operators '&&' and '||' are treated with the same precedence.  \nTo control multiple conditions in Bash, it's recommended to group conditions together.  \nWhile '&&' and '||' operators can be used in place of traditional if-then-else structures, they can produce equivalent outcomes if applied with care."
+  },
+  {
+    "question": "how to change your date of birth on icloud?",
+    "response": "Apple support say there is no way to do this; you have to create a new account and will lose everything associated with the existing IDs."
+  },
+  {
+    "question": "reattach terminal tab to another window",
+    "response": "To reattach a terminal tab to another window, first, in the window where you want to move the tab, go to View, and then to Show Tab Bar.  \nIf you encounter issues with the tab bar, consider disabling the \"Hide tab bar when there is only one tab\" in Preferences under Appearance.  \nAlternatively, go to Preferences, uncheck the \"Hide tab bar when there is only one tab,\" set the Tab position to the Bottom, and use your hotkey to show the Hotkey Window. \nThen, click and drag the tab into the Hotkey Window's tab bar.  \nAlso, you can hold down the Command + Shift + Option while dragging the body of the terminal. \nLastly, to complete the reattachment, click and drag the tab from one window onto the tab bar of the other window."
+  },
+  {
+    "question": "in bash, when to alias, when to script, and when to write a function?",
+    "response": "In determining whether to use an alias or, script, or function in shell scripting, individual preference plays a significant role.  \nOne should begin with an alias for simplicity (if you only need to add an argument at the front of a single command, for example) an alias will work, advance to a function when complexity increases, and resort to a script for standalone and reusable tasks.  \nSome say aliases are only suitable for simple text replacements, with no arguments/parameters, functions, a well-defined concept of a few lines of code, are easy to write/use, full shell scripting capability, only available inside bash with one command and some parameters, and scripts have several commands and no parameters and are more or less like functions (or a collections of functions) but available (callable) outside of bash as well.  \nFor changes that should persist within the current shell environment, functions are the appropriate choice as they execute within the same process, avoiding the overhead of creating a new shell that occurs with scripts.  \nIn multi-user environments, scripts are favored for their reliability across different contexts, as aliases and functions might depend on a specific shell context or user environment.  \nScripts are primarily used to assemble different software components into more complex functionalities, while functions act as pre-loaded scripts for enhancing modularity and reusability in bash scripts.  \nScripts can be invoked in various ways and used by multiple programs, and read from files each time they are called, contrasting with aliases and functions which are stored in and restricted to the current shell's memory.  \nFor modifications requiring administrative privileges, like editing system files, scripts are necessary since they can be executed with 'sudo'. \nAliases and functions require less memory and execute faster, though they necessitate load time as the shell must interpret them before showing the prompt.  \nIf speed is essential, one should consider an alias or function, but if a task needs to function outside the favored shell or takes arguments, scripting is advisable.  \nLastly, while aliases and functions serve different purposes and can co-exist, aliases are limited to interactive sessions and are not nestable like functions."
+  },
+  {
+    "question": "how can i run a command which will survive terminal close?",
+    "response": "To manage processes in a terminal, one can use commands like `$ nohup redshift &` or `$ redshift & disown` to prevent the process from terminating when the session ends, or when running kate & in Konsole: `nohup kate &` or screen/tmux/byobu, which will keep the shell running, independent of the terminal.  \nAlternatively, if the process is already running, you can suspend it with `Ctrl-Z`, bring it to the background with `bg`, and then `disown` it: $` sleep 1000 ^Z + Stopped sleep 1000 $ bg $ disown $ exit.`  \nAnother option is to initiate the process in a new session using `setsid process`.  \nA script can help run commands in the background, manage their output, and ignore their exit status through `nohup`, redirecting output to `/dev/null`, and controlling the script's timeout.  \nThe shell-only way to do all this is to close stdin and background the command: `command <&- &` prevent the process from closing with the terminal.  \n`Screen` is another robust tool for managing terminal sessions, allowing multiple sessions within one terminal window and the ability to detach and reattach sessions as needed (`screen -S session_name`). \nTo protect a specific process from being terminated when logging out, you can use `nohup -p PID` to prevent it from receiving a HUP signal.  \n`(applicationName &)` can ensure a smooth initiation of the background process.  \nA predefined script can use `screen` to run long commands and allow them to continue running after the terminal is closed: `#!/bin/bash # if screen -ls | awk '$1 ~ /^[1-9][0-9]*\\.'\"$1\"'/' >/dev/null then echo \"WARNING: session is already running (reattach with 'screen -r $1')\" >&2 else exec screen -S \"$1\" bash -c \"$@; echo; echo '--------------------'; read -p 'ALL DONE (Enter to exit):'\" echo \"ERROR: 'screen' is not installed on this system\" >&2 fi exit 1 `.  \nLastly, `reptyr` can attach an already running process to a `screen` session, permitting terminal closure without affecting the process."
+  },
+  {
+    "question": "why isnt udp with reliability (implemented at application layer) a substitute of tcp?",
+    "response": "Both protocols are designed with certain guarantees and raw TCP has more guarantees than raw UDP.  \nUDP with reliability can indeed be a substitute for TCP. \nHowever, in general, TCP is pretty optimal so it's not worth going to all the extra work and adding a (large) chance of adding bugs and security flaws."
+  },
+  {
+    "question": "why is mother\u2019s maiden name still used as a security question?",
+    "response": "There was a widespread lethargy and inertia among institutions, which depended on the secrecy of information over the years. \nOrganizations tend to be slow in adapting to changes. \nPeople being lazy and/or incompetent contributes to security issues. \nThere are entrenched false assumptions in security practices, with security questions and \"complex\" passwords that are considered best practices being passed on without adequate scrutiny. \nSecurity questions are meant to have long-term validity, and while they can sometimes be easily accessible public information, they can also be part of multi-factor authentication strategies for enhanced security. \nUsability is often prioritized over security in systems such as banks to cater to a more diverse clientele, sometimes sacrificing security for accessibility and convenience. \nIt is ironic that security questions, which are intended to be easy to remember and hence are weak alternate passwords, are still widely used. \nIt is suggested that users should be allowed to select their security level, acknowledging that for less important accounts, 'simple locks' and simple passwords, and ease of recovery might be more fitting than stringent security measures."
+  },
+  {
+    "question": "should package names be singular or plural?",
+    "response": "The convention for naming packages can vary based on language and context.  \nIn .NET, specifically in C#, it is recommended to use the plural form for package names.  \nAdditionally, it is recommended to use the plural form for packages with homogeneous contents and the singular form for those with heterogeneous contents."
+  },
+  {
+    "question": "how to disable battery full notification sound?",
+    "response": "Currently, there is no built-in option provided to disable the \"Battery Full\" notification alert on certain devices, including specific Samsung models. \nNevertheless, you can adjust the global notifications to silent to prevent the alert from making a sound, yet this requires individually setting the notification tone for each app and doesn't serve as a perfect fix. \nAlternatively, for those who need to mute their phone during the night but still wish to receive emergency calls, an app like \"Night Ringer Free\" can be utilized to create a whitelist for calls and messages while silencing other notifications. \nThere are also apps like Sound Manager that allow for scheduling sound volumes and types, enabling users to mute the notification volume during specific hours without affecting the ring or media volumes. \nFor users who are comfortable with using more advanced tools, Tasker is a solution on some devices that enables disabling notifications during a set timeframe, such as during the overnight charging period. \nMoreover, some users have found that operating system updates have naturally resolved the issue, as noticed with the upgrade from Android 2.2 to 2.3 on the Samsung Galaxy SGS. \nFinally, there are dedicated software modifications available separately for Lollipop, KitKat, and Jelly Bean, such as the 'GravityBox' Xposed module or the Disable Battery Full Alert module, which offer the option to remove the \"Battery Full\" notification sound."
+  },
+  {
+    "question": "support for multiple users on same device",
+    "response": "An app known as Devide by Enterproid may help create separate and secure user profiles for work and personal use on a phone, but its compatibility with specific devices like the Xoom and its cost are uncertain as it's in an invite-only beta.  \nAnother option is Titanium Backup, although it offers very limited support in managing multiple user data profiles. \nSwitchMe, an app for root users, allows management of two profiles with its free version, and more can be managed by purchasing the key, and it uniquely logs users in and out of different Android installations.  \nThe update to Android version 4.1.2 introduced the capability for multiple user profiles, which can be managed using command-line instructions, though root access is required.  \nDevices with Android 5.0 for phones and Android 4.2 for tablets have the multi-user feature, and Android 4.1 contains hidden multi-user functionality not available through the user interface."
+  },
+  {
+    "question": "why are hash functions one way? if i know the algorithm, why cant i calculate the input from it?",
+    "response": "Cryptographic hash functions are designed to be one-way functions, making the reversal from hash to original plaintext infeasible and maintaining their integrity through the avoidance of collisions. \nIt is inherently challenging to reverse a hash function due to built-in algorithm complexities. \nHash functions encode an infinite set of data inputs into a fixed-length string, which results in the impossibility of determining a unique original input from a hash value. \nThe ability to reverse hashes is theoretically possible, but practically it faces substantial obstacles, largely due to the immense time and computational effort required. \nPassword hashes also extend to large datasets; for example, the same hash algorithm used for passwords can compute the hash for a terabyte of data, reinforcing the one-way nature of hashes by highlighting the infeasibility of data recovery from short hash values. \nSecure hash functions are integral to cybersecurity, offering properties of collision resistance and non-reversibility which are vital to the integrity and confidentiality of information. \nWhereas no hash function is proven to be immune to preimage attacks, the difficulty of reversing a hash often relies on an absence of efficient inversion techniques, rather than provable mathematical hardness."
+  },
+  {
+    "question": "how can i copy files from my mac to pc via microsoft remote desktop?",
+    "response": "One approach to sharing data between a Mac and a PC is to utilize a Dropbox, permitting access from both machines.  \nAnother method involves pasting to a specific file path on the network, namely \\\\tsclient\\OSX\\Users\\Shared.  Alternatively, you could copy and paste the entire folder; simply mark the folder in the macOS Finder and press Cmd+C to copy it. \nThen, in the Windows Explorer, in the remote Desktop, press Ctrl+V to paste it."
+  },
+  {
+    "question": "does tls use diffie hellman?",
+    "response": "Yes, SSL/TLS uses Diffie-Hellman as \"ephemeral Diffie-Hellman\"."
+  },
+  {
+    "question": "can i zip an entire folder using gzip?",
+    "response": "Gzip does not inherently zip an entire directory; it serves purely as a compression algorithm.  \nIn contrast, using the gzip command with the -r switch will result in each file within a directory being compressed separately, not as a single zip file.  \nTo compress a whole folder, you can use `tar -cvf - dir | pigz -9 > /path/to/dir.tar.gz` syntax.  \nAlternatively, the zip utility allows the recursive compression of a folder with the syntax `zip -r <zip file name> <folder to zip>`."
+  },
+  {
+    "question": "umount: device is busy. why?",
+    "response": "The problem was a stale loopback mount, which was resolved by deleting the stale loopback configurations with losetup.  \nOther issues include active screen sessions running in the background solved by killing the active shell sessions, a daemon running within a chroot environment (undetected by lsof and fuser) solved by using sudo ls -l /proc/*/root | grep chroot and an open tmux socket.  \nThere were instances where bind and overlay mounts impeded the unmounting process, which required checking tab completion for the concerned mount-point. \nCommonly, processes with open files are responsible for such issues, and using lsof or fuser commands can assist in identifying and terminating these processes to resolve the device busy error."
+  },
+  {
+    "question": "why does numbers hide a huge png file in exported excel sheets?",
+    "response": "Numbers hides a huge PNG file in exported Excel sheets as the default shape fill, which is strictly unnecessary if there are no shapes."
+  },
+  {
+    "question": "how can paypal spoof emails so easily to say it comes from someone else?",
+    "response": "Anyone can falsify email addresses, including the sender information, and PayPal uses certain SMTP headers related to the message header rather than envelope headers to handle email delivery appropriately.  \nWhile it is technically possible to spoof email addresses, PayPal is not actually doing so.  \nIt is also noted that Gmail supports DKIM, which can be used to verify the authenticity of emails from PayPal."
+  },
+  {
+    "question": "how to use find command to search for multiple extensions",
+    "response": "When searching for files in Linux, you can combine criteria using the -o flag, which requires the use of parentheses for proper precedence in the command structure.  \nA command like \"find .-iregex '.*\\.\\(jpg\\|gif\\|png\\|jpeg\\)$'\" is suggested as a more correct approach to locating image files with various extensions.  \nFor Linux, Unix, and macOS systems, the command \"find -E .-regex '.*\\.(jpg|png)'\" is identified as the only option that performs reliably."
+  },
+  {
+    "question": "what should i do when my boss asks me to fabricate audit log data?",
+    "response": "One option is to ask your boss to put the request in writing (paper or email) before you do it. \nYou could also take your concerns to the owner/president (in writing). \nHowever, most people agree that this is wrong and you should tell your boss that it is wrong (it's not the way to win, what would his mother say). \nDon't do it because it's never worth doing something unethical even if it costs you your job; talk to an attorney who specializes in employment law. \nKeep a copy of the current logs and encrypt (check with your lawyer), don't make changes. \nQuit and get a new job, then report your old boss."
+  },
+  {
+    "question": "whats the purpose of dh parameters?",
+    "response": "When static Diffie Hellman (DH) is used (as opposed to Ephemeral Diffie Hellman (EDH)), the DH parameters are set for the server and can actually be embedded in a certificate, so they are public. \n\nThe purpose of the DH parameters is to exchange a secret (a large prime integer belonging to a prime order group) that will be used to encrypt a transcript of messages within a session, where each party sets a private key that is combined with the secret to create a public key, enabling encrypted messages to be exchanged and then de-encrypted. \n\nThe DH parameters are set for the server and can actually be embedded in a certificate, so they are public; with Ephemeral DH, the session key (exchanged at the beginning of the session) is deleted upon session termination."
+  },
+  {
+    "question": "how to arrange two windows easily to left and right side?",
+    "response": "You can use Better Touch Tool (BTT), also called Better Snap Tool, which includes default window snapping, among other features. \nAs of Feb 2, 2016, the app is available to buy for $2.99 USD."
+  },
+  {
+    "question": "is there a way to make the menu bar show at all times in fullscreen windows?",
+    "response": "It's now possible to do this in macOS Monterrey.  \nYou can manage window sizing and arrangement by using ALT/OPTION and clicking the green maximize button. \nAdditionally, you can use gestures, such as a 3 or 4-finger swipe up, to access the spaces menu, facilitating the efficient organization of Desktop Spaces for apps. \nThe BetterTouchTool enhances window management by allowing user-defined actions for maximizing windows and mimicking the window-snapping feature found in Microsoft Windows.  \nDouble-clicking the window title bar is also a technique to maximize the window, offering an additional option.  \nLastly, macOS 12 Monterrey provides a setting in System Preferences \u276d Dock & Menu Bar that lets you keep the menu bar visible in full-screen mode, an important aspect to note."
+  },
+  {
+    "question": "how to know what packages are available with (home)brew?",
+    "response": "To explore available packages with Homebrew, firstly, you can use the command `brew search` to list all available formulas or packages. \nAdditionally, you can browse the formulas directly on GitHub to discover the variety of packages Homebrew offers. \nFor those seeking a user-friendly alternative, there is BrewInstall, a cool website that provides the necessary commands for installing packages when their exact names are not known. \nMoreover, Homebrew's website features an online package browser for easy exploration of available formulas."
+  },
+  {
+    "question": "how can i get the size of a file in a bash script?",
+    "response": "Use the command `ls -l filename` to access information about a file, including its file size, permissions, and owner.  \nFor a more human-readable format indicating disk usage, `du -h filename` is preferred.  \nOn GNU systems, to get precise file size in bytes, the command `stat --printf=\"%s\" file.any` can be used as per the manual's indication.  \nIn Unix systems, a POSIX-compliant approach to find the file size in kilobytes is to combine `du -k` with `cut -f1`.  \nAlternatively, the `wc -c \"$filename\" | awk '{print $1}'` command is also viable, especially when input is redirected to avoid filename display issues.  \nThis method for byte count can also be achieved with `wc -c < \"$file\"` and assigned to a variable. \nMost Linux distributions now ship with a blockdev command that can make use of it: blockdev --getsize64 -- \"$device_file\", for instance (still on Linux): lsblk -bdno size -- \"$device_file\" Should work except for empty devices."
+  },
+  {
+    "question": "is there a google calendar mac desktop app?",
+    "response": "Yes, the built-in Calendar app allows you to add Google Calendar accounts directly.  \nAlternatively, you can use third-party apps like Sunrise, which offers a user-friendly interface and allows you to integrate your Google Account.  \nAnother option is Fluid, a tool that wraps any URL into a native shell, providing a standalone application for Google Calendar.  \nAdditionally, you can add Google Calendar as a Chrome App with a standalone window."
+  },
+  {
+    "question": "uninstall apps locked by phone vendor",
+    "response": "To remove preinstalled apps from your phone, you must root your device, as they reside in a directory beyond regular user permissions. \nAfter rooting, using Titanium Backup is one of the simplest ways to uninstall system apps. \nHowever, ADB can also be used to remove applications if you prefer a method that doesn't involve marketplaces. \nYou can remove the app by using the command: `rm PackageName.apk pm uninstall class.name.of.package CyanogenMod`."
+  },
+  {
+    "question": "extract only a specific file from a zipped archive to a given directory",
+    "response": "To extract a specific file from a zip archive, use the command `unzip ARCHIVE_NAME PATH_OF_FILE_INSIDE_ARCHIVE`, which will unzip the file to the current directory. \nTo list all files in a Zip archive: unzip -l ARCHIVE_NAME."
+  },
+  {
+    "question": "how do so (shared object) numbers work?",
+    "response": "Binaries themselves know which version of a shared library they depend on, and request it specifically. \n\nThe numbers in the shared libraries are convention used in Linux to identify the API of a library; typically the format is: libFOO.so.MAJOR.MINOR, and there is usually a symbolic link from libFOO.so to libFOO.so.MAJOR.MINOR. \n\nInside a shared library file is a field called the SONAME, which is set when the library itself is first linked into a shared object (so) by the build process, so SONAME is actually what a linker stores in an executable depending on that shared object is linked with it. \n\nThe installer will look up whether or not hello.so.1 is installed on the system by checking ldconfig."
+  },
+  {
+    "question": "password rules: should i disallow leetspeak dictionary passwords like xkcds tr0ub4dor&3",
+    "response": "Consider using 2-factor authentication because no password complexity scheme will protect you from user actions. \n\nNo, you should not disallow \"leetspeak\" dictionary words per se, but treat them like regular dictionary words, noting that Tr0ub4dor&3 is equivalent to six random printable characters of complexity, and a weak password, so if six random characters is too weak, then you should disallow \"leetspeak\" dictionary passwords."
+  },
+  {
+    "question": "is it free to facetime?",
+    "response": "Both FaceTime and FaceTime Audio are data and never go through the phone network as a regular phone call, so you will be charged in the same way as using the internet for other purposes on your phone, either Wi-Fi or mobile data, depending on your scenario."
+  },
+  {
+    "question": "how do i know if dd is still working?",
+    "response": "Send it a signal using the kill command to report its current status.  \nThis signal varies by system, with INFO being used for BSD systems and USR1 for Linux.  \nAlternatively, you can use lsof to watch positions within files for commands reading or writing files with `lsof. lsof -o -p1234 # where 1234 is the process ID of the command lsof -o /path/to/file `or use ddrescue.  \nYou can attach strace to a running process to see if it's blocked or active, or initiate another dd process if concerned about sending signals.  \nOn OS X, pressing Ctrl+T in the dd terminal will display its output status and CPU usage.  \nViewing disk I/O activity can also be done with iotop, which indicates disk read/write activity per program.  \nIf you anticipate the need to monitor progress, consider starting your operation with pv, a tool designed for monitoring data transfer progress and speed, or go the other way and use dd to read and pv to write.  \nReal-time information about the dd process can be gleaned from the `wchar line in /proc/$pid/io`, and an example PHP script shows how to display the written bytes without changing terminals: `<?php / Time between refreshs in seconds */ $refresh = 1; / * Start of Script */ if (!($pid = exec('pidof dd'))) exit(\"no dd running\\n\"); $history = array(); $break_ms = $refresh * 1000000; $start_time = exec(\"ls -ld /proc/$pid --time-style=+\\\"%s\\\" | egrep -o [0-9]{10}\"); fprintf(STDOUT, \"PID: %s\\n\", $pid); fprintf(STDOUT, \"START TIME: %s\\n\\n\", date(\"Y-m-d H:i:s\", $start_time)); while (true) { if (isset($curr)) array_push($history, $curr); if (count($history) > 10) array_shift($history); $oldest = reset($history); $latest = end($history); / * get number of written bytes from /proc/$pid/io */ #if (!($curr = exec(\"cat /proc/$pid/io | grep ^write_bytes | sed 's/write_bytes: //g'\"))) # break; /* prepare proc_open() parameter */ $descriptorspec = array( 0 => array('pipe', 'r'), // stdin 1 => array('pipe', 'w'), // stdout 2 => array('pipe', 'w'), // stderr ); $process = proc_open(\"cat /proc/$pid/io | grep ^write_bytes | sed 's/write_bytes: //g'\", $descriptorspec, $pipes); if (!is_resource($process)) break; $stdout = stream_get_contents($pipes); $stderr = stream_get_contents($pipes); proc_close($process); if (!empty($stderr)) break; $curr = trim($stdout); / * caculate elapsed time from start */ $time_elapsed = time() - $start_time; / * avg speed since start */ $avg = $time_elapsed > 0 ? round($curr / $time_elapsed) : 0; / * avg speed of last 10 updates */ if (count($history) > 0) $speed = human_file_size(round(($latest - $oldest) / count($history) / $refresh)); $output = sprintf(\"\\rBYTES WRITTEN: %s  :: CURRENT: %s/s :: AVERAGE: %s/s :: ELAPSED: %s\", $curr, human_file_size($curr), isset($speed) ? $speed : 0, human_file_size($avg), gmdate(\"H:i:s\", $time_elapsed)); printf(\"%s%s\", $output, str_repeat(\" \", exec(\"tput cols\") - strlen($output))); usleep($break_ms); } fprintf(STDOUT, \"\\ndd has finished!\\n\\n\"); function human_file_size($size,$unit=\"\") { if( (!$unit && $size >= 1<<30) || $unit == \"GB\") return number_format($size/(1<<30),2).\" GB\"; if( (!$unit && $size >= 1<<20) || $unit == \"MB\") return number_format($size/(1<<20),2).\" MB\"; if( (!$unit && $size >= 1<<10) || $unit == \"kB\") return number_format($size/(1<<10),2).\" kB\"; return number_format($size).\" bytes\"; }`.  \nMoreover, switching to dcfldd(1) is another option for a more convenient display of dd operations.  \nWith recent versions of coreutils (v8.24 or later), dd itself includes a progress option to show its progress natively.  \nLastly, you can use the progress utility, which showcases the advancement of a running dd command and leverages the `/proc/$pid/fd and /proc/$pid/fdinfo`."
+  },
+  {
+    "question": "can ads on a page read my password?",
+    "response": "Nothing hinders advertisements from accessing your passwords, and ads can reach sensitive information unless contained within a sandboxed iframe.  \nHow advertisements load can impact their ability to engage with website content, as well as monitor user interactions.  \nThe only solution to understand whether a website has segregated the advertiser's code is by examining the website's code itself."
+  },
+  {
+    "question": "why and how are ethernet vlans tagged?",
+    "response": "If you have more than one VLAN on a port (a \"trunk port\"), you need some way to tell which packet belongs to which VLAN on the other end; a VLAN tag is used on the trunk port, where the Ethernet frames are tagged in accordance with the 802.1Q standard."
+  },
+  {
+    "question": "cmd-tab behavior on mavericks with multiple displays",
+    "response": "A method to improve user experience for those who prefer the dock on the side of their screen is to position the dock at the furthest side from the MacBook, which can be done by right clicking on the dock and choosing \"Position on Screen\" then selecting the appropriate side.  \nAnother useful tip is that if the Alt+Tab interface is not appearing on the primary monitor, toggling the \"Displays have separate Spaces\" option within Mission Control System Preferences may solve the issue, and this action doesn't require logging out."
+  },
+  {
+    "question": "how can i find available network interfaces?",
+    "response": "To identify available network interfaces, the simplest method is to use ifconfig -a.  \nAnother approach is to do cat /proc/net/dev, a simple and easy-to-memorize command.  \nIt's worth noting that for Solaris, the equivalent command is ifconfig, for Windows it is ipconfig, and for Linux, it is ip."
+  },
+  {
+    "question": "compress a folder with tar?",
+    "response": "Use the command `tar czf name_of_archive_file.tar.gz name_of_directory_to_tar`."
+  },
+  {
+    "question": "can i install any ios version i wish by picking and choosing which firmware to restore?",
+    "response": "Typically, downgrading or upgrading to a version is not possible once Apple stops signing the old software, a process needed during iTunes restoration or installation.  \n Putting a newer iOS on older hardware that never even supported that OS is near impossible.  \nHowever, a newer method, utilizing a tool called futurerestore, allows downgrading or upgrading without requiring current signing from Apple. \nThis approach is particularly useful for newer devices not covered in the initial list."
+  },
+  {
+    "question": "how to use windows internet on android phone through usb cable",
+    "response": "To use Windows Internet on an Android phone, you must have more than one network connection for the sharing tab to show up. \nAdditionally, you should disregard your Android device's instructions and attempt to connect to the USB-Internet regardless."
+  },
+  {
+    "question": "my college is forcing me to install their ssl certificate. how to protect my privacy?",
+    "response": "It's a good idea not to use their network for anything personal. \nYou can use their certificate, and use a VPN on top of that so you are not connecting to any site directly (provided they don't block it). \nAlternatively, use a virtual machine with the certificate installed when you want to use their network. \nIf ssh is not filtered out, then you can use ssh to produce a SOCKS proxy running over an ssh tunnel. \nYou can also safely use a Chrome OS device, with a dedicated \"school\" Google account that you use solely for access to the school network. \nOr just use your own internet; if you don't trust them, don't use their network. \nGetting a cellular hotspot is another option, but don't try to bypass the firewall. \nThe best solution for protecting your privacy is probably to try your hardest to get this policy overturned."
+  },
+  {
+    "question": "are commas allowed in filenames?",
+    "response": "While it's possible to use special characters like commas in file names, it's generally discouraged because such characters might come with special meanings or implications that could complicate file operations. \nThe issue doesn't lie in using special characters per se, but rather in the management and handling of these characters within the system."
+  },
+  {
+    "question": "can you still facetime if your number is blocked?",
+    "response": "No, blocking a number will block it for normal calls, FaceTime and FaceTime audio."
+  },
+  {
+    "question": "can you add blank space to a photo in mac preview?",
+    "response": "Performing this task in preview mode is not possible.  \nAcorn and Pixelmator can be used for this purpose, but they both cost.  \nPixelmator comes highly recommended if you seek a comprehensive photo editing tool.  \nAlternatively, a simpler method is to have the text in a window just above or below the picture and take a screenshot of the picture+words, if image quality is not a priority."
+  },
+  {
+    "question": "locate vs find: usage, pros and cons of each other",
+    "response": "Locate uses a prebuilt database, which should be regularly updated, while find iterates over a filesystem to locate files; locate has one big advantage over find: speed, but it can be inaccurate if the database has not been updated. \n\nLocate typically lists all files matching your pattern, leaving it to grep filtering and similar to cut this down to size, while find can do things to files it finds, one such operator being -exec.  \n\nFind is not intuitive for a novice or occasional user of Unix, and, historically, some versions didn't have the -print option as the default; locate is less flexible, but far more intuitive to use in the common case."
+  },
+  {
+    "question": "change the mouse wheel scrolling acceleration",
+    "response": "For enhanced experience and customization with computer mice, it is highly recommended to consider using third-party mouse managers such as SteerMouse, USB Overdrive, or ControllerMate.  \nSpecifically, USB Overdrive allows for altering the default behavior and offers various scrolling and tracking options.  \nIf using a Logitech mouse, one could download the Logitech Control Center for Macintosh\u00ae OS X to make adjustments to the mouse's functionality.  \nAdditionally, a free program called DiscreteScroll can set the mouse wheel to scroll in fixed increments, such as three lines per tick."
+  },
+  {
+    "question": "where does the mac store account pictures?",
+    "response": "To locate account pictures on a Mac, you can generally look in the \"~/Library/Images/iChat/Recent Pictures\" or \"/Library/User Pictures\" directories. \nAccount pictures are also stored within the Directory Service for Mac OS X 10.5 or later, with paths to files with the \"Picture\" attribute accessible via the \"dscl\" command. \nFor user login pictures specifically captured on Snow Leopard 10.6.8, the location is \"~/Library/Images/iChat/Recent Pictures\". \nOn Mac OS X Mountain Lion 10.8.2, users' account pictures can be a mix of JPEGs and TIFFs found in multiple locations, such as \"Macintosh HD/Users/user0/Library/Images/iChat Recent Pictures\", where \"user0\" is the first-defined user on the system, as well as \"Macintosh HD/Library/Caches/\". \nIn Mountain Lion 10.8.3, however, recent account pictures have been moved to \"~/Library/Containers/com.apple.ImageKit.RecentPictureService/Data/Library/Images/Recent Pictures/\" as discovered through the \"fs_usage\" command line tool."
+  },
+  {
+    "question": "how do i set a user environment variable? (permanently, not session)",
+    "response": "You have to put the declaration in the initialization files of your shell: for bash, you can use `.bash_profile (${HOME}/.bash_profile)` or .`bash_login` instead.  \nTo add environment variables in bash, modifying the .bashrc file is often recommended.  \nYou'll need to know which shell a user logs in with (`path=\"$(grep $USER /etc/passwd | cut -d ':' -f 7)\" shell=\"$(basename -- \"$path\")\" `) and which dot files it reads (`man $shell`).  \nNote that declaring a variable 'permanently' is specific to the session and the method varies depending on the shell.  \nAnother method is to use: `echo 'export ABC + \"123\"'>> ~/.profile`."
+  },
+  {
+    "question": "viewing all iptables rules",
+    "response": "To list the current firewall rules using the -L or --list option, you must specify the appropriate Netfilter table which could be one of filter, nat, mangle, raw, or security.  \nIf you do not specifically indicate a table, it defaults to the filter table, so you can try iptables -t nat -L.  \nTo view the firewall's complete state, it is necessary to invoke iptables on each table successively with the -v option for detailed output.  \nThe -S or --list-rules command also lists all active rules, working even if the service is not running, and defaults to the filter table unless otherwise specified.  \nFor comprehensive lists, commands such as iptables -vnxL or iptables -vnxL -tnat with various table options are used, although some like -traw, -tmangle, and -tsecuriy are seldom needed."
+  },
+  {
+    "question": "how to see process created by specific user in unix/linux",
+    "response": "To view only the processes owned by a specific user, use the following command: top -U [username]. \n\nYou can try: ps -fp $(pgrep -u <username>)."
+  },
+  {
+    "question": "how can i instruct yum to install a specific version of package x?",
+    "response": "Download the rpm file and then command yum to execute a local installation.  \nTo obtain the needed packages, a resourceful website to visit is rpmfind.com, where you can search for the specific package name."
+  },
+  {
+    "question": "why is fhepfcelehfcepfffacacacacacacabn a top dns query from my devices?",
+    "response": "Google Chrome testing internet connectivity explains the unexpected behavior observed.  \nThe domain in question translates to the string \"WORKGROUP\" and seems to be a NetBIOS name."
+  },
+  {
+    "question": "what is the difference between zero and null?",
+    "response": "Zero is a numeric value, allowing mathematical operations and calculations where NULL is not. \nZero represents the absence of a measurable quantity. \nIn contrast, null is not a value but a lack thereof, symbolizing non-existence or absence. \nDescribed as a unicorn, null doesn't even exist. \nWhen dealing with measurements, a newValue of null signifies nothing measured, resulting in a percent change equivalent to zero."
+  },
+  {
+    "question": "should i disconnect my macbook pros power cord when the battery is fully charged?",
+    "response": "It's unnecessary to detach the battery on your MacBook Pro as it ceases charging once full, and modern Apple batteries are designed smarter than earlier versions.  \nHowever, for optimal care of your MacBook's battery, it's advisable not to charge it fully, and instead, you can disconnect it after reaching 90% or more.  \nFinally, the chemistry of lithium batteries does not necessitate periodic cycling to maintain capacity."
+  },
+  {
+    "question": "how can you tell if someone checks your location on iphone?",
+    "response": "On a device using GPS, there is no direct indication that it is being tracked, as the only sign is the location services arrow on the top bar.  \nUsers can discern what's using the GPS by checking the settings under General -> Privacy, where a purple arrow indicates current use of Find My iPhone and a grey arrow shows it was used within the past day.  \nAdditionally, installing the Find Friends app is suggested as a less invasive method to let someone know their location is being requested."
+  },
+  {
+    "question": "how to check which gpu is active in linux?",
+    "response": "The command 'nvidia-smi -L' is used to display a list of GPUs installed on a computer."
+  },
+  {
+    "question": "how can i open a text file with textwrangler from the terminal (command line)?",
+    "response": "If you have the TextWrangler command line tools installed, you can use the 'edit' command, type edit my_text_file.txt in the terminal, to open files in TextWrangler directly from the command line.   \nIf you downloaded from the BareBones Software site, there should be an \"install command line tools\" command in either the Application (TextWrangler) menu or the help menu. \nAnother suggestion is that using 'open' is the correct approach, but you may want to create a shell alias for simplicity and to avoid changing default editors.  \nA final method for editing text files is by using the TextWrangler application directly through its full path in the MacOS directory."
+  },
+  {
+    "question": "how do i transfer my ios developer profile to another computer?",
+    "response": "From Mac OS X, you'll need to export your private key from the Key Chain where your certificates are running.  \nAlternatively, this can be managed directly within Xcode, which allows you to export your developer profile from the Organiser's devices tab.  \nFor those using Xcode 5 or later, import/export functions have evolved, and your developer account should be managed through Xcode Preferences under Accounts."
   }
 ]

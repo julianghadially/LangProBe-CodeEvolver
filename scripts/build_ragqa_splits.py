@@ -31,12 +31,13 @@ DATA_DIR = Path("data")
 RAW_PATH = DATA_DIR / "ragqa_arena_tech_500.json"
 
 # Split sizes (disjoint). The source file holds ~2064 examples, so these draw
-# from a comfortable surplus (300+600+200=1100 << 2064). val is sized at 600 so a
-# run can set maxValSetSize up to 600 (e.g. 300) and still have variance headroom
-# for a near-ceiling log-odds metric; train is sized for optimization. Because the
-# carve order is train->val->test, train stays byte-identical when val grows and the
-# new val is a superset of the previous 150-row val. Adjust here to retune.
-SIZES = {"train": 300, "val": 600, "test": 200}
+# from a comfortable surplus (300+600+300=1200 << 2064). val is sized at 600 so a
+# run can set maxValSetSize up to 600 (e.g. 300) with variance headroom for a
+# near-ceiling log-odds metric; test is sized at 300 to match; train is sized for
+# optimization. Because the carve order is train->val->test, growing a later split
+# leaves the earlier ones byte-identical and each grown split is a superset of its
+# previous version. Adjust here to retune.
+SIZES = {"train": 300, "val": 600, "test": 300}
 
 # Fixed seed so the partition is reproducible across machines/runs.
 SHUFFLE_SEED = 0
