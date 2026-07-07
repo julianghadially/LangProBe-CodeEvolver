@@ -177,7 +177,12 @@ PAIRWISE_JUDGE_SAMPLES = 1
 # [D6] A "win" (1.0) is the positive label under bootstrap/trace mode.
 PAIRWISE_THRESHOLD = 1.0
 
-# Verbatim from templates/pairwise_lfrqa.cfg (`{x.question}` etc. -> str.format fields).
+# From templates/pairwise_lfrqa.cfg (`{x.question}` etc. -> str.format fields). The
+# query/answer/rubric structure is verbatim; [D7] the final instruction asks for a
+# visible one-line <reason> (instead of the paper's <thinking>) so the judge's
+# rationale lands in the VISIBLE text and can be surfaced to the CodeEvolver optimizer
+# -- reasoning-model judges route <thinking>-style deliberation to a separate
+# reasoning_content channel, leaving the paper's <thinking> tag empty in the output.
 _PAIRWISE_TEMPLATE = """Query is in the <query></query> tags. Answer 1 is in <answer 1></answer 1>, and Answer 2 is in <answer 2></answer 2>.
 
 <query>
@@ -197,7 +202,7 @@ Review the rubric in <rubric> tags,
 - if you prefer <answer 2>, output 2.
 - if you are not sure, output 0.
 
-First, think step by step, put your thinking in <thinking></thinking> tags. Your thinking must be shorter than 50 words. Then, provide your rating inside <rating></rating> tags. Remember your rating should be 0 if you are not sure, and your rating must be either 0, 1, or 2. """
+First, in one sentence (shorter than 50 words), state the single most important reason for your preference inside <reason></reason> tags. Then, provide your rating inside <rating></rating> tags. Remember your rating should be 0 if you are not sure, and your rating must be either 0, 1, or 2. """
 
 _ASSET_DIR = os.path.join(os.path.dirname(__file__), "rqa_arena_eval")
 _RATING_TAG_RE = re.compile(r"<rating>.*?</rating>", re.DOTALL)
@@ -293,7 +298,7 @@ def _judge_once(question, response1, response2):
         )
         messages.append(
             {"role": "assistant",
-             "content": f"<thinking>{ex['thinking']}</thinking><rating>{ex['label']}</rating>"}
+             "content": f"<reason>{ex['thinking']}</reason><rating>{ex['label']}</rating>"}
         )
     messages.append({"role": "user", "content": _render_pairwise(question, response1, response2)})
     out = _get_pairwise_judge()(messages=messages)
@@ -369,6 +374,26 @@ def _extract_thinking(completion):
     return m.group(1).strip() if m else ""
 
 
+def _extract_reason(completion):
+    """The judge's one-line preference reason, for optimizer feedback ([D7]).
+
+    Primary: the visible ``<reason>..</reason>`` tag the judge is now asked to emit.
+    Fallback: the reasoning model's native ``reasoning_content`` channel (a reasoning
+    judge may route its rationale there and emit only ``<rating>`` in the visible
+    text). Whitespace/newlines are collapsed to keep it one line. '' if neither exists.
+    """
+    text = completion.get("text", "") if isinstance(completion, dict) else str(completion)
+    m = re.search(r"<reason>(.*?)</reason>", str(text), re.DOTALL)
+    if m and m.group(1).strip():
+        return " ".join(m.group(1).split())
+    if isinstance(completion, dict):
+        rc = (completion.get("reasoning_content") or "").strip()
+        if rc:
+            return " ".join(rc.split())
+    m2 = re.search(r"<reason>(.*?)</reason>", str(completion), re.DOTALL)
+    return " ".join(m2.group(1).split()) if m2 else ""
+
+
 def ragqa_pairwise_winrate_feedback(
     output, example, trace=None, pred_name=None, pred_trace=None
 ):
@@ -391,9 +416,9 @@ def ragqa_pairwise_winrate_feedback(
         f"Gold (LFRQA) answer: {gold_response}",
         f"System response: {response}",
     ]
-    thinking = _extract_thinking(completion)
-    if thinking:
-        parts.append(f"Judge thinking: {thinking}")
+    reason = _extract_reason(completion)
+    if reason:
+        parts.append(f"Judge reason: {reason}")
 
     # Directional guidance for the optimizer (mirrors the SemanticF1 feedback style).
     if outcome == "loss":
