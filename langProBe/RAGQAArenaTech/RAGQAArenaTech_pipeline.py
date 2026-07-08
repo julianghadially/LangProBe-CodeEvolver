@@ -53,7 +53,8 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             api_base=GMI_API_BASE,
             api_key=os.environ["GMI_API_KEY"],
             reasoning_effort="high",
-            allowed_openai_params=["reasoning_effort"],
+            max_tokens=16384,
+            allowed_openai_params=["reasoning_effort", "max_tokens"],
         )
         # The pipeline owns the retrieval database and injects it into the program,
         # so the inner program is pure logic the optimizer can freely swap/evolve.
