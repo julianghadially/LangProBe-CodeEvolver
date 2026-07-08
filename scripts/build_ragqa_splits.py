@@ -35,11 +35,6 @@ RAW_PATH = DATA_DIR / "ragqa_arena_tech_500.json"
 # (300 + 1200 + 564). val is sized at 1200 to keep the per-eval standard error
 # low on this near-ceiling pairwise-judge metric; test gets the remaining rows.
 SIZES = {"train": 300, "val": 1200, "test": 564}
-
-# Fixed seed so the partition is reproducible across machines/runs. Seed 1 is
-# the v2 partition (double-polled judge, 300/1200/564 sizes) — a fresh
-# resample, deliberately not row-compatible with the seed-0 splits used by
-# earlier runs.
 SHUFFLE_SEED = 1
 
 
