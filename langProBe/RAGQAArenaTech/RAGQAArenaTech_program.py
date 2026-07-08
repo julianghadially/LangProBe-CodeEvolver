@@ -2,7 +2,7 @@ import re
 
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
-from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateAnswer
+from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateIntentSearchQuery, GenerateAnswer
 
 # Some completions return the adapter's *literal* template placeholder (e.g.
 # "{response text}", "{response}", "{answer}") instead of filling in the field.
@@ -31,15 +31,23 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     3.7GB embedding index lives in a process loaded once, outside the eval.
     """
 
-    def __init__(self, retriever, num_docs=5, max_hops=2):
+    def __init__(self, retriever, num_docs=5, max_hops=2, intent_docs=4):
         super().__init__()
         self.retriever = retriever
         self.max_hops = max_hops
         self.num_docs = num_docs
+        # On the first hop we ALSO run an intent-reformulated query to surface
+        # passages for colloquial/figurative questions the broad query may miss
+        # (e.g. "search for backdoors" -> how to *detect* them). Small k keeps
+        # dilution bounded; later hops are untouched so coverage-complete rows
+        # are unaffected. Mirrors the validated breadth mechanism (extra
+        # passages dedup away on already-covered questions).
+        self.intent_docs = intent_docs
         self.respond = dspy.ChainOfThought(GenerateAnswer)
         self.generate_query = [
             dspy.ChainOfThought(GenerateSearchQuery) for _ in range(self.max_hops)
         ]
+        self.intent_query = dspy.ChainOfThought(GenerateIntentSearchQuery)
 
     def search(self, query, k=5):
         return self.retriever.search(query, k=k)
@@ -58,6 +66,21 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
             q = None
         if not q or not str(q).strip():
             q = question
+        return str(q).strip()
+
+    def _generate_intent_query(self, context, question):
+        """Run the intent-reformulation query hop, robust to adapter parse failures.
+
+        Mirrors ``_generate_query``'s guard: on any failure or empty output,
+        return None so the caller simply skips the extra search rather than
+        crashing the row.
+        """
+        try:
+            q = self.intent_query(context=context, question=question).query
+        except Exception:
+            q = None
+        if not q or not str(q).strip():
+            return None
         return str(q).strip()
 
     def _respond(self, context, question):
@@ -91,6 +114,15 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         for hop in range(self.max_hops):
             query = self._generate_query(hop, context, question)
             passages = self.search(query, k=self.num_docs)
+            # Hop 0 only: also pull an intent-reformulated query to surface
+            # passages for colloquial/figurative questions. Small k bounds
+            # dilution; dedup keeps already-covered questions neutral.
+            if hop == 0 and self.intent_docs > 0:
+                intent_query = self._generate_intent_query(context, question)
+                if intent_query and intent_query != query:
+                    passages = passages + self.search(
+                        intent_query, k=self.intent_docs
+                    )
             context = deduplicate(context + passages)
         pred = self._respond(context, question)
         # Carry the retrieved passages on the prediction so downstream metrics

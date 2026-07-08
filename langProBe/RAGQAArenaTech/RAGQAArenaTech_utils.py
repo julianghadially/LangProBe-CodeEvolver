@@ -9,6 +9,17 @@ class GenerateSearchQuery(dspy.Signature):
     query = dspy.OutputField(desc="a short plain-text search query of a few keywords")
 
 
+class GenerateIntentSearchQuery(dspy.Signature):
+    """Reformulate the user's question into a search query that targets what the user most likely actually wants to know.
+
+    Many questions use colloquial, figurative, or symptom-based wording that differs from the literal words (e.g. "search for backdoors on my laptop" usually means "how to detect/check for hardware backdoors"; a question about a UI symptom such as "why are my apps in the cloud?" or an icon next to an app usually asks what that UI element/feature means, not a general essay on the topic). Before searching, infer the user's most likely real intent -- the concrete technical question or feature behind the wording -- then write a short keyword query that would retrieve pages addressing that intent and the specific device/OS/feature implied. If the question is already concrete and literal, mirror its wording closely. Output only a few keywords; never output shell syntax, braces, or code.
+    """
+
+    context = dspy.InputField(desc="may be empty on the first hop; otherwise may contain relevant facts")
+    question = dspy.InputField()
+    query = dspy.OutputField(desc="a short plain-text search query targeting the inferred intent")
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer the user's question using the retrieved context to ground your response.
 
