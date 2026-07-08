@@ -30,17 +30,17 @@ SOURCE_URL = "https://huggingface.co/dspy/cache/resolve/main/ragqa_arena_tech_50
 DATA_DIR = Path("data")
 RAW_PATH = DATA_DIR / "ragqa_arena_tech_500.json"
 
-# Split sizes (disjoint). The source file holds ~2064 examples, so these draw
-# from a comfortable surplus (300+600+300=1200 << 2064). val is sized at 600 so a
-# run can set maxValSetSize up to 600 (e.g. 300) with variance headroom for a
-# near-ceiling log-odds metric; test is sized at 300 to match; train is sized for
-# optimization. Because the carve order is train->val->test, growing a later split
-# leaves the earlier ones byte-identical and each grown split is a superset of its
-# previous version. Adjust here to retune.
-SIZES = {"train": 300, "val": 600, "test": 300}
+# Split sizes (disjoint), carved train->val->test as contiguous slices of the
+# seeded shuffle. The source file holds 2064 examples; all of them are used
+# (300 + 1200 + 564). val is sized at 1200 to keep the per-eval standard error
+# low on this near-ceiling pairwise-judge metric; test gets the remaining rows.
+SIZES = {"train": 300, "val": 1200, "test": 564}
 
-# Fixed seed so the partition is reproducible across machines/runs.
-SHUFFLE_SEED = 0
+# Fixed seed so the partition is reproducible across machines/runs. Seed 1 is
+# the v2 partition (double-polled judge, 300/1200/564 sizes) — a fresh
+# resample, deliberately not row-compatible with the seed-0 splits used by
+# earlier runs.
+SHUFFLE_SEED = 1
 
 
 def _download_raw() -> None:

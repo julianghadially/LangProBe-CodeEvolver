@@ -144,11 +144,11 @@ def ragqa_semantic_f1_feedback(
 #      (rqa_arena_eval/pairwise_lfrqa_examples.json, verbatim, labels 1/2/0) are
 #      injected as user/assistant turns; the final user turn is the rendered template
 #      (rqa_arena_eval/pairwise template below, verbatim from pairwise_lfrqa.cfg).
-#   3. Position bias: the paper assigns the system answer to slot 1 or slot 2
-#      *deterministically by the parity of the query word count*
-#      (`len(query.split(' ')) % 2 == 0`), and judges each query EXACTLY ONCE. We
-#      replicate this exactly (see `_pairwise_slot_order`). It is NOT a bidirectional
-#      both-orders average.
+#   3. Position bias: [D8 — DEVIATION] the paper assigns the system answer to slot 1
+#      or slot 2 deterministically by query-word-count parity and judges each query
+#      EXACTLY ONCE. We instead run a BIDIRECTIONAL both-orders average: two polls per
+#      row (gold-first, then system-first) and score = mean of the two. This cancels
+#      position bias symmetrically and reduces judge variance. (important given benchmark saturation)
 #   4. The judge outputs `<rating>0|1|2</rating>`: 1 => prefer answer 1, 2 => prefer
 #      answer 2, 0 => not sure (tie). We map the rating back through the slot order to
 #      a win / tie / loss for the SYSTEM answer.
@@ -158,10 +158,11 @@ def ragqa_semantic_f1_feedback(
 # DEVIATIONS FROM THE PAPER (all called out, per request):
 #
 #   [D1] Single scalar per example. DSPy/CodeEvolver metrics must return ONE float per
-#        example, but the paper reports W and W+T as two separate aggregates. We map
-#        win=1.0 / tie=0.5 / loss=0.0, so the dataset MEAN of this metric equals
-#        `W + 0.5*T` (the midpoint of W and W+T). To recover W and W+T separately, use
-#        `ragqa_pairwise_outcome(...)` which returns the raw 'win'/'tie'/'loss' string.
+#        example, but the paper reports W and W+T as two separate aggregates. Each
+#        poll maps win=1.0 / tie=0.5 / loss=0.0; the per-row score is the mean of the
+#        two polls ([D8]), so values land in {0, .25, .5, .75, 1} and the dataset MEAN
+#        is the double-polled analogue of `W + 0.5*T`. `ragqa_pairwise_outcome(...)`
+#        returns 'win'/'tie'/'loss' for the row (win: mean > 0.5; tie: == 0.5).
 #
 #   [D2] Bool/trace mode. `dspy.Evaluate` bootstrap/trace mode needs a bool; we treat a
 #        WIN (score == 1.0) as the positive label (`>= PAIRWISE_THRESHOLD`). This is a
@@ -174,7 +175,8 @@ PAIRWISE_JUDGE_LM = "openai/gpt-5.4-mini"
 PAIRWISE_JUDGE_TEMPERATURE = 0.0
 # [D3] 1 == single evaluator == paper's headline setup. >1 draws N votes + majority.
 PAIRWISE_JUDGE_SAMPLES = 1
-# [D6] A "win" (1.0) is the positive label under bootstrap/trace mode.
+# [D6] A unanimous "win" (both polls, score 1.0) is the positive label under
+# bootstrap/trace mode.
 PAIRWISE_THRESHOLD = 1.0
 
 # From templates/pairwise_lfrqa.cfg (`{x.question}` etc. -> str.format fields). The
@@ -259,18 +261,6 @@ def _process_response(response):
     return s
 
 
-def _pairwise_slot_order(question, system_answer, gold_answer):
-    """Paper's deterministic position assignment ([position bias], step 3).
-
-    Even query word count -> system answer is slot 1, LFRQA is slot 2.
-    Odd  query word count -> LFRQA is slot 1, system answer is slot 2.
-    Returns (response1, response2, system_slot) where system_slot in {1, 2}.
-    """
-    if len(question.split(" ")) % 2 == 0:
-        return system_answer, gold_answer, 1
-    return gold_answer, system_answer, 2
-
-
 def _parse_rating(completion):
     """Extract the judge's rating in {0, 1, 2} from `<rating>..</rating>` ([D5]).
 
@@ -305,16 +295,13 @@ def _judge_once(question, response1, response2):
     return out[0] if isinstance(out, list) else str(out)
 
 
-def _pairwise_judge_call(question, gold_response, system_response):
-    """Run the paper's pairwise comparison for one row.
+def _judge_with_order(question, response1, response2, system_slot):
+    """One order-fixed poll, mapped to the SYSTEM answer's outcome.
 
-    Returns (outcome, score, rating, completion) where outcome in
-    {'win','tie','loss'} for the SYSTEM answer and score in {1.0, 0.5, 0.0} ([D1])."""
-    pred = _process_response(system_response)
-    reference = _process_response(gold_response)
-    response1, response2, system_slot = _pairwise_slot_order(question, pred, reference)
-
-    # [D3] one vote (paper's headline), or N-sample majority if configured.
+    Runs the [D3] vote loop (one vote by default, N-sample majority if
+    configured) with the answers pinned to the given slots. Returns
+    (score, rating, completion) with score in {1.0, 0.5, 0.0}.
+    """
     votes, last_completion = [], ""
     for _ in range(max(1, PAIRWISE_JUDGE_SAMPLES)):
         try:
@@ -325,10 +312,38 @@ def _pairwise_judge_call(question, gold_response, system_response):
 
     rating = _majority_rating(votes)  # None on tie/no-majority/unparseable
     if rating is None or rating == 0:
-        return "tie", 0.5, (rating if rating is not None else 0), last_completion
+        return 0.5, (rating if rating is not None else 0), last_completion
     if rating == system_slot:
-        return "win", 1.0, rating, last_completion
-    return "loss", 0.0, rating, last_completion
+        return 1.0, rating, last_completion
+    return 0.0, rating, last_completion
+
+
+def _pairwise_judge_call(question, gold_response, system_response):
+    """Double-polled pairwise comparison for one row ([D8]).
+
+    Poll A: gold LFRQA answer in slot 1, system answer in slot 2 (gold-first).
+    Poll B: system answer in slot 1, gold answer in slot 2 (system-first).
+    Row score = mean of the two per-poll scores -> {0, .25, .5, .75, 1}; the
+    order swap cancels the judge's position bias and the averaging halves
+    judge variance. No third-poll tiebreak by design — a split verdict stays
+    at its fractional value.
+
+    Returns (outcome, score, ratings, completions) where outcome in
+    {'win','tie','loss'} for the SYSTEM answer (win: score > 0.5; tie: == 0.5),
+    ratings = (gold_first_rating, system_first_rating), and completions the
+    matching pair of judge completions."""
+    pred = _process_response(system_response)
+    reference = _process_response(gold_response)
+
+    score_a, rating_a, completion_a = _judge_with_order(
+        question, reference, pred, system_slot=2
+    )
+    score_b, rating_b, completion_b = _judge_with_order(
+        question, pred, reference, system_slot=1
+    )
+    score = (score_a + score_b) / 2.0
+    outcome = "win" if score > 0.5 else ("loss" if score < 0.5 else "tie")
+    return outcome, score, (rating_a, rating_b), (completion_a, completion_b)
 
 
 def _majority_rating(votes):
@@ -406,19 +421,26 @@ def ragqa_pairwise_winrate_feedback(
     gold_question = _example_field(example, "question")
     gold_response = _example_field(example, "response")
     response = _response_text(pred)
-    outcome, score, rating, completion = _pairwise_judge_call(
+    outcome, score, ratings, completions = _pairwise_judge_call(
         gold_question, gold_response, response
     )
+    rating_gold_first, rating_system_first = ratings
+    completion_gold_first, completion_system_first = completions
 
     parts = [
-        f"Pairwise vs LFRQA: {outcome.upper()} (score={score:.1f}, judge rating={rating}).",
+        f"Pairwise vs LFRQA (double-poll): {outcome.upper()} "
+        f"(score={score:.2f}, gold-first rating={rating_gold_first}, "
+        f"system-first rating={rating_system_first}).",
         f"Question: {gold_question}",
         f"Gold (LFRQA) answer: {gold_response}",
         f"System response: {response}",
     ]
-    reason = _extract_reason(completion)
-    if reason:
-        parts.append(f"Judge reason: {reason}")
+    reason_a = _extract_reason(completion_gold_first)
+    if reason_a:
+        parts.append(f"Judge reason (gold-first poll): {reason_a}")
+    reason_b = _extract_reason(completion_system_first)
+    if reason_b:
+        parts.append(f"Judge reason (system-first poll): {reason_b}")
 
     # Directional guidance for the optimizer (mirrors the SemanticF1 feedback style).
     if outcome == "loss":
