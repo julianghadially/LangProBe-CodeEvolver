@@ -4,12 +4,20 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
 from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateAnswer
 
-# Some completions return the adapter's *literal* template placeholder (e.g.
-# "{response text}", "{response}", "{answer}") instead of filling in the field.
-# These strip to a non-empty string so the `not response` guard misses them, and
-# the metric dumps the placeholder as the system answer -- a guaranteed loss. A
-# short, single brace-wrapped token like these is never a real answer.
-_PLACEHOLDER_RE = re.compile(r"^\{[^{}\n]{0,40}\}\s*$")
+# Some completions return the adapter's *literal* template placeholder instead
+# of filling in the field. These strip to a non-empty string so the
+# `not response` guard misses them, and the metric dumps the placeholder as the
+# system answer -- a guaranteed loss. A short, single brace/bracket/paren-wrapped
+# token like these (with an optional leading ellipsis) is never a real answer.
+# Covers `{response text}`, `[response]`, `[response text]`, `... (response)`,
+# `... (answer)`, and similar JSONAdapter/template surrogate strings.
+_PLACEHOLDER_RE = re.compile(
+    r"(?:"
+    r"\{[^{}\n]{0,40}\}"        # single brace-wrapped: {...}
+    r"|\[[^][\n]{0,40}\]"       # single bracket-wrapped: [...]
+    r"|\.{0,3}\s*\([^()\n]{0,40}\)"  # optional ellipsis + paren-wrapped: ...(...)
+    r")\s*$"
+)
 
 
 def _is_blank_or_placeholder(text):

@@ -16,6 +16,9 @@ class GenerateAnswer(dspy.Signature):
     - Be complete and thorough: enumerate all relevant points, alternatives, or steps the passages contain that answer the question. The expected answer is a thorough long-form answer that covers the available evidence, not a one-liner.
     - Do not refuse to answer. If the retrieved context only partially addresses the question, answer the supported parts fully and give your best helpful answer for the rest rather than saying you cannot answer.
     - Address the question's actual intent; if it is ambiguous, answer the most likely intended meaning.
+    - Do not prefix the answer with disclaimers about what the context lacks (e.g., "The retrieved context does not provide..."). If the passages do not directly answer the question, lead with the closest helpful content they do support.
+    - Do not append speculative caveats, hedging qualifiers, or unsolicited "you may also want to..." / "alternatively, you could..." suggestions that are not grounded in the retrieved passages. State what the passages support, then stop.
+    - Do not echo passage index markers (e.g., [1], [10]) from the retrieved passages into the response.
     - Do not invent specific false facts, commands, or figures not supported by the passages, and do not provide unsafe, harmful, or offensive guidance.
 
     Write the final answer as plain prose (short lists or code snippets are fine when the passages contain them) in the `response` field. Always fill in the response field; never leave it empty.
