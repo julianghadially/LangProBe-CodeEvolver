@@ -8,14 +8,16 @@ from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateAnswer
 # of filling in the field. These strip to a non-empty string so the
 # `not response` guard misses them, and the metric dumps the placeholder as the
 # system answer -- a guaranteed loss. A short, single brace/bracket/paren-wrapped
-# token like these (with an optional leading ellipsis) is never a real answer.
+# token or ellipsis-flanked token like these is never a real answer.
 # Covers `{response text}`, `[response]`, `[response text]`, `... (response)`,
-# `... (answer)`, and similar JSONAdapter/template surrogate strings.
+# `... (answer)`, `... response text ...`, and similar JSONAdapter/template
+# surrogate strings.
 _PLACEHOLDER_RE = re.compile(
     r"(?:"
     r"\{[^{}\n]{0,40}\}"        # single brace-wrapped: {...}
     r"|\[[^][\n]{0,40}\]"       # single bracket-wrapped: [...]
     r"|\.{0,3}\s*\([^()\n]{0,40}\)"  # optional ellipsis + paren-wrapped: ...(...)
+    r"|\.{2,}\s*[^{}\[\]()\n]{0,40}?\.{2,}"  # ellipsis-flanked both sides: ...text...
     r")\s*$"
 )
 
@@ -73,15 +75,23 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
 
         Some completions return an empty `response` (content routed entirely to
         the reasoning model's native channel), which downstream scoring dumps as a
-        raw Prediction repr -- a guaranteed loss. Retry once on a fresh call; if
-        still empty, synthesize a minimal grounded one-sentence answer from the
-        strongest retrieved passage rather than emitting nothing.
+        raw Prediction repr -- a guaranteed loss. The reasoning model may also
+        emit an unparseable completion that raises AdapterParseError, crashing the
+        row into an auto-loss. Retry once on a fresh call; if still empty/blank,
+        synthesize a minimal grounded one-sentence answer from the strongest
+        retrieved passage rather than emitting nothing.
         """
-        pred = self.respond(context=context, question=question)
-        response = getattr(pred, "response", None)
+        def _attempt():
+            try:
+                return self.respond(context=context, question=question)
+            except Exception:
+                return None
+
+        pred = _attempt()
+        response = getattr(pred, "response", None) if pred is not None else None
         if _is_blank_or_placeholder(response):
-            pred = self.respond(context=context, question=question)
-            response = getattr(pred, "response", None)
+            pred = _attempt()
+            response = getattr(pred, "response", None) if pred is not None else None
         if _is_blank_or_placeholder(response):
             # Last-resort fallback: a concise, grounded sentence from the context.
             if context:
@@ -91,7 +101,10 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
                 )
             else:
                 response = "I could not find an answer in the available context."
-            pred.response = response
+            if pred is None:
+                pred = dspy.Prediction(response=response)
+            else:
+                pred.response = response
         return pred
 
     def forward(self, question):
