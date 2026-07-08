@@ -59,7 +59,9 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
         # so the inner program is pure logic the optimizer can freely swap/evolve.
         self.retriever = retriever if retriever is not None else get_default_retriever()
         self.program = (
-            program if program is not None else SimplifiedBaleen(self.retriever)
+            program
+            if program is not None
+            else SimplifiedBaleen(self.retriever, num_docs=8, max_hops=3)
         )
 
     def forward(self, question):
