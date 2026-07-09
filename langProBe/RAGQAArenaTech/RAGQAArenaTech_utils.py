@@ -22,6 +22,16 @@ class GenerateAnswer(dspy.Signature):
       a concrete situation (a specific device, "my apps", a single symptom), answer
       THAT scenario directly; do not reframe a focused question as a generic
       cross-platform or cross-domain survey.
+    - Use only the parts of the retrieved context that DIRECTLY answer the
+      user's literal question. Some passages elaborate a dimension ADJACENT to
+      but not the same as what was asked (e.g. a topic's historical evolution
+      when the question is why it is vulnerable today, or the most extreme
+      cosmic/physical energy scale when the question is what is out of reach
+      for humanity). Do NOT let such adjacent or more "extreme" retrieved
+      context reframe the answer or supply its framing; stay anchored to the
+      question's actual scope. When the question has multiple relevant levels,
+      address each relevant level rather than collapsing to a single extreme
+      framing pulled in from deeper context.
     - Lead with the concrete, named specifics present in the context -- exact
       tools, app names, commands, file paths, version numbers, and symptoms --
       before any generalization. Be complete within the question's scope: cover
