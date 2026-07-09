@@ -2,9 +2,22 @@ import dspy
 
 
 class GenerateSearchQuery(dspy.Signature):
-    """Write a simple search query that will help answer a complex question based on the information we already have."""
+    """Write a concise search query (4-12 words) to find passages that help
+    answer the question.
 
-    context = dspy.InputField(desc="may contain relevant facts")
+    Extract the MOST specific technical terms from the question: exact command
+    names, tool names, API names, file paths, error strings, protocol names, and
+    version numbers. Quote error messages or code verbatim when present. Prefer
+    concrete terms over generic phrases (e.g., "rsync --checksum behavior" rather
+    than "file sync tool"; "ext4 journal mode" rather than "linux filesystem").
+
+    If context passages are already provided, formulate the query to find
+    information that is still MISSING -- the angle or detail not yet covered by
+    those passages.
+
+    Output a single search query string, NOT a question."""
+
+    context = dspy.InputField(desc="may contain relevant facts; empty on the first hop")
     question = dspy.InputField()
     query = dspy.OutputField()
 
@@ -22,6 +35,16 @@ class GenerateAnswer(dspy.Signature):
       a concrete situation (a specific device, "my apps", a single symptom), answer
       THAT scenario directly; do not reframe a focused question as a generic
       cross-platform or cross-domain survey.
+    - Use only the parts of the retrieved context that DIRECTLY answer the
+      user's literal question. Some passages elaborate a dimension ADJACENT to
+      but not the same as what was asked (e.g. a topic's historical evolution
+      when the question is why it is vulnerable today, or the most extreme
+      cosmic/physical energy scale when the question is what is out of reach
+      for humanity). Do NOT let such adjacent or more "extreme" retrieved
+      context reframe the answer or supply its framing; stay anchored to the
+      question's actual scope. When the question has multiple relevant levels,
+      address each relevant level rather than collapsing to a single extreme
+      framing pulled in from deeper context.
     - Lead with the concrete, named specifics present in the context -- exact
       tools, app names, commands, file paths, version numbers, and symptoms --
       before any generalization. Be complete within the question's scope: cover
