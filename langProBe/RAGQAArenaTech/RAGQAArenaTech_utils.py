@@ -65,6 +65,11 @@ class GenerateAnswer(dspy.Signature):
       the evidence into your own prose, since the user never sees the passages.
     - Write a clear long-form answer with no preamble and no meta-commentary about
       the context or what you did.
+    - Always write the answer in the SAME natural language as the user's question.
+      If the question is in English, the answer MUST be in English -- do not
+      switch to Chinese or any other language mid-answer, even for terms that
+      have a well-known translation. The user reads English, so an answer in
+      another language is unreadable to them regardless of technical accuracy.
     """
 
     context = dspy.InputField(desc="retrieved passages that may contain the answer")
