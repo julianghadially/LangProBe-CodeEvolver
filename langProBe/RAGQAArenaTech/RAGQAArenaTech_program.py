@@ -1,7 +1,7 @@
 import re
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
-from .RAGQAArenaTech_utils import GenerateSearchQuery
+from .RAGQAArenaTech_utils import GenerateAnswer, GenerateSearchQuery
 
 try:  # AdapterParseError location varies across DSPy versions
     from dspy.utils.exceptions import AdapterParseError
@@ -27,7 +27,47 @@ _GARBAGE_MARKERS = (
     "prediction(",
     "reasoning=none",
     "response=none",
+    # Leaked DSPy/adapter output-field placeholder (e.g. "... (response text)")
+    # wrapped in parens / brackets / angle brackets. The rich GenerateAnswer
+    # primary is more adapter-fragile than the bare signature, so catch all
+    # three wrappings so a leaking sample is discarded instead of emitted.
+    "(response text)",
+    "[response text]",
+    "<response text>",
+    "[your answer]",
+    "[your response]",
+    "<your answer>",
+    "<your response>",
+    # LM refusal / abstention-shaped outputs that read as "I cannot answer from
+    # the context". Non-refusal answers almost never begin with these phrases,
+    # so the false-positive risk is low; cascading past them lets the
+    # no-context parametric floor answer answerable questions instead of
+    # scoring a guaranteed-0 abstention against a substantive LFRQA gold.
+    "context does not provide",
+    "context does not contain",
+    "i don't have enough information",
+    "i do not have enough information",
 )
+
+
+# Tokens that, after stripping ALL non-alphanumeric characters from a
+# candidate response, identify it as a lone field-placeholder leak (e.g.
+# ``"... content ..."`` -> "content", ``"... (the answer)"`` -> "theanswer",
+# ``"... [your response here] ..."`` -> "yourresponsehere"). A real answer is
+# always several words, so its stripped form is not a member of this set.
+_PLACEHOLDER_LEAK_TOKENS = frozenset({
+    # bare field-hint nouns
+    "content", "response", "answer", "result", "text", "output",
+    # "the"-prefixed ("the answer", "the response")
+    "thecontent", "theresponse", "theanswer", "theresult", "thetext", "theoutput",
+    # "your"-prefixed ("your answer", "your response")
+    "yourcontent", "yourresponse", "youranswer", "yourresult", "yourtext", "youroutput",
+    # "-here" suffixed ("answer here", "your response here")
+    "answerhere", "responsehere", "contenthere", "resulthere", "texthere", "outputhere",
+    "theanswerhere", "youranswerhere", "yourresponsehere", "yourcontenthere",
+    # generic empty-value markers
+    "placeholder", "todo", "loremipsum", "na", "null", "none", "empty",
+})
 
 
 def _is_garbage(text):
@@ -42,6 +82,18 @@ def _is_garbage(text):
         return True
     low = s.lower()
     if any(marker in low for marker in _GARBAGE_MARKERS):
+        return True
+    # Lone field-placeholder leak: the reasoning LM occasionally emits the
+    # adapter's field-description word wrapped in ellipsis/brackets/parens
+    # instead of filling the response field -- e.g. ``"... content ..."``,
+    # ``"... (the answer)"``, ``"... [your response] ..."``. Strip ALL
+    # non-alphanumeric characters; if only a bare placeholder noun (with
+    # common prefixes/suffixes) remains, treat it as garbage so the
+    # self-consistency loop discards that sample and the chain cascades to a
+    # substantive layer instead of emitting the placeholder (a guaranteed
+    # loss vs LFRQA gold).
+    core = re.sub(r"[^a-z0-9]", "", low)
+    if core in _PLACEHOLDER_LEAK_TOKENS:
         return True
     # Punctuation/symbol-only placeholder (catches "..." / "---" / "??" style
     # leaks that carry no answer content).
@@ -87,7 +139,13 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         self.max_hops = max_hops
         self.num_docs = num_docs
         self.n_samples = n_samples
-        self.respond = dspy.ChainOfThought("context, question -> response")
+        # Primary synthesis: the content-quality ``GenerateAnswer`` prompt
+        # (stay-scoped to the user's literal scenario, lead with named
+        # specifics, no passage-citation meta -- a confirmed multi-draw lever
+        # across prior iterations). Drawn N times via self-consistency below;
+        # the generalized placeholder guardrail absorbs the rich signature's
+        # added adapter-fragility relative to the bare seed string.
+        self.respond = dspy.ChainOfThought(GenerateAnswer)
         self.generate_query = [
             dspy.ChainOfThought(GenerateSearchQuery) for _ in range(self.max_hops)
         ]
@@ -120,14 +178,28 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
 
         Draw ``self.n_samples`` independent ``ChainOfThought`` answers (DSPy
         caches are off, so each call is a fresh stochastic draw). Discard any
-        that leak scaffolding (``_is_garbage``). Return the LONGEST clean
-        answer -- a deterministic, robust selection rule that harvests the
-        completeness the pairwise win-rate judge rewards, while the
-        multiplicative leak-resistance of N independent draws absorbs the
-        seed's stochastic ``Prediction(...)`` repr-leak rows without an extra
-        fragile refine LM pass. If every sample leaks, fall to a no-context
-        parametric completion (strictly better than abstention for answerable
-        questions); abstention only if that too leaks.
+        that leak scaffolding (``_is_garbage``). Select the clean answer with a
+        **specificity-biased** rule rather than raw length:
+
+        - By default prefer the LONGEST clean sample -- a robust completeness
+          proxy ("completeness beats minimalism", confirmed empirically): with
+          N independent draws the longest usually carries the extra coverage
+          a single thinner draw omits, flipping completeness TIEs to wins.
+        - BUT when the longest clean sample is a length *outlier* (more than
+          ~1.5x the median clean length, on a non-trivial median), prefer the
+          MEDIAN instead. An outlier-long sample is more often verbose padding
+          / an off-axis tangent / a confidently-wrong over-definition than
+          genuine extra coverage -- the documented cost of a pure ``max(len)``
+          rule (e.g. a verbose confidently-misdefined answer beating a shorter
+          correct one, or a focused question reframed as a cross-platform
+          survey with dubious extras). The median stays complete *and* focused,
+          cutting the verbosity/tangent tax without reintroducing terseness.
+
+        Multiplicative leak-resistance of N independent draws absorbs the
+        seed's stochastic ``Prediction(...)`` repr-leak rows. If every sample
+        leaks, fall to a no-context parametric completion (strictly better
+        than abstention for answerable questions); abstention only if that too
+        leaks.
         """
         clean = []
         for _ in range(self.n_samples):
@@ -139,10 +211,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
                 continue
 
         if clean:
-            # Longest clean answer = completeness proxy. The judge rewards
-            # fuller, well-organized answers; ties become wins when the system
-            # answer covers the extra detail the gold carries.
-            return max(clean, key=len)
+            return _select_answer(clean)
 
         try:
             r = self.respond_parametric(question=question).response
@@ -155,3 +224,25 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         # Emit a clean honest non-answer rather than a raw passage (which would
         # also lose). On the valset this should fire on ~0 rows.
         return "I'm sorry, I don't have enough information to answer this question."
+
+
+def _select_answer(clean):
+    """Pick the best clean self-consistency sample.
+
+    Default: the longest clean answer (completeness proxy the win-rate judge
+    rewards). Guard: if the longest is a length outlier -- strictly more than
+    1.5x the median clean length AND the median is non-trivial (>= 80 chars,
+    so the guard only fires on real answers, not tiny stubs) -- prefer the
+    median. An outlier-long sample is more likely verbose padding / an
+    off-axis tangent / an over-definition than genuine coverage; the median
+    keeps the answer complete *and* on-target, cutting the verbosity/tangent
+    cost of a pure ``max(len)`` rule without reintroducing terse losses.
+    """
+    if len(clean) == 1:
+        return clean[0]
+    by_len = sorted(clean, key=len)
+    median = by_len[len(by_len) // 2]
+    longest = by_len[-1]
+    if len(median) >= 80 and len(longest) > 1.5 * len(median):
+        return median
+    return longest
