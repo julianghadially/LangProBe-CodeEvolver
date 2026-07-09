@@ -133,7 +133,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     technical Q&A the seed already answers well.
     """
 
-    def __init__(self, retriever, num_docs=5, max_hops=2, n_samples=3):
+    def __init__(self, retriever, num_docs=5, max_hops=3, n_samples=3):
         super().__init__()
         self.retriever = retriever
         self.max_hops = max_hops
