@@ -216,6 +216,38 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return result
 
     @staticmethod
+    def _fifo_then_interleave_dedup(primary_hops, late_hops, limit):
+        """Dedup that preserves insertion-order priority for primary hops
+        (hop-1 and hop-2, whose raw-claim and first-entity-follow queries carry
+        the most gold docs), and only once primary hops are exhausted round-robins
+        the late hops (hop-3 / hop-4 gap-analysis) into the remaining slots so
+        their gap-analysis retrievals can appear in the final set without
+        truncating primary hops' tail ranks."""
+        seen = set()
+        primary = []
+        for h in primary_hops:
+            for p in h:
+                t = p.split(" | ", 1)[0]
+                if t not in seen:
+                    seen.add(t)
+                    primary.append(p)
+                    if len(primary) >= limit:
+                        return primary
+        late = []
+        max_r = max((len(h) for h in late_hops), default=0)
+        for r in range(max_r):
+            for h in late_hops:
+                if r < len(h):
+                    p = h[r]
+                    t = p.split(" | ", 1)[0]
+                    if t not in seen:
+                        seen.add(t)
+                        late.append(p)
+                        if len(primary) + len(late) >= limit:
+                            return primary + late
+        return primary + late
+
+    @staticmethod
     def _titles(passages):
         """Extract the leading Wikipedia title from each 'Title | ...' passage."""
         return [p.split(" | ", 1)[0] for p in passages]
@@ -279,8 +311,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop4_query = hop4_query.strip()
             hop4_docs = self.retrieve_k(hop4_query).passages
 
-        all_docs = self._round_robin_dedup(
-            [hop1_docs, hop2_docs, hop3_docs, hop4_docs], self.final_doc_limit
+        all_docs = self._fifo_then_interleave_dedup(
+            [hop1_docs, hop2_docs], [hop3_docs, hop4_docs], self.final_doc_limit
         )
         return dspy.Prediction(retrieved_docs=all_docs)
 
