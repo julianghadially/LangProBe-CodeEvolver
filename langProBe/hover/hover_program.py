@@ -90,9 +90,12 @@ class CreateQueryHop3(dspy.Signature):
     DO:
     - From the summaries, identify a named entity mentioned by the retrieved
       passages via a relational phrase (e.g. "produced by X", "dedicated to Y",
-      "directed by W", "wife of W", "located beside Z", "born in P") whose OWN
-      Wikipedia article is NOT in retrieved_titles and is needed to verify or
-      refute the claim.
+      "directed by W", "wife of W", "located beside Z", "born in P", "starring Z")
+      whose OWN Wikipedia article is NOT in retrieved_titles and is needed to
+      verify or refute the claim.
+    - Prefer a specific PERSON (the actor, director, singer, writer, scientist)
+      when one is named in the passages and not yet retrieved — biographical
+      articles are the most common missing hop.
     - Target that entity's Wikipedia article. Prefer the bare entity name;
       append a single disambiguator only when the name is genuinely ambiguous.
     - If several entities are still missing, pick a DIFFERENT entity than any
@@ -106,6 +109,9 @@ class CreateQueryHop3(dspy.Signature):
       neighbour.
     - Restate the whole claim or repeat a prior query; pick a new specific
       missing entity.
+    - Pivot to a derived/connector entity (film festival, song title, TV
+      series name, continent) when a more specific PERSON is named in the
+      passages and not yet retrieved.
 
     Output a single concise search query."""
     claim: str = dspy.InputField()
@@ -114,6 +120,43 @@ class CreateQueryHop3(dspy.Signature):
     retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved across hop 1 and hop 2")
     prior_queries: list[str] = dspy.InputField(desc="Search queries already issued; do not repeat them")
     query: str = dspy.OutputField(desc="A single targeted Wikipedia search query for one missing entity")
+
+
+class CreateQueryHop4(dspy.Signature):
+    """You are guiding multi-hop Wikipedia retrieval to verify a claim.
+
+    THREE retrieval hops have been completed. This is the FINAL gap-analysis
+    hop: produce ONE search query targeting an entity STILL missing after the
+    first three hops.
+
+    DO:
+    - Re-read the summary; identify a NAMED ENTITY (especially a PERSON — but
+      also a place, organization, or work) that the retrieved passages NAME via
+      a relational phrase such as "directed by X", "starring Y", "wife of W",
+      "born in P", "produced by Z", "dares with Q", "named after R", "dedicated
+      to S" whose OWN Wikipedia article is NOT in retrieved_titles and is
+      needed to verify or refute the claim.
+    - Prefer a specific PERSON when several are missing: biographical articles
+      are the most common remaining hop.
+    - Use the bare entity name (first + last as it appears in the passage);
+      append a single disambiguator (actor, singer, director, film, player,
+      place) only if the name is genuinely ambiguous.
+
+    DO NOT:
+    - Repeat any prior_queries or restate the claim.
+    - Pivot to a derived/connector entity (film festival, song title, TV series
+      name, continent, dataset, disambiguation page) when a more specific PERSON
+      is named in the passages and not yet retrieved — follow to the person.
+    - Output "none", "no query", "no missing entity", "verification complete",
+      an empty string, or any meta-commentary. Always output exactly one
+      concrete entity search query.
+
+    Output a single concise search query."""
+    claim: str = dspy.InputField()
+    summary: str = dspy.InputField(desc="Latest entity-focused summary listing entities still missing")
+    retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved across hops 1-3; do not query these")
+    prior_queries: list[str] = dspy.InputField(desc="Search queries already issued; do not repeat them")
+    query: str = dspy.OutputField(desc="A single targeted Wikipedia search query for one missing entity (prefer a person)")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -129,6 +172,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.final_doc_limit = 21
         self.create_query_hop2 = dspy.ChainOfThought(CreateQueryHop2)
         self.create_query_hop3 = dspy.ChainOfThought(CreateQueryHop3)
+        self.create_query_hop4 = dspy.ChainOfThought(CreateQueryHop4)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought(SummarizeHop1)
         self.summarize2 = dspy.ChainOfThought(SummarizeHop2)
@@ -145,6 +189,31 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 seen.add(title)
                 unique.append(p)
         return unique
+
+    @staticmethod
+    def _round_robin_dedup(hop_passages, limit):
+        """Round-robin interleaving across hops by within-hop rank, deduping by
+        Wikipedia title. Gives each hop's top-ranked passages representation
+        under the hard 21-doc cap, instead of letting earlier hops crowd out
+        later hops (so a hop-4 gap-analysis retrieval can actually appear in
+        the final set)."""
+        n = len(hop_passages)
+        if n == 0:
+            return []
+        max_r = max((len(h) for h in hop_passages), default=0)
+        seen = set()
+        result = []
+        for r in range(max_r):
+            for hop in hop_passages:
+                if r < len(hop):
+                    p = hop[r]
+                    t = p.split(" | ", 1)[0]
+                    if t not in seen:
+                        seen.add(t)
+                        result.append(p)
+                        if len(result) >= limit:
+                            return result
+        return result
 
     @staticmethod
     def _titles(passages):
@@ -193,7 +262,26 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop3_query = hop3_query.strip()
             hop3_docs = self.retrieve_k(hop3_query).passages
 
-        all_docs = self._dedup(hop1_docs + hop2_docs + hop3_docs)[: self.final_doc_limit]
+        # HOP 4 (independent gap-analysis — does NOT re-summarize into the
+        # hop-3 chain, so it cannot perturb earlier hops; it just issues one
+        # final targeted retrieval for an entity the summaries name but that is
+        # still not in retrieved_titles).
+        hop1_2_3_titles = hop1_2_titles + self._titles(hop3_docs)
+        hop4_query = self.create_query_hop4(
+            claim=claim,
+            summary=summary_2,
+            retrieved_titles=hop1_2_3_titles,
+            prior_queries=[claim, hop2_query, hop3_query],
+        ).query
+        if self._is_refusal(hop4_query):
+            hop4_docs = []
+        else:
+            hop4_query = hop4_query.strip()
+            hop4_docs = self.retrieve_k(hop4_query).passages
+
+        all_docs = self._round_robin_dedup(
+            [hop1_docs, hop2_docs, hop3_docs, hop4_docs], self.final_doc_limit
+        )
         return dspy.Prediction(retrieved_docs=all_docs)
 
     @staticmethod
