@@ -160,6 +160,44 @@ class HarvestEntityQueries(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="Up to 3 bare-entity-name search queries for mentioned-but-unretrieved entities, most claim-relevant first")
 
 
+class BridgeDescriptorQuery(dspy.Signature):
+    """You are guiding multi-hop Wikipedia retrieval to verify a claim, as a
+    final BRIDGE hop. Several retrieval hops and an entity-harvest sweep have
+    completed, yet some entities the claim links to may STILL be missing because
+    NO retrieved passage names them — they are only IMPLIED by a role, title,
+    location, or descriptor in the claim or in the retrieved passages.
+
+    Your job: NAME a single real-world entity (person, organization, place, or
+    work) that the claim's chain implies by ROLE / title / location / descriptor
+    but that is NOT named in any retrieved passage and whose own Wikipedia
+    article is NOT in `retrieved_titles`. Then output a search query for it.
+
+    Examples of role/descriptor-implied bridges:
+    - "the founding director of the X Centre" -> the person who founded/directs it
+    - "starred in a film directed by Shane Meadows" -> the actor of that film
+    - "the subsidiary of Comair" -> the airline Comair owns
+    - "the Nigerian midfielder who played in match Y" -> the specific player
+    - "a film directed by Z" -> the lead actor or the film itself
+
+    Rules:
+    - Only emit an entity genuinely IMPLIED by a relational phrase in the claim
+      or passages; do NOT invent entities the claim does not point to.
+    - The entity must NOT be in `retrieved_titles` and a query for it must NOT
+      be in `prior_queries`.
+    - Prefer the bare entity name; add a single disambiguator (e.g. "actor",
+      "footballer", "tv series", "place") only when ambiguous.
+    - Do NOT restate the whole claim, do NOT refuse, and do NOT answer
+      "none"/"no query". If multiple entities are implied, pick the one most
+      central to verifying the claim.
+
+    Output a single concise search query."""
+    claim: str = dspy.InputField()
+    summary_2: str = dspy.InputField(desc="Entity-focused summary of the chain so far")
+    retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved")
+    prior_queries: list[str] = dspy.InputField(desc="Search queries already issued")
+    query: str = dspy.OutputField(desc="A single search query for one role/descriptor-implied missing entity")
+
+
 class CreateQueryHop4(dspy.Signature):
     """You are guiding multi-hop Wikipedia retrieval to verify a claim, as a
     final independent GAP-ANALYSIS hop after three hops have been completed.
@@ -238,6 +276,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.create_query_hop3 = dspy.ChainOfThought(CreateQueryHop3)
         self.create_query_hop4 = dspy.ChainOfThought(CreateQueryHop4)
         self.harvest = dspy.ChainOfThought(HarvestEntityQueries)
+        self.bridge = dspy.ChainOfThought(BridgeDescriptorQuery)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.retrieve_k_hop4 = dspy.Retrieve(k=self.k_hop4)
         self.summarize1 = dspy.ChainOfThought(SummarizeHop1)
@@ -263,10 +302,21 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     @staticmethod
     def _rerank_pool(passages_groups, claim, rerank_fn, limit, safety_count=0):
-        """Build a title-deduped candidate pool from per-hop passage lists,
-        score each passage with the LM reranker, and return the top-`limit`
-        passages ordered by score (ties broken by earliest hop then earliest
-        rank, preserving FIFO priority for primary-hop golds).
+        """Build a title-deduped candidate pool from per-hop passage lists and
+        return the top-`limit` passages via a TWO-STAGE pointwise rerank:
+
+          Stage 1 (coarse): score every candidate, keep the top
+            `stage1_keep` (~limit + 9) by score -- this drops the bulk of
+            distractors so survivor golds become salient.
+          Stage 2 (fine):   re-score only the stage-1 survivors and keep the
+            top `need` by the stage-2 score.
+
+        Two stages absorb enlarged harvest/bridge pools that the single-pass
+        scorer diluted (a true gold that survives stage 1 gets a cleaner, less
+        noisy re-score among a high-relevance-only pool). Ties break by
+        earliest hop then earliest rank, preserving FIFO priority for
+        primary-hop golds. On any LM parse/length failure we fall back to
+        hop/rank FIFO order.
 
         `safety_count`: each of the first `safety_count` hops has its
         first-seen (rank-0) passage automatically guaranteed a final slot,
@@ -293,23 +343,55 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return [p for p, _, _ in candidates]
         guaranteed_titles = {p.split(" | ", 1)[0] for p in guaranteed}
         scored = [c for c in candidates if c[0].split(" | ", 1)[0] not in guaranteed_titles]
-        passages = [c[0] for c in scored]
         kept = list(guaranteed)
         need = limit - len(kept)
         if need <= 0:
             return kept[:limit]
-        try:
-            scores = rerank_fn(claim=claim, passages=passages).scores
-        except Exception:
-            scores = None
-        if not scores or len(scores) != len(scored):
-            return (kept + passages)[:limit]
-        order = sorted(
+        if not scored:
+            return kept[:limit]
+        # ---- Stage 1 (coarse): score every candidate, keep the top stage1_keep
+        stage1_keep = min(len(scored), max(need + 9, 25))
+        s1 = HoverMultiHop._score_candidates(rerank_fn, claim, scored)
+        if s1 is None:
+            return (kept + [c[0] for c in scored])[:limit]
+        order1 = sorted(
             range(len(scored)),
-            key=lambda i: (-scores[i], scored[i][1], scored[i][2]),
+            key=lambda i: (-s1[i], scored[i][1], scored[i][2]),
         )
-        kept.extend(scored[i][0] for i in order[:need])
+        surv_idxs = order1[:stage1_keep]
+        survivors = [scored[i] for i in surv_idxs]
+        if len(survivors) <= need:
+            kept.extend(c[0] for c in survivors)
+            return kept[:limit]
+        # ---- Stage 2 (fine): re-score only the survivors, keep top `need`
+        s2 = HoverMultiHop._score_candidates(rerank_fn, claim, survivors)
+        if s2 is None:
+            kept.extend(survivors[i][0] for i in range(need))
+            return kept[:limit]
+        order2 = sorted(
+            range(len(survivors)),
+            key=lambda i: (-s2[i], survivors[i][1], survivors[i][2]),
+        )
+        kept.extend(survivors[i][0] for i in order2[:need])
         return kept[:limit]
+
+    @staticmethod
+    def _score_candidates(rerank_fn, claim, scored):
+        """Run the pointwise reranker over `scored` [(passage,hop,rank),...].
+        Returns int scores aligned to `scored`, or None on any
+        parse/length-mismatch failure."""
+        passages = [c[0] for c in scored]
+        try:
+            out = rerank_fn(claim=claim, passages=passages)
+            scores = list(out.scores)
+        except Exception:
+            return None
+        if not scores or len(scores) != len(scored):
+            return None
+        try:
+            return [int(s) for s in scores]
+        except Exception:
+            return None
 
     @staticmethod
     def _is_refusal(query):
@@ -466,8 +548,21 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 harvest_docs.extend(self.retrieve_k(qs).passages)
                 count += 1
 
+        bridge_docs = []
+        bridge_titles_before = retrieved_titles + self._titles(hop4_docs) + self._titles(harvest_docs)
+        bridge_query = self._gen_query(
+            self.bridge,
+            claim=claim,
+            summary_2=summary_2,
+            retrieved_titles=bridge_titles_before,
+            prior_queries=prior_queries,
+        )
+        if not self._is_refusal(bridge_query):
+            prior_queries.append(bridge_query)
+            bridge_docs = self.retrieve_k_hop4(bridge_query).passages
+
         all_docs = self._rerank_pool(
-            [hop1_docs, hop2_docs, hop3_docs, hop4_docs, harvest_docs],
+            [hop1_docs, hop2_docs, hop3_docs, hop4_docs, harvest_docs, bridge_docs],
             claim,
             self.rerank,
             self.final_doc_limit,
