@@ -152,6 +152,34 @@ class CreateQueryHop4(dspy.Signature):
     query: str = dspy.OutputField(desc="A single targeted Wikipedia search query for one still-missing entity")
 
 
+class RerankDocs(dspy.Signature):
+    """You are verifying a multi-hop Wikipedia claim. A pool of candidate
+    Wikipedia abstract passages has been retrieved across several search hops.
+    Score EACH passage 0-10 for how relevant its Wikipedia article is to
+    verifying the claim's multi-hop chain.
+
+    Score 9-10: this passage's Wikipedia article is one of the entities the
+    claim directly links to (the subject entity, or a person/organization/place
+    /work that a relational phrase in the claim or in retrieved passages points
+    to — e.g. "directed by X", "produced by Y", "starring Z", "founded by W",
+    "located in L"). Gold supporting articles are in this band.
+    Score 5-8: clearly on-topic and plausibly part of the chain.
+    Score 1-4: only loosely related (same broad field, a neighbor article, a
+    disambiguator); a surface-token hit, not the linked entity.
+    Score 0: off-topic distractor.
+
+    A film/album/show article itself is highly relevant when the claim concerns
+    that work; a cast/crew member's own biography article is highly relevant
+    when the claim links the subject to that person. A venue/festival/broadcaster
+    is a low-value connector unless the claim literally links to it.
+
+    Output one integer score per passage, in the SAME order as the input
+    passages. Output exactly len(passages) scores."""
+    claim: str = dspy.InputField()
+    passages: list[str] = dspy.InputField(desc="Candidate Wikipedia abstract passages to score")
+    scores: list[int] = dspy.OutputField(desc="One relevance score 0-10 per passage, in input order")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -162,7 +190,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 10
-        self.k_hop4 = 6
+        self.k_hop4 = 10
         self.final_doc_limit = 21
         self.create_query_hop2 = dspy.ChainOfThought(CreateQueryHop2)
         self.create_query_hop3 = dspy.ChainOfThought(CreateQueryHop3)
@@ -171,6 +199,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.retrieve_k_hop4 = dspy.Retrieve(k=self.k_hop4)
         self.summarize1 = dspy.ChainOfThought(SummarizeHop1)
         self.summarize2 = dspy.ChainOfThought(SummarizeHop2)
+        self.rerank = dspy.Predict(RerankDocs)
 
     @staticmethod
     def _titles(passages):
@@ -188,6 +217,38 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 seen.add(title)
                 unique.append(p)
         return unique
+
+    @staticmethod
+    def _rerank_pool(passages_groups, claim, rerank_fn, limit):
+        """Build a title-deduped candidate pool from per-hop passage lists,
+        score each passage with the LM reranker, and return the top-`limit`
+        passages ordered by score (ties broken by earliest hop then earliest
+        rank, preserving FIFO priority for primary-hop golds)."""
+        seen_titles = set()
+        candidates = []  # (passage, hop, rank)
+        for hop, group in enumerate(passages_groups):
+            for rank, p in enumerate(group):
+                title = p.split(" | ", 1)[0]
+                if title in seen_titles:
+                    continue
+                seen_titles.add(title)
+                candidates.append((p, hop, rank))
+        if not candidates:
+            return []
+        if len(candidates) <= limit:
+            return [p for p, _, _ in candidates]
+        passages = [c[0] for c in candidates]
+        try:
+            scores = rerank_fn(claim=claim, passages=passages).scores
+        except Exception:
+            scores = None
+        if not scores or len(scores) != len(candidates):
+            return passages[:limit]
+        order = sorted(
+            range(len(candidates)),
+            key=lambda i: (-scores[i], candidates[i][1], candidates[i][2]),
+        )
+        return [candidates[i][0] for i in order[:limit]]
 
     @staticmethod
     def _is_refusal(query):
@@ -292,9 +353,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         else:
             hop4_docs = self.retrieve_k_hop4(hop4_query).passages
 
-        all_docs = self._fifo_then_interleave_dedup(
-            hop1_docs + hop2_docs,
-            [hop3_docs, hop4_docs],
+        all_docs = self._rerank_pool(
+            [hop1_docs, hop2_docs, hop3_docs, hop4_docs],
+            claim,
+            self.rerank,
             self.final_doc_limit,
         )
         return dspy.Prediction(retrieved_docs=all_docs)
