@@ -308,12 +308,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
           Stage 1 (coarse): score every candidate, keep the top
             `stage1_keep` (~limit + 9) by score -- this drops the bulk of
             distractors so survivor golds become salient.
-          Stage 2 (fine):   re-score only the stage-1 survivors and keep the
-            top `need` by the stage-2 score.
+          Stage 2 (fine):   re-score only the stage-1 survivors and ENSEMBLE
+            (average) their stage-1 + stage-2 scores; keep the top `need`
+            by the averaged score.
 
-        Two stages absorb enlarged harvest/bridge pools that the single-pass
-        scorer diluted (a true gold that survives stage 1 gets a cleaner, less
-        noisy re-score among a high-relevance-only pool). Ties break by
+        Averaging two independent pointwise passes smooths per-pass scoring
+        noise so a single distractor's lucky high score in one pass cannot
+        dominate a true gold that scores well in both -- directly targeting
+        the one-pass false-drop dilution mode on enlarged harvest/bridge pools.
+        Ties break by
         earliest hop then earliest rank, preserving FIFO priority for
         primary-hop golds. On any LM parse/length failure we fall back to
         hop/rank FIFO order.
@@ -363,14 +366,20 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if len(survivors) <= need:
             kept.extend(c[0] for c in survivors)
             return kept[:limit]
-        # ---- Stage 2 (fine): re-score only the survivors, keep top `need`
+        # ---- Stage 2 (fine): re-score only the survivors and ENSEMBLE with
+        # stage-1 scores (average). Averaging two independent pointwise passes
+        # smooths per-pass scoring noise so a single distractor's lucky high
+        # score in one pass cannot dominate a true gold that scores well in
+        # both -- directly targeting the one-pass false-drop dilution mode.
+        s1_surv = [s1[i] for i in surv_idxs]
         s2 = HoverMultiHop._score_candidates(rerank_fn, claim, survivors)
         if s2 is None:
             kept.extend(survivors[i][0] for i in range(need))
             return kept[:limit]
+        combined = [(s1_surv[k] + s2[k]) / 2.0 for k in range(len(survivors))]
         order2 = sorted(
             range(len(survivors)),
-            key=lambda i: (-s2[i], survivors[i][1], survivors[i][2]),
+            key=lambda i: (-combined[i], survivors[i][1], survivors[i][2]),
         )
         kept.extend(survivors[i][0] for i in order2[:need])
         return kept[:limit]
