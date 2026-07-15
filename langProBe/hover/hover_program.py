@@ -436,7 +436,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # game) is named inside an already-retrieved passage but never had its
         # own article queried. Independent of hops 1-4; does not write back.
         harvest_docs = []
-        all_passages = hop1_docs + hop2_docs + hop3_docs
+        all_passages = hop1_docs + hop2_docs + hop3_docs + hop4_docs
         if all_passages:
             try:
                 harvested = self.harvest(
