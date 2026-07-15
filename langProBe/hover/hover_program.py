@@ -120,6 +120,46 @@ class CreateQueryHop3(dspy.Signature):
     query: str = dspy.OutputField(desc="A single targeted Wikipedia search query for one missing entity")
 
 
+class HarvestEntityQueries(dspy.Signature):
+    """You are guiding multi-hop Wikipedia retrieval to verify a claim. Several
+    retrieval hops have completed and their Wikipedia abstract passages are
+    listed below.
+
+    Your job: find NAMED ENTITIES (people, organizations, places, films/works,
+    events, teams, games) that are MENTIONED BY NAME inside these passages but
+    whose OWN Wikipedia article has NOT yet been retrieved (its title is NOT in
+    `retrieved_titles`). These are the chain-follow targets the claim may link to
+    — a passage often textually names the next-hop entity to chase (e.g.
+    "songwriter Rosi Golan", "founded by Charlotte Baldwin Allen", "the city of
+    Rochester Hills", "the video game F.E.A.R."). Issue search queries to pull
+    the OWN articles of the most claim-relevant such entities.
+
+    Rules:
+    - Only entities whose name actually appears in the passage text. Do NOT
+      invent entities that are merely implied by the claim but never named in a
+      passage.
+    - Exclude any entity whose article title is already in `retrieved_titles` or
+      whose name matches a query already in `prior_queries`.
+    - Prefer entities the claim's chain links to (the subject's spouse, founder,
+      director, partner, home city, parent work, or named role) over background
+      mentions. A person/place/work that a retrieved passage introduces via a
+      relational phrase ("married X", "born in Y", "composed by Z", "directed
+      by W", "founded in L") is highest value.
+    - Prefer a PERSON over a connector (venue, broadcaster, festival) when the
+      claim links the subject to a person.
+    - Output BARE entity names, adding a single disambiguator (e.g. "film",
+      "band", "actor", "place") only when the name is genuinely ambiguous.
+
+    `prior_queries` lists queries already issued; do NOT duplicate them. Do not
+    restate the whole claim, refuse, or answer "none". Output up to 3 distinct
+    search queries."""
+    claim: str = dspy.InputField()
+    passages: list[str] = dspy.InputField(desc="All Wikipedia abstract passages retrieved across earlier hops")
+    retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved")
+    prior_queries: list[str] = dspy.InputField(desc="Search queries already issued")
+    queries: list[str] = dspy.OutputField(desc="Up to 3 bare-entity-name search queries for mentioned-but-unretrieved entities, most claim-relevant first")
+
+
 class CreateQueryHop4(dspy.Signature):
     """You are guiding multi-hop Wikipedia retrieval to verify a claim, as a
     final independent GAP-ANALYSIS hop after three hops have been completed.
@@ -189,12 +229,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 10
-        self.k_hop4 = 10
+        self.k = 15
+        self.k_hop4 = 15
+        self.harvest_k = 15
         self.final_doc_limit = 21
+        self.harvest_q_cap = 2
         self.create_query_hop2 = dspy.ChainOfThought(CreateQueryHop2)
         self.create_query_hop3 = dspy.ChainOfThought(CreateQueryHop3)
         self.create_query_hop4 = dspy.ChainOfThought(CreateQueryHop4)
+        self.harvest = dspy.ChainOfThought(HarvestEntityQueries)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.retrieve_k_hop4 = dspy.Retrieve(k=self.k_hop4)
         self.summarize1 = dspy.ChainOfThought(SummarizeHop1)
@@ -219,36 +262,54 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return unique
 
     @staticmethod
-    def _rerank_pool(passages_groups, claim, rerank_fn, limit):
+    def _rerank_pool(passages_groups, claim, rerank_fn, limit, safety_count=0):
         """Build a title-deduped candidate pool from per-hop passage lists,
         score each passage with the LM reranker, and return the top-`limit`
         passages ordered by score (ties broken by earliest hop then earliest
-        rank, preserving FIFO priority for primary-hop golds)."""
+        rank, preserving FIFO priority for primary-hop golds).
+
+        `safety_count`: each of the first `safety_count` hops has its
+        first-seen (rank-0) passage automatically guaranteed a final slot,
+        ahead of the score-ranked fill. This protects primary-hop golds that
+        the pointwise reranker occasionally false-drops below distractors."""
         seen_titles = set()
+        guaranteed = []
         candidates = []  # (passage, hop, rank)
         for hop, group in enumerate(passages_groups):
-            for rank, p in enumerate(group):
+            ranked_unique = []
+            for p in group:
                 title = p.split(" | ", 1)[0]
                 if title in seen_titles:
                     continue
                 seen_titles.add(title)
+                ranked_unique.append(p)
+            for rank, p in enumerate(ranked_unique):
                 candidates.append((p, hop, rank))
+            if hop < safety_count and ranked_unique:
+                guaranteed.append(ranked_unique[0])
         if not candidates:
             return []
         if len(candidates) <= limit:
             return [p for p, _, _ in candidates]
-        passages = [c[0] for c in candidates]
+        guaranteed_titles = {p.split(" | ", 1)[0] for p in guaranteed}
+        scored = [c for c in candidates if c[0].split(" | ", 1)[0] not in guaranteed_titles]
+        passages = [c[0] for c in scored]
+        kept = list(guaranteed)
+        need = limit - len(kept)
+        if need <= 0:
+            return kept[:limit]
         try:
             scores = rerank_fn(claim=claim, passages=passages).scores
         except Exception:
             scores = None
-        if not scores or len(scores) != len(candidates):
-            return passages[:limit]
+        if not scores or len(scores) != len(scored):
+            return (kept + passages)[:limit]
         order = sorted(
-            range(len(candidates)),
-            key=lambda i: (-scores[i], candidates[i][1], candidates[i][2]),
+            range(len(scored)),
+            key=lambda i: (-scores[i], scored[i][1], scored[i][2]),
         )
-        return [candidates[i][0] for i in order[:limit]]
+        kept.extend(scored[i][0] for i in order[:need])
+        return kept[:limit]
 
     @staticmethod
     def _is_refusal(query):
@@ -260,6 +321,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if q.startswith(("no query", "none of", "no ", "i don't", "i do not")):
             return True
         return False
+
+    def _gen_query(self, predictor, **kwargs):
+        """Run a ChainOfThought query generator, returning a single query
+        string. Falls back to an empty string (skip the hop) on any parse or
+        missing-field failure so a single LM crash cannot zero an example."""
+        try:
+            out = predictor(**kwargs)
+            q = getattr(out, "query", None)
+            if q is None or not str(q).strip():
+                return ""
+            return str(q).strip()
+        except Exception:
+            return ""
 
     def _fifo_then_interleave_dedup(self, primary_docs, late_docs_groups, limit):
         """Primary hops (1, 2) keep FIFO priority for full tail coverage; late
@@ -307,12 +381,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         retrieved_titles = self._titles(hop1_docs)
 
         # HOP 2
-        hop2_query = self.create_query_hop2(
+        hop2_query = self._gen_query(
+            self.create_query_hop2,
             claim=claim,
             summary_1=summary_1,
             retrieved_titles=retrieved_titles,
             prior_queries=prior_queries,
-        ).query
+        )
         if self._is_refusal(hop2_query):
             hop2_docs = []
         else:
@@ -327,13 +402,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         retrieved_titles = self._titles(hop1_docs) + self._titles(hop2_docs)
 
         # HOP 3
-        hop3_query = self.create_query_hop3(
+        hop3_query = self._gen_query(
+            self.create_query_hop3,
             claim=claim,
             summary_1=summary_1,
             summary_2=summary_2,
             retrieved_titles=retrieved_titles,
             prior_queries=prior_queries,
-        ).query
+        )
         if self._is_refusal(hop3_query):
             hop3_docs = []
         else:
@@ -342,21 +418,59 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         retrieved_titles = retrieved_titles + self._titles(hop3_docs)
 
         # HOP 4 (independent gap-analysis; does NOT re-summarize into chain)
-        hop4_query = self.create_query_hop4(
+        hop4_query = self._gen_query(
+            self.create_query_hop4,
             claim=claim,
             summary_2=summary_2,
             retrieved_titles=retrieved_titles,
             prior_queries=prior_queries,
-        ).query
+        )
         if self._is_refusal(hop4_query):
             hop4_docs = []
         else:
             hop4_docs = self.retrieve_k_hop4(hop4_query).passages
 
+        # HARVEST: chain-follow sweep over entity names mentioned in retrieved
+        # passage text whose own article is not yet retrieved. Targets the
+        # recurring mode where a gold (songwriter, spouse, home city, parent
+        # game) is named inside an already-retrieved passage but never had its
+        # own article queried. Independent of hops 1-4; does not write back.
+        harvest_docs = []
+        all_passages = hop1_docs + hop2_docs + hop3_docs
+        if all_passages:
+            try:
+                harvested = self.harvest(
+                    claim=claim,
+                    passages=all_passages,
+                    retrieved_titles=retrieved_titles + self._titles(hop4_docs),
+                    prior_queries=prior_queries,
+                ).queries
+            except Exception:
+                harvested = []
+            if not isinstance(harvested, list):
+                harvested = [harvested] if harvested else []
+            issued = set(q.strip().lower() for q in prior_queries)
+            count = 0
+            for q in harvested:
+                if count >= self.harvest_q_cap:
+                    break
+                if not isinstance(q, str):
+                    continue
+                qs = q.strip()
+                if not qs or self._is_refusal(qs):
+                    continue
+                if qs.lower() in issued:
+                    continue
+                issued.add(qs.lower())
+                prior_queries.append(qs)
+                harvest_docs.extend(self.retrieve_k(qs).passages)
+                count += 1
+
         all_docs = self._rerank_pool(
-            [hop1_docs, hop2_docs, hop3_docs, hop4_docs],
+            [hop1_docs, hop2_docs, hop3_docs, hop4_docs, harvest_docs],
             claim,
             self.rerank,
             self.final_doc_limit,
+            safety_count=4,
         )
         return dspy.Prediction(retrieved_docs=all_docs)
