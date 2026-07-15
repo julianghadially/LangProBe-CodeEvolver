@@ -441,9 +441,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop1b_docs = self.retrieve_k(hop1b_q.strip()).passages
         hop_docs["hop1b"] = hop1b_docs
 
-        # ---- Summarize hop 1 ----
+        # ---- Summarize hop 1 (include hop1b passages so disambiguator-
+        # retrieved entities enter the multi-hop chain) ----
         summary_1 = self._safe_summary(
-            self.summarize1, claim=claim, passages=hop1_docs
+            self.summarize1, claim=claim, passages=hop1_docs + hop1b_docs
         )
 
         all_titles = list(dict.fromkeys(self._titles(hop1_docs) + self._titles(hop1b_docs)))
