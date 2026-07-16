@@ -290,7 +290,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.k = 15
         self.final_doc_limit = 21
         self.harvest_query_cap = 3
-        self.bridge_query_cap = 2
+        self.bridge_query_cap = 1
         self.rrf_k_constant = 60
         self.rrf_pool_cap = 45
         self.stage1_keep_margin = 9
