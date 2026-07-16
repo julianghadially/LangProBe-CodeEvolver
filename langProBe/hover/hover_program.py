@@ -182,24 +182,42 @@ class HarvestEntityQueries(dspy.Signature):
 
 
 class BridgeDescriptorQuery(dspy.Signature):
-    """You are helping multi-hop Wikipedia retrieval. The claim may refer to
-    an entity by ROLE, title, location, or descriptor without naming it, and
-    NO retrieved passage names it either.
+    """You are helping multi-hop Wikipedia retrieval. The claim implies one or
+    more Wikipedia articles STILL MISSING - articles not named in any retrieved
+    passage and not in retrieved_titles - but likely needed to verify or refute
+    the claim.
 
-    Identify ONE entity that:
-    1. The claim implies by role or descriptor (e.g. "the director of a film
-       named in the claim", "the company that produced a product mentioned",
-       "the place where someone was born", "the subsidiary of an airline").
-    2. Is NOT named in any retrieved passage.
-    3. Is NOT in retrieved_titles.
+    These missing articles are reached by INFERENCE from a role, event,
+    relationship, or descriptor rather than by a literal name in a passage.
+    Think about each of the following targets in turn:
+    - An EVENT named by a phrase in the claim whose own article should be
+      retrieved by that phrase (e.g. claim "the 1986 space-shuttle accident"
+      -> query "Space Shuttle Challenger disaster").
+    - A SEASON article of a sports team mentioned in the claim (e.g.
+      "2001-02 Detroit Red Wings season").
+    - A SONG or WORK ADAPTED FROM a work already retrieved (e.g. a Broadway
+      song adapted from a classical piece).
+    - A PREDECESSOR, PARENT, or SUBSIDIARY body of an organisation already
+      retrieved (e.g. a state-university system's former governing board).
+    - A FILM two named actors co-starred in that is NOT named in the claim
+      (e.g. claim "X and Y co-starred in a 1990 film" -> "Tom Hanks 1998
+      war film" style query combining one actor + year + type).
+    - A CITY, COUNTY, or PLACE implied by a descriptor in the claim (e.g.
+      "the county where the other school is located").
 
-    Output the single bare entity NAME as it would appear as a Wikipedia
-    article title. If you cannot identify such an entity, output an empty
-    string."""
+    Output up to 2 concise SEARCH QUERIES. Each query is a short phrase a
+    Wikipedia full-text search (ColBERT) is likely to match to the missing
+    article - usually the article's likely title, OR a tight descriptor phrase
+    combining the entity type with the claim's discriminator. Prefer exact
+    titles when you can name them; otherwise prefer descriptive phrases over
+    outputting nothing.
+
+    Do NOT duplicate any string already in retrieved_titles. Output [] only if
+    you can propose NO plausible search query."""
     claim: str = dspy.InputField()
     passages: list[str] = dspy.InputField(desc="All Wikipedia passages retrieved across all hops")
-    retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved")
-    query: str = dspy.OutputField(desc="A single bare entity name to search for, or empty string if none")
+    retrieved_titles: list[str] = dspy.InputField(desc="Wikipedia article titles already retrieved; do not re-issue these")
+    queries: list[str] = dspy.OutputField(desc="Up to 2 concise search-query phrases for missing Wikipedia articles")
 
 
 class EntityHop1Query(dspy.Signature):
@@ -272,6 +290,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.k = 15
         self.final_doc_limit = 21
         self.harvest_query_cap = 3
+        self.bridge_query_cap = 2
         self.rrf_k_constant = 60
         self.rrf_pool_cap = 45
         self.stage1_keep_margin = 9
@@ -375,20 +394,22 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         except Exception:
             return []
 
-    def _safe_bridge(self, claim, passages, retrieved_titles):
-        """Call the bridge module and return a single entity-name query or None."""
+    def _safe_bridge_queries(self, claim, passages, retrieved_titles):
+        """Call the bridge module and return a list of up to cap query strings."""
         try:
             result = self.bridge(
                 claim=claim,
                 passages=passages,
                 retrieved_titles=retrieved_titles,
             )
-            q = getattr(result, "query", None)
-            if q is None or self._is_refusal(q):
-                return None
-            return q.strip()
+            qs = getattr(result, "queries", None)
+            if qs is None:
+                return []
+            if isinstance(qs, str):
+                qs = [q.strip() for q in qs.split(",") if q.strip()]
+            return [q.strip() for q in qs if q and not self._is_refusal(q)]
         except Exception:
-            return None
+            return []
 
     def _safe_rerank(self, module, claim, titles):
         """Call a reranker module and return a list of float scores, or None."""
@@ -533,17 +554,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     dict.fromkeys(all_titles + self._titles(hq_docs))
                 )
 
-        # ---- BRIDGE: role/descriptor-implied entity ----
+        # ---- BRIDGE: descriptor/event/relationship-implied missing articles ----
         all_passages_updated = []
         for docs in hop_docs.values():
             all_passages_updated.extend(docs)
 
-        bridge_q = self._safe_bridge(claim, all_passages_updated, all_titles)
-        if bridge_q:
-            bridge_docs = self.retrieve_k(bridge_q).passages
-            hop_docs["bridge"] = bridge_docs
+        bridge_queries = self._safe_bridge_queries(claim, all_passages_updated, all_titles)
+        for bi, bq in enumerate(bridge_queries[: self.bridge_query_cap]):
+            hop_docs[f"bridge_{bi}"] = self.retrieve_k(bq).passages
             all_titles = list(
-                dict.fromkeys(all_titles + self._titles(bridge_docs))
+                dict.fromkeys(all_titles + self._titles(hop_docs[f"bridge_{bi}"]))
             )
 
         # ---- BUILD CANDIDATE POOL ----
