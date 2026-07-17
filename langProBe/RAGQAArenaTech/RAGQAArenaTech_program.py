@@ -35,19 +35,30 @@ _PLACEHOLDER_TOKENS = {
     "[no content]",
 }
 
+# DSPy adapter section markers leaked into a response -- a clear sign the LM
+# is meta-ruminating about the template format instead of producing the answer
+# (e.g. it emits ``{response}`` then rambling about how to fill that field).
+# These markers are not part of any real StackExchange-style tech answer.
+_ADAPTER_TEMPLATE_MARKERS = (
+    "[[ ## response ## ]]",
+    "[[ ## reasoning ## ]]",
+)
+
 
 def _is_malformed_response(text) -> bool:
     """True if a synthesis `response` is a catastrophic stub/placeholder.
 
     Only fires on definitively-broken outputs: empty/whitespace, a literal
-    template token like ``{response}``, an explicit ``[answer]`` marker, or a
-    stub of only dots (``...``). Short lexical answers like ``None``/``No``/
-    ``N/A`` that can be valid are intentionally NOT triggered, so real
-    (including terse) answers are byte-for-byte unchanged.
+    template token like ``{response}``, an explicit ``[answer]`` marker, a stub
+    of only dots (``...``), or a response with leaked DSPy adapter section
+    markers (``[[ ## response ## ]]`` etc.). Short lexical answers like
+    ``None``/``No``/``N/A`` that can be valid are intentionally NOT triggered,
+    so real (including terse) answers are byte-for-byte unchanged.
     """
     if text is None:
         return True
-    t = re.sub(r"\s+", "", str(text)).lower()
+    s = str(text)
+    t = re.sub(r"\s+", "", s).lower()
     if not t:
         return True
     if t in _PLACEHOLDER_TOKENS:
@@ -55,9 +66,11 @@ def _is_malformed_response(text) -> bool:
     # Bare ``{template_variable}`` form for any name (covers adapter stubs).
     if re.fullmatch(r"\{[a-z_][a-z0-9_]*\}", t):
         return True
-    # A stub of only dots (``.``, ``...``, ``......``): the adapter parsed
-    # a placeholder, not a real answer.
+    # A stub of only dots (``.``, ``...``, ``......``).
     if re.fullmatch(r"\.{1,}", t):
+        return True
+    # DSPy adapter markup leaked into the response text.
+    if any(m in s for m in _ADAPTER_TEMPLATE_MARKERS):
         return True
     return False
 
