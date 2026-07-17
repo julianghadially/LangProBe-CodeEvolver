@@ -1,3 +1,4 @@
+import re
 import time
 
 import dspy
@@ -23,6 +24,42 @@ _RETRYABLE_SUBSTRINGS = (
 
 # Backoff (seconds) before the cheaper-fallback retry path.
 _RETRY_BACKOFF = 2.0
+
+# Literal placeholder/stub responses the LM occasionally emits without raising
+# AdapterParseError (e.g. "{response}", "...", empty). These are catastrophic
+# zero-score outputs the exception-only guard above misses, because the adapter
+# successfully parsed *a* response -- it just wasn't a real answer. The cheaper
+# `dspy.Predict` fallback (no `reasoning` field) on re-roll skips the stub path.
+_PLACEHOLDER_TOKENS = {
+    "[answer]",
+    "[no content]",
+}
+
+
+def _is_malformed_response(text) -> bool:
+    """True if a synthesis `response` is a catastrophic stub/placeholder.
+
+    Only fires on definitively-broken outputs: empty/whitespace, a literal
+    template token like ``{response}``, an explicit ``[answer]`` marker, or a
+    stub of only dots (``...``). Short lexical answers like ``None``/``No``/
+    ``N/A`` that can be valid are intentionally NOT triggered, so real
+    (including terse) answers are byte-for-byte unchanged.
+    """
+    if text is None:
+        return True
+    t = re.sub(r"\s+", "", str(text)).lower()
+    if not t:
+        return True
+    if t in _PLACEHOLDER_TOKENS:
+        return True
+    # Bare ``{template_variable}`` form for any name (covers adapter stubs).
+    if re.fullmatch(r"\{[a-z_][a-z0-9_]*\}", t):
+        return True
+    # A stub of only dots (``.``, ``...``, ``......``): the adapter parsed
+    # a placeholder, not a real answer.
+    if re.fullmatch(r"\.{1,}", t):
+        return True
+    return False
 
 
 def _is_retriable(exc: Exception) -> bool:
@@ -101,22 +138,37 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     def _safe_respond(self, context, question):
         """Synthesize an answer with a cheaper-shape fallback on failure.
 
-        Falls back to raw `question` only if *both* the primary ChainOfThought
-        and the cheaper Predict raise a retriable exception.
+        Two catastrophic triggers route to the cheaper `dspy.Predict` fallback:
+          (a) the primary `ChainOfThought` raises a retriable exception (the
+              LM-gateway hard-cap), OR
+          (b) the primary call returns a *content stub* response (e.g.
+              ``{response}``, ``...``, empty) without raising -- the adapter
+              parsed a placeholder, not a real answer.
+        Both share the same cheaper-shape fallback (drop `reasoning`). Falls
+        back to raw `question` only if the cheaper Predict also fails / stubs.
         """
         try:
-            return self.respond(context=context, question=question)
+            pred = self.respond(context=context, question=question)
         except Exception as exc:  # noqa: BLE001 - broad catch is deliberate for recovery
             if not _is_retriable(exc):
                 raise
-            try:
-                if _RETRY_BACKOFF:
-                    time.sleep(_RETRY_BACKOFF)
-                return self.respond_fallback(context=context, question=question)
-            except Exception as exc2:  # noqa: BLE001
-                if not _is_retriable(exc2):
-                    raise
-                return dspy.Prediction(response=question)
+            pred = None
+        if pred is not None and not _is_malformed_response(getattr(pred, "response", None)):
+            return pred
+        # Either primary raised a retriable exc, or returned a content stub:
+        # re-roll with the cheaper `dspy.Predict` (no `reasoning` field) which
+        # fits the LM-gateway budget and skips the stub-emission path.
+        if _RETRY_BACKOFF:
+            time.sleep(_RETRY_BACKOFF)
+        try:
+            pred = self.respond_fallback(context=context, question=question)
+        except Exception as exc2:  # noqa: BLE001
+            if not _is_retriable(exc2):
+                raise
+            return dspy.Prediction(response=question)
+        if _is_malformed_response(getattr(pred, "response", None)):
+            return dspy.Prediction(response=question)
+        return pred
 
     def forward(self, question):
         context = []
