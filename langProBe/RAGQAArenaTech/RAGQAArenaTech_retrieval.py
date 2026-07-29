@@ -28,6 +28,13 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 
+from ._tracing import traceable
+
+try:  # OTel is optional -- this module must stay importable outside CodeEvolver.
+    from opentelemetry import trace as _otel_trace
+except Exception:  # pragma: no cover
+    _otel_trace = None
+
 DEFAULT_URL = "http://localhost:8894/api/search"
 
 # Shared, connection-pooled HTTP session for all searches. A pooled Session resolves
@@ -38,6 +45,32 @@ _SESSION = requests.Session()
 _adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32)
 _SESSION.mount("https://", _adapter)
 _SESSION.mount("http://", _adapter)
+
+
+def _record_doc_scores(topk: list[dict]) -> None:
+    """Stamp per-document relevance scores onto the active ``search`` span.
+
+    ``search`` returns passage text only, so the server's ranking signal is otherwise
+    discarded before anything can observe it. Uses OpenInference's own attribute name
+    (``retrieval.documents.{i}.document.score``) so these spans carry the same score
+    signal as hover's auto-instrumented dspy.ColBERTv2 spans. Document text is left
+    out -- it is already on the span as ``ce.output``.
+
+    Never raises: tracing must not be able to break retrieval, and the module must stay
+    usable with no OpenTelemetry installed.
+    """
+    if _otel_trace is None:
+        return
+    try:
+        span = _otel_trace.get_current_span()
+        if span is None or not span.is_recording():
+            return
+        for i, doc in enumerate(topk):
+            span.set_attribute(
+                f"retrieval.documents.{i}.document.score", float(doc.get("score") or 0.0)
+            )
+    except Exception:
+        pass
 
 
 class HTTPEmbeddingRetriever:
@@ -63,6 +96,11 @@ class HTTPEmbeddingRetriever:
         self.max_retries = max_retries
         self.retry_backoff = retry_backoff
 
+    # One span per logical retrieval (the decorator wraps the whole retry loop, not each
+    # HTTP attempt). Records the hop's query text, k, the returned passages, and -- on
+    # failure -- the error, which is what OpenInference gives hover for free via
+    # dspy.Retrieve/dspy.ColBERTv2 but cannot give a plain HTTP client.
+    @traceable("retriever")
     def search(self, query: str, k: int = 5) -> list[str]:
         for attempt in range(self.max_retries + 1):
             try:
@@ -75,7 +113,10 @@ class HTTPEmbeddingRetriever:
                     raise ValueError(
                         f"Retriever server returned an unexpected response: {res_json}"
                     )
-                return [doc["text"][: self.max_characters] for doc in res_json["topk"][:k]]
+                topk = res_json["topk"][:k]
+                # Capture ranking scores before the projection below discards them.
+                _record_doc_scores(topk)
+                return [doc["text"][: self.max_characters] for doc in topk]
             except (
                 requests.exceptions.Timeout,
                 requests.exceptions.ConnectionError,

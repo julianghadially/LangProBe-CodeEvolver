@@ -16,5 +16,7 @@ firecrawl==4.14.0
 numpy==2.2.6
 datasets==4.5.0
 openinference-instrumentation-dspy
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
 mlflow==3.14.0
 ujson

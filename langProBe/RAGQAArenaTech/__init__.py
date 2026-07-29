@@ -1,3 +1,5 @@
+from . import tracing_setup  # noqa: F401  -- enables DSPy->OTEL spans; must precede any dspy use
+
 import dspy
 import dspy.evaluate
 from langProBe.benchmark import BenchmarkMeta
