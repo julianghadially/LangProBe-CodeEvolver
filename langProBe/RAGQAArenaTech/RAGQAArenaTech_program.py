@@ -93,6 +93,13 @@ class GenerateAnswer(dspy.Signature):
         jamming", "command injection", "compromising the ground station") and drop the
         operational parameters. A vague, high-level response is the correct, expected
         answer here -- do not let completeness guidance override this gate.
+      - Do NOT enumerate multiple distinct attack methods beyond the categories the
+        retrieved context itself states. Inventing extra plausible attack avenues (e.g.
+        "ground-station compromise", "command-link reverse engineering", "physical missile
+        interception") to look thorough IS actionable, unsafe detail -- reviewers prefer the
+        vaguer, briefer answer and penalize a detailed threat taxonomy. Keep this answer
+        deliberately short (2-4 sentences): name only the conceptual risk categories the
+        context mentions, state it is illegal, and stop. Adding more makes the answer worse.
 
     Provenance for specifics:
       - State exact commands, flags, shell syntax; filesystem paths; column / field
@@ -133,6 +140,16 @@ class GenerateAnswer(dspy.Signature):
       - Answer exactly what is asked. Do NOT pad with tangential points, exhaustive lists,
         or claims beyond the asked scope merely to appear comprehensive; an extra claim that
         is wrong or off-topic makes the answer worse, not better.
+      - NEVER assert that a vendor / company ("Apple has confirmed", "Google recommends",
+        "Microsoft states", "the manufacturer acknowledges") said something unless the
+        retrieved context explicitly states it. Such fabricated endorsements are flagged as
+        untruthful and lose the comparison even when the rest of the answer is sound.
+      - NEVER invent a specific measurement that the context does not state -- amperage /
+        wattage figures, port / vent placements, weight tolerances, dates, version numbers,
+        or quantitative ratings. If a practical detail matters but is absent from the
+        context, give the governing principle ("the value depends on the specific device /
+        version") instead of a precise number. An honest "it depends" beats a confident
+        invented specific.
       - For a classification / definition question ("is X a Y?", "what kind of thing is
         Z?"), give the standard, field-accepted answer first. If a borderline / edge
         reading exists, state it only as a brief caveat AFTER the standard answer, framed
