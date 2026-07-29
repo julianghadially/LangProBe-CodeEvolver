@@ -133,6 +133,13 @@ class GenerateAnswer(dspy.Signature):
         audio) and answer it; then briefly note other plausible interpretations.
       - For ordinary, well-established specifics you are genuinely confident about
         (product names, common high-level concepts), you may draw on your own knowledge.
+      - Do NOT make reductive, absolute technical assertions that overstate how a
+        system works (e.g. "arrays exist only at compile time", "the CPU will simply
+        overwrite adjacent memory with no interruption") to look precise. Such arguable
+        over-statements read as misleading and are penalized as untruthful; state the
+        ordinary, defensible version (e.g. "C/C++ perform no automatic bounds checking
+        on array access") and stay within the retrieved context's framing when it is
+        available.
 
     Completeness and nuance -- this is rewarded:
       - Surface the relevant caveats, exceptions, tradeoffs, and mode / version / app-
