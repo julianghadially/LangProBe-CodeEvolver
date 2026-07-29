@@ -40,6 +40,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Bridge-aware query generators using passage content to find missing entities.
         self.create_query_hop2 = dspy.ChainOfThought(BridgeQuery)
         self.create_query_hop3 = dspy.ChainOfThought(BridgeQuery)
+        self.create_query_hop4 = dspy.ChainOfThought(BridgeQuery)
 
         # Keep a short summary focused on entities/connections that bridge the claim.
         self.summarize = dspy.ChainOfThought(
@@ -91,7 +92,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages if hop3_query else []
 
+        # HOP 4: a final bridge query targeting any entity still missing after
+        # the first three retrievals (uses all passages gathered so far).
+        all_prior_docs = hop1_docs + hop2_docs + hop3_docs
+        hop4_query = self.create_query_hop4(
+            claim=claim,
+            retrieved_titles=self._titles(all_prior_docs),
+            passages=all_prior_docs,
+        ).query
+        hop4_docs = self.retrieve_k(hop4_query).passages if hop4_query else []
+
         merged = self._interleave_dedup(
-            [hop1_docs, hop2_docs, hop3_docs], self.max_docs
+            [hop1_docs, hop2_docs, hop3_docs, hop4_docs], self.max_docs
         )
         return dspy.Prediction(retrieved_docs=merged)
