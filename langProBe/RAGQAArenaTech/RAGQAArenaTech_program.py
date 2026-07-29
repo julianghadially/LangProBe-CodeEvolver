@@ -68,7 +68,14 @@ def _is_placeholder_response(text: str) -> bool:
     if _BRACKET_WRAP_RE.match(deellipsed):
         inner = deellipsed[1:-1].strip()
         words = inner.split()
-        if 2 <= len(words) <= 28 and _GENERIC_TOKEN_RE.search(inner):
+        # A whole response wrapped in a single bracket pair that reduces to
+        # placeholder vocabulary (e.g. "(answer)", "(response)") is a template
+        # leak, not a real answer. Allow a single placeholder word here -- the
+        # generic-token list is template vocabulary, never real content.
+        if 1 <= len(words) <= 28 and (
+            inner.lower() in _BARE_PLACEHOLDER_WORDS
+            or _GENERIC_TOKEN_RE.search(inner)
+        ):
             return True
     return False
 
