@@ -87,6 +87,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _titles(self, docs):
         return "; ".join(d.split(" | ")[0] for d in docs)
 
+    @staticmethod
+    def _norm_q(q):
+        return " ".join((q or "").lower().split())
+
     def _pool(self, hop_doc_lists, max_docs):
         """Merge per-hop ranked lists, dedup by title, preserving first-seen
         order (hop1 first, then by rank order within each hop)."""
@@ -107,7 +111,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         for i, doc in enumerate(docs):
             title = doc.split(" | ")[0]
             body = doc.split(" | ", 1)[1] if " | " in doc else ""
-            preview = body[:200].replace("\n", " ")
+            preview = body[:400].replace("\n", " ")
             lines.append(f"#{i} | {title} | {preview}")
             if i >= 79:
                 break
@@ -120,47 +124,40 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def forward(self, claim):
         # HOP 1: retrieve directly with the raw claim.
+        used_queries = {self._norm_q(claim)}
         hop1_docs = self.retrieve_k(claim).passages
         summary_1 = self.summarize(claim=claim, passages=hop1_docs).summary
 
+        def _bridge(predictor, prior_docs):
+            q = predictor(
+                claim=claim,
+                retrieved_titles=self._titles(prior_docs),
+                passages=prior_docs,
+            ).query
+            nq = self._norm_q(q)
+            if not q or nq in used_queries:
+                return []
+            used_queries.add(nq)
+            return self.retrieve_k(q).passages
+
         # HOP 2: derive a bridge query targeting an entity named in the
         # retrieved passages but not yet retrieved as its own page.
-        hop2_query = self.create_query_hop2(
-            claim=claim,
-            retrieved_titles=self._titles(hop1_docs),
-            passages=hop1_docs,
-        ).query
-        hop2_docs = self.retrieve_k(hop2_query).passages if hop2_query else []
+        hop2_docs = _bridge(self.create_query_hop2, hop1_docs)
         summary_2 = self.summarize(
             claim=claim, passages=hop1_docs + hop2_docs
         ).summary
 
         # HOP 3: bridge query after considering hop1 + hop2 retrieved titles.
-        hop3_query = self.create_query_hop3(
-            claim=claim,
-            retrieved_titles=self._titles(hop1_docs + hop2_docs),
-            passages=hop1_docs + hop2_docs,
-        ).query
-        hop3_docs = self.retrieve_k(hop3_query).passages if hop3_query else []
+        hop3_docs = _bridge(self.create_query_hop3, hop1_docs + hop2_docs)
 
         # HOP 4: a final bridge query targeting any entity still missing after
         # the first three retrievals (uses all passages gathered so far).
         all_prior_docs = hop1_docs + hop2_docs + hop3_docs
-        hop4_query = self.create_query_hop4(
-            claim=claim,
-            retrieved_titles=self._titles(all_prior_docs),
-            passages=all_prior_docs,
-        ).query
-        hop4_docs = self.retrieve_k(hop4_query).passages if hop4_query else []
+        hop4_docs = _bridge(self.create_query_hop4, all_prior_docs)
 
         # HOP 5: extra bridge query if entities still appear missing.
         all_prior_docs_4 = hop1_docs + hop2_docs + hop3_docs + hop4_docs
-        hop5_query = self.create_query_hop5(
-            claim=claim,
-            retrieved_titles=self._titles(all_prior_docs_4),
-            passages=all_prior_docs_4,
-        ).query
-        hop5_docs = self.retrieve_k(hop5_query).passages if hop5_query else []
+        hop5_docs = _bridge(self.create_query_hop5, all_prior_docs_4)
 
         # Build the full candidate pool (dedup, order hop1 first then by rank).
         pool = self._pool(
