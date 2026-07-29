@@ -3,6 +3,23 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
 from .RAGQAArenaTech_utils import GenerateSearchQuery
 
 
+class GenerateAnswer(dspy.Signature):
+    """Answer the user's question directly and helpfully.
+
+    Use the retrieved context as the primary source of facts; where the context is
+    silent or incomplete you may also draw on your own knowledge. Every claim must be
+    truthful and specific -- never fabricate or speculate. Cover all the question-
+    relevant points, including concrete names, commands, and numbers, while staying
+    focused and concise. Write in plain, natural prose. Do not include bracketed
+    citations, source tags, response templates, or any placeholder tokens -- output
+    only the final answer itself.
+    """
+
+    context = dspy.InputField(desc="may contain relevant facts")
+    question = dspy.InputField()
+    response = dspy.OutputField(desc="a direct, truthful, well-grounded answer")
+
+
 class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     """Multi-hop RAG program for RAGQAArenaTech.
 
@@ -18,7 +35,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         self.retriever = retriever
         self.max_hops = max_hops
         self.num_docs = num_docs
-        self.respond = dspy.ChainOfThought("context, question -> response")
+        self.respond = dspy.ChainOfThought(GenerateAnswer)
         self.generate_query = [
             dspy.ChainOfThought(GenerateSearchQuery) for _ in range(self.max_hops)
         ]
