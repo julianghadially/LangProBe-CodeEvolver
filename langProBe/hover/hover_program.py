@@ -5,15 +5,18 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 class RerankPassages(dspy.Signature):
     """Listwise re-ranking of retrieved Wikipedia passages for a claim.
 
-    Given a claim and a numbered list of candidate passages (each rendered as
+    Given a claim, a short summary of the entities/relations that bridge the
+    claim, and a numbered list of candidate passages (each rendered as
     "#<id> | <title>"), output the semicolon-separated list of passage IDs in
     order of DECREASING relevance to the claim's supporting-fact retrieval.
 
     Relevance = how likely the passage is a TOP supporting Wikipedia page that
-    directly grounds the entities/relations in the claim. Put the most relevant
-    IDs first. Output ONLY the ordered id list (e.g. "3; 7; 1; ...").
+    directly grounds the entities/relations named in the claim and summary. Put
+    the most relevant IDs first. Output ONLY the ordered id list (e.g.
+    "3; 7; 1; ...").
     """
     claim: str = dspy.InputField()
+    summary: str = dspy.InputField(desc="Key entities and relationships that bridge/support the claim, distilled from retrieved passages.")
     candidates: str = dspy.InputField()
     ranked_ids: str = dspy.OutputField()
 
@@ -123,11 +126,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 break
         return "\n".join(lines)
 
-    def _links(self, docs):
-        return "\n".join(
-            f"#{i} | {doc.split(' | ')[0]}" for i, doc in enumerate(docs)
-        )
-
     def forward(self, claim):
         # HOP 1: retrieve directly with the raw claim.
         used_queries = {self._norm_q(claim)}
@@ -177,10 +175,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             len(pool),
         )
 
-        reranked = self._rerank_to_max(pool, claim, interleave_fallback)
+        # Distilled gap analysis over all gathered passages: a concise statement
+        # of the entities/relations that bridge the claim. Feeding it to the
+        # listwise reranker grounds relevance on the claim's support structure,
+        # helping borderline supporting pages rank above look-alikes.
+        rerank_summary = self.summarize(
+            claim=claim, passages=interleave_fallback[:40]
+        ).summary
+
+        reranked = self._rerank_to_max(pool, claim, rerank_summary, interleave_fallback)
         return dspy.Prediction(retrieved_docs=reranked)
 
-    def _rerank_to_max(self, pool, claim, fallback):
+    def _rerank_to_max(self, pool, claim, summary, fallback):
         """Use the listwise reranker to order the pool then cap at max_docs.
         Any pool docs the LM omits are appended in fallback order so the
         returned count is exactly max_docs."""
@@ -188,7 +194,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return pool[: self.max_docs]
         candidates = self._render_candidates(pool)
         ranked_ids_raw = self.rerank(
-            claim=claim, candidates=candidates
+            claim=claim, summary=summary, candidates=candidates
         ).ranked_ids or ""
         ordered_ids = []
         seen = set()
