@@ -167,6 +167,11 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         self.retriever = retriever
         self.max_hops = max_hops
         self.num_docs = num_docs
+        # Cap on how many deduplicated passages are kept around the answer step.
+        # Query expansion (two queries per hop) can otherwise crowd the context with
+        # near-duplicate passages; this keeps it focused without losing the recall win
+        # from issuing a second, different-interpretation query.
+        self.max_context_passages = 12
         self.respond = dspy.ChainOfThought(GenerateAnswer)
         self.generate_query = [
             dspy.ChainOfThought(GenerateSearchQuery) for _ in range(self.max_hops)
@@ -174,6 +179,27 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
 
     def search(self, query, k=5):
         return self.retriever.search(query, k=k)
+
+    def _gather_passages(self, queries, k):
+        """Run one search per query and return deduplicated passages (order preserved).
+
+        ``GenerateSearchQuery`` now produces a primary ``query`` plus an ``alt_query``
+        targeting a different plausible interpretation of the question. Issuing both
+        broadens retrieval recall: a colloquial question whose literal reading pulls the
+        wrong corpus (e.g. general cloud-computing docs instead of the iOS offload icon
+        meaning; fastboot docs instead of Cisco's bootflash term) still gets a chance at
+        the right passages via the alternate, concrete-scenario query.
+        """
+        seen, passages = set(), []
+        for q in queries:
+            if not q or str(q).strip() in seen:
+                continue
+            seen.add(str(q).strip())
+            for p in self.search(str(q), k=k):
+                key = str(p).strip()
+                if key and key not in passages:
+                    passages.append(key)
+        return passages
 
     def _respond_robust(self, context, question):
         """Answer-generation with a graceful fallback for intermittent LM hiccups.
@@ -224,9 +250,14 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     def forward(self, question):
         context = []
         for hop in range(self.max_hops):
-            query = self.generate_query[hop](context=context, question=question).query
-            passages = self.search(query, k=self.num_docs)
+            gen = self.generate_query[hop](context=context, question=question)
+            queries = [getattr(gen, "query", None), getattr(gen, "alt_query", None)]
+            passages = self._gather_passages(queries, k=self.num_docs)
             context = deduplicate(context + passages)
+        # Bound the context fed to the answer step so query-expansion's extra passages
+        # add recall without overwhelming the answer synthesis with low-ranked passes.
+        if self.max_context_passages and len(context) > self.max_context_passages:
+            context = context[: self.max_context_passages]
         pred = self._respond_robust(context=context, question=question)
         # Carry the retrieved passages on the prediction so downstream metrics
         # (e.g. faithfulness/groundedness) can see the evidence the answer was
