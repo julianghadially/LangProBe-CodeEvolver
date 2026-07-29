@@ -81,6 +81,19 @@ class GenerateAnswer(dspy.Signature):
     the concrete names, commands, and numbers that appear in the context. Never fabricate
     or speculate.
 
+    Harmful / illegal-action gate (applies FIRST, before any other guidance):
+      - For requests that could enable harmful or illegal acts (hacking / overriding a
+        system, hijacking a device / satellite, bypassing security, building weapons),
+        answer ONLY with high-level concepts, the categories of risk, and the fact that
+        such acts are illegal. NEVER produce a step-by-step how-to, an ordered list of
+        operational actions, frequencies, equipment, commands, protocols, or any other
+        actionable recipe -- even when the retrieved context contains such detail. If the
+        context lists operational specifics (a frequency band, a vendor, a protocol), do
+        not repeat them; summarize the attack only as a conceptual category (e.g. "RF
+        jamming", "command injection", "compromising the ground station") and drop the
+        operational parameters. A vague, high-level response is the correct, expected
+        answer here -- do not let completeness guidance override this gate.
+
     Provenance for specifics:
       - State exact commands, flags, shell syntax; filesystem paths; column / field
         definitions; and language or framework convention rules ONLY when they come from
@@ -88,56 +101,50 @@ class GenerateAnswer(dspy.Signature):
         wrong is worse than an honest general principle, and reviewers penalize untruthful
         content first. If the context is silent on a specific, give the governing principle
         or qualitative guidance ("the exact command depends on your version / app",
-        "either interpretation is possible") rather than inventing a precise value.
+        "either interpretation is possible") rather than inventing a precise value. Do not
+        invent named programs, companies, or historical incidents that the context does not
+        actually state -- tangential unsupported specifics are penalized as untruthful.
       - When the retrieved context contains several distinct values / estimates / OS- or
-        version-specific sizes, name them with the platform they apply to instead of
-        collapsing to one generic figure -- but only those actually present in the context;
-        do not invent specifics to pad the answer.
-      - Re-read the question and identify the SPECIFIC feature / mechanism it refers to
-        (e.g. an iOS "cloud" icon = the unused-app offload indicator, not cloud sync;
-        "block on iPhone" applies to calls, FaceTime, and FaceTime audio). Answer the
-        concrete scenario the question asks about, not a nearby generic one.
+        version-specific answers, name them all with the platform / version they apply to
+        instead of collapsing to one generic figure -- but only those actually present in
+        the context; do not invent specifics to pad the answer. Cover each version / variant
+        the context addresses rather than only the first one found, stopping at the scope
+        of what was asked.
+      - Re-read the question and identify the SPECIFIC feature / mechanism it refers to,
+        and answer that concrete scenario, not a nearby generic one. When the wording is
+        colloquial or ambiguous and the context does not pin down one meaning, first state
+        the most likely concrete scenario (using platform knowledge where appropriate --
+        e.g. an iOS "cloud" icon next to an app = the unused-app offload indicator, not
+        generic cloud sync; "block on iPhone" applies to calls, FaceTime, and FaceTime
+        audio) and answer it; then briefly note other plausible interpretations.
       - For ordinary, well-established specifics you are genuinely confident about
         (product names, common high-level concepts), you may draw on your own knowledge.
 
-    Completeness and nuance -- this matters and is rewarded:
-      - Surface the relevant caveats, exceptions, and mode / version / app-dependent
-        nuances that the retrieved context provides (e.g. "in CBC mode the IV must be
-        unpredictable", "the storage path depends on the reader app"). A terse answer
-        that drops a relevant qualification is less helpful than one that states it, even
-        briefly. Do not omit a caveat present in the context just to be concise.
-      - When a term in the question is ambiguous and the context does not pin down one
-        meaning, briefly note the interpretations rather than committing to a single
-        (possibly wrong) one.
+    Completeness and nuance -- this is rewarded:
+      - Surface the relevant caveats, exceptions, tradeoffs, and mode / version / app-
+        dependent nuances the retrieved context provides (e.g. "in CBC mode the IV must be
+        unpredictable"; for "is X a good idea?" give both the verdict AND the limited
+        benefits / drawbacks / edge uses the context states). A terse answer that drops a
+        relevant qualification is less helpful than one that states it, even briefly. Do
+        not omit a caveat present in the context just to be concise; dropping a query-
+        relevant nuance to appear decisive reads as evasive and loses the comparison.
 
-    Scope and over-claiming -- untruthful content is penalized first, so prefer a short
-    honest answer over a confident but uncertain one:
-      - Answer exactly what is asked. The reference answers are concise, single-thesis
-        responses; do NOT pad with tangential points, exhaustive lists, or claims beyond
-        the asked scope merely to appear comprehensive. An extra claim that is wrong or
-        off-topic makes the answer worse, not better.
+    Scope and over-claiming -- untruthful content is penalized first:
+      - Answer exactly what is asked. Do NOT pad with tangential points, exhaustive lists,
+        or claims beyond the asked scope merely to appear comprehensive; an extra claim that
+        is wrong or off-topic makes the answer worse, not better.
       - For a classification / definition question ("is X a Y?", "what kind of thing is
-        Z?"), give the standard, accepted answer used in the field and STOP there. Do NOT
-        append a "technically / in the formal sense / in a strict sense it IS a Y"
-        proviso, and do not lead with such a framing -- the conventional, field-standard
-        answer is what reviewers want; hedging toward the borderline reading reads as
-        untruthful and is penalized. If you must mention the borderline view, state it
-        only as a caveat AFTER the standard answer, framed as a minority/edge view.
+        Z?"), give the standard, field-accepted answer first. If a borderline / edge
+        reading exists, state it only as a brief caveat AFTER the standard answer, framed
+        as a minority / edge view -- never lead with it or append a hedge like "technically
+        / in a strict sense it IS a Y".
       - Never state a precise figure, command, or rule unless it is grounded in the
         retrieved context OR is a well-established fact you are genuinely confident of.
-        Do not invent specific numbers or ranges to add plausibility.
-      - For requests that could enable harmful/illegal acts (hacking/overriding a system,
-        hijacking a device/satellite, bypassing security), answer ONLY with high-level
-        concepts, risks, and the fact that such acts are illegal. NEVER produce a
-        step-by-step how-to, an ordered list of operational actions, frequencies,
-        equipment, commands, or any other actionable recipe -- even if the retrieved
-        context contains such detail. Describe the categories of attacks at a conceptual
-        level (jamming, spoofing, command injection) but do not turn them into steps.
 
-    Write in plain, natural prose. Stay focused and concise. Do not include bracketed
-    citations, source tags, response templates, or any placeholder tokens -- output only
-    the final answer itself. Never output a bare template placeholder such as
-    "(concise answer)", "(explanation of ...)", or wrap your whole answer in parentheses.
+    Write in plain, natural prose. Stay focused. Do not include bracketed citations,
+    source tags, response templates, or any placeholder tokens -- output only the final
+    answer itself. Never output a bare template placeholder such as "(concise answer)",
+    "(explanation of ...)", or wrap your whole answer in parentheses.
     """
 
     context = dspy.InputField(desc="may contain relevant facts")
