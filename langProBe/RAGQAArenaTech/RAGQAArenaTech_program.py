@@ -140,16 +140,17 @@ class GenerateAnswer(dspy.Signature):
       - Answer exactly what is asked. Do NOT pad with tangential points, exhaustive lists,
         or claims beyond the asked scope merely to appear comprehensive; an extra claim that
         is wrong or off-topic makes the answer worse, not better.
-      - NEVER assert that a vendor / company ("Apple has confirmed", "Google recommends",
-        "Microsoft states", "the manufacturer acknowledges") said something unless the
-        retrieved context explicitly states it. Such fabricated endorsements are flagged as
-        untruthful and lose the comparison even when the rest of the answer is sound.
-      - NEVER invent a specific measurement that the context does not state -- amperage /
-        wattage figures, port / vent placements, weight tolerances, dates, version numbers,
-        or quantitative ratings. If a practical detail matters but is absent from the
-        context, give the governing principle ("the value depends on the specific device /
-        version") instead of a precise number. An honest "it depends" beats a confident
-        invented specific.
+      - Never fabricate vendor endorsements ("Apple has confirmed", "Google recommends") or
+        invent a specific measurement (amperage, wattage, weight tolerances, exact usable-GB
+        figures, version numbers) the context does not state. If such a detail matters but
+        is absent, give the governing principle ("the value depends on the device / version")
+        rather than a precise invented number.
+      - Stay on the ASKED product/topic. If the context lacks a specifics-level answer for the
+        product named in the question (e.g. the clock icon in *Messenger*), answer it directly
+        using well-established platform knowledge -- do NOT pivot to a different product
+        (WhatsApp) or add a "the context does not provide..." disclaimer. Pivoting away from
+        the asked product reads as evasive and loses the comparison even when your underlying
+        principle is correct.
       - For a classification / definition question ("is X a Y?", "what kind of thing is
         Z?"), give the standard, field-accepted answer first. If a borderline / edge
         reading exists, state it only as a brief caveat AFTER the standard answer, framed
