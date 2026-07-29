@@ -16,26 +16,57 @@ _BARE_TEMPLATE_RE = re.compile(
     r"^(reasoning|response|answer|summary|context)\s*[:\-]?\s*[(<].*[\]>)]\s*\.?$",
     re.IGNORECASE,
 )
+# Whole-response mustache / single-curly placeholder literal, e.g. "{response}",
+# "{{answer}}", "{answer here}". A real answer is never *only* a {var-name} token.
+_MUSTACHE_LITERAL_RE = re.compile(r"^\{+[^{}()\[\]<>]*\}+$", re.DOTALL)
+_ELLIPSIS_FILLER_RE = re.compile(r"\s*\.{2,}\s*")
+# A response that collapses (after removing ellipse-fillers and whitespace) to one
+# of these bare placeholder words is a template leak, not a real answer.
+_BARE_PLACEHOLDER_WORDS = {
+    "response", "answer", "reasoning", "summary", "explanation",
+    "context", "output", "placeholder", "your answer", "your response",
+    "the answer", "the response", "concise answer", "insert answer here",
+    "your answer here", "your response here",
+}
 
 
 def _is_placeholder_response(text: str) -> bool:
     """Detect answers that are obviously template/placeholder leakage rather than
-    real content (e.g. ``"(concise answer)"``, ``(explanation of ...)``).
+    real content (e.g. ``"(concise answer)"``, ``(explanation of ...)``,
+    ``"... response ..."`` -- where the LM left the example placeholder unfilled,
+    or ``"{response}"`` -- a raw mustache placeholder).
 
-    Such outputs occur when the LM echoes an example placeholder instead of
-    filling it in. They are short and are either entirely wrapped in a single
-    bracket pair describing what should go there, or a bare ``reasoning/response:``
-    template prefix. Real answers are never *entirely* wrapped in one parenthetical,
-    so this stays free of false positives.
+    Such outputs occur when the LM echoes an example/template placeholder instead
+    of filling it in. They are short and are either entirely wrapped in a single
+    bracket pair describing what should go there, a bare ``reasoning/response:``
+    template prefix, a curly-brace {var} literal, or a phrase that -- after the
+    ellipse fillers (``...``) used as placeholder spacers are removed -- reduces
+    to generic placeholder vocabulary. Real answers are never *entirely* such a
+    fragment, so this stays free of false positives (it only triggers on short,
+    content-free fragments, never on prose that actually answers the question).
     """
     t = (text or "").strip()
     if not t or len(t) > 220:
         return False
     flat = t.replace("\n", " ").strip()
-    if _BARE_TEMPLATE_RE.match(flat):
+    # Remove the ``...`` filler the LM sometimes uses as a placeholder spacer
+    # ("... response ...", "... (the answer)") before pattern-matching.
+    deellipsed = _ELLIPSIS_FILLER_RE.sub(" ", flat).strip()
+    if not deellipsed:
+        return True  # an all-ellipsis string is never a real answer
+    if deellipsed.lower() in _BARE_PLACEHOLDER_WORDS:
         return True
-    if _BRACKET_WRAP_RE.match(flat):
-        inner = flat[1:-1].strip()
+    if _MUSTACHE_LITERAL_RE.match(deellipsed):
+        inner = deellipsed.strip("{} ").strip()
+        if 1 <= len(inner.split()) <= 28 and (
+            inner.lower() in _BARE_PLACEHOLDER_WORDS
+            or _GENERIC_TOKEN_RE.search(inner)
+        ):
+            return True
+    if _BARE_TEMPLATE_RE.match(deellipsed):
+        return True
+    if _BRACKET_WRAP_RE.match(deellipsed):
+        inner = deellipsed[1:-1].strip()
         words = inner.split()
         if 2 <= len(words) <= 28 and _GENERIC_TOKEN_RE.search(inner):
             return True
