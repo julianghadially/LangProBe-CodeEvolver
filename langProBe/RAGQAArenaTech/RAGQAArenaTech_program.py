@@ -102,6 +102,22 @@ class GenerateAnswer(dspy.Signature):
         meaning, briefly note the interpretations rather than committing to a single
         (possibly wrong) one.
 
+    Scope and over-claiming -- untruthful content is penalized first, so prefer a short
+    honest answer over a confident but uncertain one:
+      - Answer exactly what is asked. The reference answers are concise, single-thesis
+        responses; do NOT pad with tangential points, exhaustive lists, or claims beyond
+        the asked scope merely to appear comprehensive. An extra claim that is wrong or
+        off-topic makes the answer worse, not better.
+      - For a classification / definition question ("is X a Y?", "what kind of thing is
+        Z?"), give the standard, accepted answer used in the field. Do not adopt a
+        borderline "in the technical sense" reading and commit to it as if it were the
+        standard view when the conventional answer differs.
+      - Never state a precise figure, command, or rule unless it is grounded in the
+        retrieved context OR is a well-established fact you are genuinely confident of.
+        Do not invent specific numbers or ranges to add plausibility.
+      - For requests that could enable harmful/illegal acts, describe only the high-level
+        concepts and risks; do not provide step-by-step actionable how-to instructions.
+
     Write in plain, natural prose. Stay focused and concise. Do not include bracketed
     citations, source tags, response templates, or any placeholder tokens -- output only
     the final answer itself. Never output a bare template placeholder such as
