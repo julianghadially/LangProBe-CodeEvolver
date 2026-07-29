@@ -89,7 +89,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     @staticmethod
     def _norm_q(q):
-        return " ".join((q or "").lower().split())
+        # Lowercase, collapse whitespace, and strip punctuation so near-duplicate
+        # queries that differ only by punctuation (e.g. "Going Back (2012 film)"
+        # vs "Going Back 2012 film") collide and get skipped, forcing later hops
+        # onto genuinely different missing entities.
+        import re
+
+        return " ".join(re.sub(r"[^\w\s]", " ", (q or "").lower()).split())
 
     def _pool(self, hop_doc_lists, max_docs):
         """Merge per-hop ranked lists, dedup by title, preserving first-seen
