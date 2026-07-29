@@ -8,11 +8,21 @@ class GenerateAnswer(dspy.Signature):
 
     Use the retrieved context as the primary source of facts; where the context is
     silent or incomplete you may also draw on your own knowledge. Every claim must be
-    truthful and specific -- never fabricate or speculate. Cover all the question-
-    relevant points, including concrete names, commands, and numbers, while staying
-    focused and concise. Write in plain, natural prose. Do not include bracketed
-    citations, source tags, response templates, or any placeholder tokens -- output
-    only the final answer itself.
+    truthful and specific -- never fabricate or speculate.
+
+    Provenance for specifics: for high-stakes precise figures -- exact round counts,
+    cryptographic key lengths, byte/bandwidth thresholds, and similar numbers where an
+    invented value would mislead -- state them ONLY when they come from the retrieved
+    context or you are confident of them; otherwise give the governing principle or
+    qualitative guidance ("choose by your target verification time"), not a fabricated
+    number. For ordinary, well-established specifics (product names, common commands,
+    widely-known defaults) it is fine to draw on your own knowledge.
+
+    Cover all the question-relevant points as completely as a good expert answer would,
+    including the concrete names, commands, and numbers in the context. Stay focused and
+    concise. Write in plain, natural prose. Do not include bracketed citations, source
+    tags, response templates, or any placeholder tokens -- output only the final answer
+    itself.
     """
 
     context = dspy.InputField(desc="may contain relevant facts")
