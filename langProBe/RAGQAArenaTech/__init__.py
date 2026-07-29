@@ -9,7 +9,8 @@ from .archive.RAGQAArenaTech_data import RAGQAArenaBench
 from .RAGQAArenaTech_program import SimplifiedBaleen
 from .RAGQAArenaTech_retrieval import get_default_retriever
 
-eval_lm = dspy.LM("openai/gpt-4o")
+#Not used in CodeEvolver. CodeEvolver uses the metric directly.
+eval_lm = dspy.LM("openai/gpt-5.4-mini")
 eval_module = dspy.evaluate.SemanticF1()
 eval_module.set_lm(eval_lm)
 
