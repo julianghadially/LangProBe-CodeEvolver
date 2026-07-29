@@ -1,6 +1,45 @@
+import re
+
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
 from .RAGQAArenaTech_utils import GenerateSearchQuery
+
+# Cached compiled patterns for placeholder/template-leak detection.
+_BRACKET_WRAP_RE = re.compile(r"^[(<\[]\s*.*\s*[\]>)]$", re.DOTALL)
+_GENERIC_TOKEN_RE = re.compile(
+    r"\b(answer|answers|concise|explanation|summary|response|reasoning|"
+    r"placeholder|insert|text|here|step|steps|detail|details|your|"
+    r"context|question|topic|above|relevant|factual)\b",
+    re.IGNORECASE,
+)
+_BARE_TEMPLATE_RE = re.compile(
+    r"^(reasoning|response|answer|summary|context)\s*[:\-]?\s*[(<].*[\]>)]\s*\.?$",
+    re.IGNORECASE,
+)
+
+
+def _is_placeholder_response(text: str) -> bool:
+    """Detect answers that are obviously template/placeholder leakage rather than
+    real content (e.g. ``"(concise answer)"``, ``(explanation of ...)``).
+
+    Such outputs occur when the LM echoes an example placeholder instead of
+    filling it in. They are short and are either entirely wrapped in a single
+    bracket pair describing what should go there, or a bare ``reasoning/response:``
+    template prefix. Real answers are never *entirely* wrapped in one parenthetical,
+    so this stays free of false positives.
+    """
+    t = (text or "").strip()
+    if not t or len(t) > 220:
+        return False
+    flat = t.replace("\n", " ").strip()
+    if _BARE_TEMPLATE_RE.match(flat):
+        return True
+    if _BRACKET_WRAP_RE.match(flat):
+        inner = flat[1:-1].strip()
+        words = inner.split()
+        if 2 <= len(words) <= 28 and _GENERIC_TOKEN_RE.search(inner):
+            return True
+    return False
 
 
 class GenerateAnswer(dspy.Signature):
@@ -34,7 +73,8 @@ class GenerateAnswer(dspy.Signature):
 
     Write in plain, natural prose. Stay focused and concise. Do not include bracketed
     citations, source tags, response templates, or any placeholder tokens -- output only
-    the final answer itself.
+    the final answer itself. Never output a bare template placeholder such as
+    "(concise answer)", "(explanation of ...)", or wrap your whole answer in parentheses.
     """
 
     context = dspy.InputField(desc="may contain relevant facts")
@@ -77,11 +117,17 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         prediction so faithfulness metrics keep working.
         """
         last_exc = None
+        last_placeholder = None
         for _ in range(3):
             try:
                 pred = self.respond(context=context, question=question)
-                if getattr(pred, "response", None):
+                resp = getattr(pred, "response", None)
+                if resp and not _is_placeholder_response(resp):
                     return pred
+                # Track a template/placeholder leak so we retry; remember it in
+                # case every retry leaks, so we can surface what happened.
+                if resp:
+                    last_placeholder = resp
             except Exception as exc:  # AdapterParseError, JSONDecodeError, etc.
                 last_exc = exc
         # All retries produced an unusable answer -- assemble a grounded fallback from
@@ -101,6 +147,8 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         pred = dspy.Prediction(response=fallback)
         if last_exc is not None:
             pred.respond_error = type(last_exc).__name__
+        elif last_placeholder is not None:
+            pred.respond_error = "PlaceholderResponse"
         return pred
 
     def forward(self, question):
