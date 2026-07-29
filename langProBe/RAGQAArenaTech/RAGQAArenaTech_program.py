@@ -82,13 +82,21 @@ class GenerateAnswer(dspy.Signature):
     or speculate.
 
     Provenance for specifics:
-      - State exact commands, flags, and shell syntax; filesystem paths; column / field
+      - State exact commands, flags, shell syntax; filesystem paths; column / field
         definitions; and language or framework convention rules ONLY when they come from
         the retrieved context or you are genuinely confident of them. A specific that is
         wrong is worse than an honest general principle, and reviewers penalize untruthful
-        content first. If the context is silent on a specific, give the governing
-        principle or qualitative guidance ("the exact command depends on your version /
-        app", "either interpretation is possible") rather than inventing a precise value.
+        content first. If the context is silent on a specific, give the governing principle
+        or qualitative guidance ("the exact command depends on your version / app",
+        "either interpretation is possible") rather than inventing a precise value.
+      - When the retrieved context contains several distinct values / estimates / OS- or
+        version-specific sizes, name them with the platform they apply to instead of
+        collapsing to one generic figure -- but only those actually present in the context;
+        do not invent specifics to pad the answer.
+      - Re-read the question and identify the SPECIFIC feature / mechanism it refers to
+        (e.g. an iOS "cloud" icon = the unused-app offload indicator, not cloud sync;
+        "block on iPhone" applies to calls, FaceTime, and FaceTime audio). Answer the
+        concrete scenario the question asks about, not a nearby generic one.
       - For ordinary, well-established specifics you are genuinely confident about
         (product names, common high-level concepts), you may draw on your own knowledge.
 
@@ -109,14 +117,22 @@ class GenerateAnswer(dspy.Signature):
         the asked scope merely to appear comprehensive. An extra claim that is wrong or
         off-topic makes the answer worse, not better.
       - For a classification / definition question ("is X a Y?", "what kind of thing is
-        Z?"), give the standard, accepted answer used in the field. Do not adopt a
-        borderline "in the technical sense" reading and commit to it as if it were the
-        standard view when the conventional answer differs.
+        Z?"), give the standard, accepted answer used in the field and STOP there. Do NOT
+        append a "technically / in the formal sense / in a strict sense it IS a Y"
+        proviso, and do not lead with such a framing -- the conventional, field-standard
+        answer is what reviewers want; hedging toward the borderline reading reads as
+        untruthful and is penalized. If you must mention the borderline view, state it
+        only as a caveat AFTER the standard answer, framed as a minority/edge view.
       - Never state a precise figure, command, or rule unless it is grounded in the
         retrieved context OR is a well-established fact you are genuinely confident of.
         Do not invent specific numbers or ranges to add plausibility.
-      - For requests that could enable harmful/illegal acts, describe only the high-level
-        concepts and risks; do not provide step-by-step actionable how-to instructions.
+      - For requests that could enable harmful/illegal acts (hacking/overriding a system,
+        hijacking a device/satellite, bypassing security), answer ONLY with high-level
+        concepts, risks, and the fact that such acts are illegal. NEVER produce a
+        step-by-step how-to, an ordered list of operational actions, frequencies,
+        equipment, commands, or any other actionable recipe -- even if the retrieved
+        context contains such detail. Describe the categories of attacks at a conceptual
+        level (jamming, spoofing, command injection) but do not turn them into steps.
 
     Write in plain, natural prose. Stay focused and concise. Do not include bracketed
     citations, source tags, response templates, or any placeholder tokens -- output only
