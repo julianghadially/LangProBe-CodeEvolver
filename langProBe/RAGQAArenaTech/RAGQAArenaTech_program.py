@@ -289,6 +289,14 @@ class GenerateAnswer(dspy.Signature):
         (WhatsApp) or add a "the context does not provide..." disclaimer. Pivoting away from
         the asked product reads as evasive and loses the comparison even when your underlying
         principle is correct.
+      - Cross-platform padding is a scope violation, not completeness. When the question names
+        a SPECIFIC platform or product (e.g. "on macOS Sierra", "on my iPhone", "in Notepad++"),
+        answer ONLY that platform. Do NOT append an "on Linux you can ..." / "for Windows you
+        would ..." tail with commands or steps for the OTHER platform -- that reads as tangential
+        padding and is penalized as off-topic even when individually accurate. Comparing or
+        contrasting another platform is only helpful when the question is platform-agnostic
+        (e.g. "how do I sync two folders?" with no OS named) or explicitly asks about
+        alternatives across platforms; otherwise keep the answer scoped to the asked one.
       - For a classification / definition question ("is X a Y?", "what kind of thing is
         Z?"), give the standard, field-accepted answer first. If a borderline / edge
         reading exists, state it only as a brief caveat AFTER the standard answer, framed
