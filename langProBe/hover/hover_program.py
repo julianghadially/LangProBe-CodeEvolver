@@ -305,16 +305,77 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).summary
 
         reranked = self._rerank_to_max(
-            pool, claim, rerank_summary, interleave_fallback, hop_lists
+            pool, claim, rerank_summary, interleave_fallback, hop_lists,
+            anchor_norms=used_queries,
         )
         return dspy.Prediction(retrieved_docs=reranked)
 
-    def _rerank_to_max(self, pool, claim, summary, fallback, hop_lists=None):
+    def _inject_anchors(self, ordered, pool, anchor_norms):
+        """Guarantee that 'anchor' candidate pages already in the pool end up
+        in the final selection.
+
+        An anchor is a candidate whose normalized title exactly equals a
+        previously-issued query. Such matches are overwhelmingly verbatim
+        Wikipedia titles (cross-ref titles harvested from passages, or single
+        title-style bridge queries); the listwise reranker occasionally drops
+        them in favour of noisier topically-similar pages even though they are
+        actually supporting pages, which zeros out the whole example. We force
+        any missing anchors into the selection by swapping out the
+        lowest-priority non-anchor slots — reranker / fallback order is
+        otherwise untouched."""
+        if not anchor_norms:
+            return ordered
+
+        def norm(doc):
+            return self._norm_q(doc.split(" | ")[0])
+
+        present_norms = set(norm(d) for d in ordered)
+        missing = [
+            d for d in pool
+            if norm(d) in anchor_norms and norm(d) not in present_norms
+        ]
+        if not missing:
+            return ordered
+
+        # Only consider anchors actually retrievable from the pool; preserve
+        # pool ordering so the first (most relevant) occurrence is kept.
+        seen_anchor_norms = set()
+        unique_missing = []
+        for d in missing:
+            nt = norm(d)
+            if nt not in seen_anchor_norms:
+                seen_anchor_norms.add(nt)
+                unique_missing.append(d)
+
+        result = list(ordered)
+        protected = set(
+            norm(d) for d in result if norm(d) in anchor_norms
+        )
+        for m in unique_missing:
+            # Replace the last non-anchor slot with this anchor.
+            target = None
+            for i in range(len(result) - 1, -1, -1):
+                nt = norm(result[i])
+                if nt not in anchor_norms and nt not in protected:
+                    target = i
+                    break
+            if target is None:
+                break
+            result[target] = m
+            protected.add(norm(m))
+        return result
+
+    def _rerank_to_max(self, pool, claim, summary, fallback, hop_lists=None,
+                      anchor_norms=None):
         """Use the listwise reranker to order the pool then cap at max_docs.
         Any pool docs the LM omits are appended in fallback order so the
-        returned count is exactly max_docs."""
+        returned count is exactly max_docs. Anchor pages (titles that exactly
+        match an issued query) are guaranteed inclusion even when the
+        reranker omits them."""
+        if anchor_norms is None:
+            anchor_norms = set()
         if len(pool) <= self.max_docs:
-            return pool[: self.max_docs]
+            return self._inject_anchors(pool[: self.max_docs], pool, anchor_norms)
         candidates = self._render_candidates(pool)
         ranked_ids_raw = self.rerank(
             claim=claim, summary=summary, candidates=candidates
@@ -339,4 +400,5 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             ordered.append(doc)
             if len(ordered) >= self.max_docs:
                 break
-        return ordered[: self.max_docs]
+        ordered = ordered[: self.max_docs]
+        return self._inject_anchors(ordered, pool, anchor_norms)
