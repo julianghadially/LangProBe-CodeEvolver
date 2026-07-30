@@ -29,6 +29,52 @@ _BARE_PLACEHOLDER_WORDS = {
     "your answer here", "your response here",
 }
 
+# Phrases (lowercased substring match) indicating the LM refused instead of
+# producing a real search query. A genuine concise query never contains these;
+# matching them is safe and prevents a refusal from poisoning retrieval.
+_REFUSAL_MARKERS = (
+    "i cannot", "i can't", "i'm unable", "i am unable", "cannot provide",
+    "can't provide", "sorry, ", "i'm sorry", "as an ai", "无法", "抱歉",
+    "不能提供", "我无法", "i won't", "i will not", "i'm not able",
+)
+
+
+def _is_refusal(text: str) -> bool:
+    t = (text or "").strip().lower()
+    if not t:
+        return True
+    return any(m in t for m in _REFUSAL_MARKERS)
+
+# Bracketed numeric citation markers the LM sometimes appends despite the
+# no-citations rule, e.g. "...workspace clean (source [1])." or "...again (source
+# [7])." or "...project [1].". Real answers never carry these; stripping them is
+# a safe, content-preserving cleanup that removes a known comparison-loser.
+# Matches "(source [N])", "(Source [N, M])", and bare trailing "[N]" / "[N, M]".
+_CITE_PAREN_RE = re.compile(
+    r"\s*\(\s*sources?\s+\[\s*\d+(?:\s*,\s*\d+)*\s*\]\s*\)",
+    re.IGNORECASE,
+)
+_CITE_BARE_RE = re.compile(
+    r"\s+\[\s*\d+(?:\s*,\s*\d+)*\s*\](?=[\s.,;:!?)\"\']|$)",
+)
+
+
+def _strip_citations(text: str) -> str:
+    """Remove trailing bracketed source-citation markers an LM appends despite the
+    no-citations rule (e.g. "(source [1])", "[7]"). Only targets bare numeric
+    citation brackets -- leaves code indexers like ``arr[0]`` (no preceding space)
+    and markdown links ``[text](url)`` (non-numeric inner) untouched.
+    """
+    if not text:
+        return text
+    s = _CITE_PAREN_RE.sub("", text)
+    # Iterate so adjacent "[1] [2] ..." at the end all clear.
+    prev = None
+    while prev != s:
+        prev = s
+        s = _CITE_BARE_RE.sub("", s)
+    return s.rstrip()
+
 
 def _is_placeholder_response(text: str) -> bool:
     """Detect answers that are obviously template/placeholder leakage rather than
@@ -334,7 +380,14 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
             try:
                 pred = self.respond(context=context, question=question)
                 resp = getattr(pred, "response", None)
-                if resp and not _is_placeholder_response(resp):
+                if resp and not _is_placeholder_response(_strip_citations(resp)):
+                    # Strip any stray bracketed source-citation markers the LM
+                    # appended despite the no-citations rule; they lose
+                    # pairwise comparisons and carry no answer content.
+                    cleaned = _strip_citations(resp)
+                    if cleaned and cleaned != resp:
+                        pred = pred.copy()
+                        pred.response = cleaned
                     return pred
                 # Track a template/placeholder leak so we retry; remember it in
                 # case every retry leaks, so we can surface what happened.
@@ -359,11 +412,35 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
             pred.respond_error = "PlaceholderResponse"
         return pred
 
+    def _generate_queries(self, hop, context, question):
+        """Generate search queries for a hop, robust to LM refusals / parse errors.
+
+        DeepSeek-V4-Flash occasionally refuses an ambiguous query (returning a
+        non-English "I cannot help" string) or emits output JSONAdapter cannot
+        parse -- both raise and, if unhandled, fail the entire row with a 0.0
+        score. Retry a few times; if it still fails, fall back to the raw user
+        question as the sole query so retrieval (and thus a grounded answer) can
+        still run. A fallback query is always preferable to no query.
+        """
+        gen_fn = self.generate_query[hop]
+        for _ in range(3):
+            try:
+                gen = gen_fn(context=context, question=question)
+                q = getattr(gen, "query", None)
+                aq = getattr(gen, "alt_query", None)
+                # Reject empty/refusal generations and retry.
+                if q and str(q).strip() and not _is_refusal(str(q)):
+                    return [str(q).strip(), str(aq).strip() if aq else None]
+            except Exception:
+                continue
+        # All retries failed -- fall back to the raw question so the row still
+        # gets retrieval + a grounded answer rather than a guaranteed 0.0.
+        return [str(question).strip() if str(question).strip() else None, None]
+
     def forward(self, question):
         context = []
         for hop in range(self.max_hops):
-            gen = self.generate_query[hop](context=context, question=question)
-            queries = [getattr(gen, "query", None), getattr(gen, "alt_query", None)]
+            queries = self._generate_queries(hop, context, question)
             passages = self._gather_passages(queries, k=self.num_docs)
             context = deduplicate(context + passages)
         # Bound the context fed to the answer step so query-expansion's extra passages
