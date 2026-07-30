@@ -33,8 +33,16 @@ class BridgeQueries(dspy.Signature):
 
     A) CROSS-REF TITLE — scan the passages' text for a Wikipedia page title that
     is *referenced* inside a retrieved passage (a work title in quotes/italics, a
-    person's full name, a linked-style entity) and that BRIDGES the claim, but
-    whose own page is NOT in retrieved_titles. Use that exact title.
+    person's full name, a co-star/colleague name, a company, a genus, a
+    linked-style entity) whose own page is NOT in retrieved_titles. Use that
+    EXACT title verbatim. CRITICAL: do NOT only look for titles that "make the
+    claim true". The retrieval task needs EVERY supporting page, and many claims
+    are FALSE — the missing page is often a titled entity printed right in the
+    passages that actually CONTRADICTS the claim's wording (e.g. an actor's other
+    film listed in their filmography, a real co-star whose name differs from the
+    one the claim asserts, the actual company behind a product, the genus above a
+    binomial). Harvest those exact verbatim titles even when they disprove the
+    claim, and query them as-is.
 
     B) COMBINED-ENTITY QUERY — build a query that JOINS TWO key named entities
     (prefer one entity from the claim + one entity from the retrieved passages
