@@ -299,6 +299,43 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         except Exception:
             return dspy.Prediction(**{field: ""})
 
+    @staticmethod
+    def _truncate_query(query, max_words=15):
+        """Shorten a query to its first ``max_words`` whitespace-separated
+        tokens. Long / garbled multi-hop claim queries are the most common
+        trigger of a persistent ColBERT 500 (the server rejects the long
+        payload); a short clean prefix rarely 500s and still surfaces the
+        topically-most-relevant pages, so it is a useful last-resort
+        fallback form before giving up with an empty result."""
+        words = (query or "").split()
+        return " ".join(words[:max_words]).strip()
+
+    def _safe_retrieve(self, retrieve, query):
+        """Retrieve passages, degrading gracefully on a ColBERT server error.
+
+        The remote ColBERT server intermittently returns HTTP 500 (overload /
+        cold start). ``CountingRM`` retries only timeouts/connection errors;
+        an HTTP 500 raises ``HTTPError`` and, if uncaught here, aborts the
+        ENTIRE example (zeroing its score) even though every OTHER hop could
+        still succeed. A single failed retrieval must not kill the run:
+
+          1. try the exact query (most 5xx are transient and clear on retry),
+          2. try a word-truncated query (a long/garbled payload is the usual
+             *persistent* 500 trigger; a short clean query rarely 500s),
+          3. return [] so the pipeline continues with whatever passages it
+             already gathered rather than producing nothing.
+
+        On the successful path (the common case, server healthy) the first
+        attempt returns and behaviour is identical to a bare retrieve."""
+        for q in (query, self._truncate_query(query)):
+            if not q:
+                continue
+            try:
+                return retrieve(q).passages
+            except Exception:
+                continue
+        return []
+
     def _run_bridge_batch(self, predictor, claim, prior_docs, used_queries, hop_lists, limit):
         """Generate a batch of diverse bridge queries and retrieve each (after
         dedup). Append each retrieval result to hop_lists in place. Returns
@@ -318,7 +355,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if not q or nq in used_queries:
                 continue
             used_queries.add(nq)
-            docs = self.retrieve_k(q).passages
+            docs = self._safe_retrieve(self.retrieve_k, q)
             hop_lists.append(docs)
             prior_docs = prior_docs + docs
         return prior_docs
@@ -369,7 +406,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if not t or nq in used_queries or nq in retrieved_titles:
                 continue
             used_queries.add(nq)
-            docs = self.retrieve_title_k(t).passages
+            docs = self._safe_retrieve(self.retrieve_title_k, t)
             hop_lists.append(docs)
             prior_docs = prior_docs + docs
         return prior_docs
@@ -378,7 +415,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # HOP 1: retrieve directly with the raw claim.
         used_queries = {self._norm_q(claim)}
         hop_lists = []
-        hop1_docs = self.retrieve_k(claim).passages
+        hop1_docs = self._safe_retrieve(self.retrieve_k, claim)
         hop_lists.append(hop1_docs)
 
         # BATCH 0 (early): harvest verbatim cross-ref titles straight from the
