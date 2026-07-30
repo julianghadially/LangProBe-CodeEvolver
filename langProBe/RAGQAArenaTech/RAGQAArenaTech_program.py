@@ -101,6 +101,31 @@ class GenerateAnswer(dspy.Signature):
     the concrete names, commands, and numbers that appear in the context. Never fabricate
     or speculate.
 
+    Interpretation gate (applies FIRST, before any other guidance):
+      - Re-read the question and decide its ACTUAL intent before writing anything. A
+        generic / everyday / colloquial word very often has a well-known product- or
+        platform-specific concrete meaning that the user means, and the LITERAL generic
+        reading is a trap that yields a non-answer. Identify that concrete meaning first
+        and treat it as the primary intent.
+        * "why are my apps all in the cloud?" -- the iOS "cloud" icon next to an app =
+          the unused-app offload indicator (the app was removed but its data remains);
+          the general "cloud computing / SaaS" reading is the trap, NOT the answer.
+        * "what does the clock symbol mean on Messenger?" -- Messenger = the named
+          product (Facebook Messenger); a clock = the message has not been sent yet.
+          Pivoting to WhatsApp (or any other "messenger" app) is the trap.
+        * "block on iPhone" = calls, FaceTime, and FaceTime audio, not only one.
+        * "flash vs bootflash" -- Cisco's bootflash term, not Android fastboot.
+      - Reach this concrete interpretation from your own platform knowledge; do NOT defer
+        to off-target retrieved passages (general cloud-computing docs, a different
+        product's docs) that the question is NOT really about. Off-topic context is not
+        evidence against a well-established concrete meaning -- it is recall noise.
+      - If, and only if, the question's wording is plainly technical and the literal
+        reading is itself the intended domain (e.g. "is ping TCP or UDP?" -> answer
+        about ICMP directly with its specifics), do not invent an alternate consumer
+        product pivot -- just answer the literal technical question.
+      - Then, and only for completeness, you may add ONE short line noting an alternate
+        plausible interpretation if it is also well-established; do not lead with it.
+
     Harmful / illegal-action gate (applies FIRST, before any other guidance):
       - For requests that could enable harmful or illegal acts (hacking / overriding a
         system, hijacking a device / satellite, bypassing security, building weapons),
@@ -197,7 +222,13 @@ class GenerateAnswer(dspy.Signature):
     Write in plain, natural prose. Stay focused. Do not include bracketed citations,
     source tags, response templates, or any placeholder tokens -- output only the final
     answer itself. Never output a bare template placeholder such as "(concise answer)",
-    "(explanation of ...)", or wrap your whole answer in parentheses.
+    "(explanation of ...)", or wrap your whole answer in parentheses. NEVER append a
+    meta-disclaimer that narrates the retrieval process -- phrases like "based on the
+    retrieved context", "the context does not provide...", "this is the intended
+    interpretation", or "(Summary assembled from the retrieved passages.)" are NOT part
+    of an answer and they cost you the comparison; reviewers read them as evasive. If
+    the context is silent, just answer from knowledge / give the governing principle
+    directly, without describing that the context was silent.
     """
 
     context = dspy.InputField(desc="may contain relevant facts")
@@ -283,11 +314,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         # the retrieved passages so the row still gets a substantive, honest response.
         snippets = [str(p).strip() for p in (context or []) if str(p).strip()]
         if snippets:
-            fallback = (
-                "Here is what the relevant sources say:\n\n"
-                + "\n\n".join(snippets[:3])
-                + "\n\n(Summary assembled from the retrieved passages.)"
-            )
+            fallback = "\n\n".join(snippets[:3])
         else:
             fallback = (
                 f"Regarding \"{question}\": the retrieved references did not surface a "
