@@ -73,6 +73,39 @@ class BridgeQueries(dspy.Signature):
     queries: str = dspy.OutputField(desc="Semicolon-separated list of diverse search queries.")
 
 
+class RefTitles(dspy.Signature):
+    """Harvest VERBATIM Wikipedia article titles that are *referenced* inside
+    the supplied passages but NOT yet in retrieved_titles. A multi-hop claim
+    has ~3 supporting pages; frequently a retrieved passage names the
+    still-missing supporting page right in its text (a person's co-star, a work
+    title in quotes/italics, a company, a genus, a disambiguated film/work).
+    Often the missing page even CONTRADICTS the claim's wording (e.g. an actor's
+    other film listed in their filmography, the actual co-star whose name
+    differs from the one asserted in the claim, the company behind a product,
+    the genus above a binomial). Harvest those EXACT verbatim titles REGARDLESS
+    of whether they confirm the claim — the retrieval task needs EVERY
+    supporting page.
+
+    Rules:
+    - Output ONLY exact verbatim titles copied from the passage text (use the
+      disambiguated form printed in the text, e.g. 'This Is England (film)',
+      'Best Foot Forward (musical)', 'Secret Agent (TV series)',
+      'Josh Flitter', 'Gene Kelly', 'Airlines of Africa', 'Warren Fu').
+    - Do NOT invent or paraphrase; do NOT include a title already in
+      retrieved_titles; do NOT include the page's own title.
+    - Prefer titles that bridge a still-missing hop (co-stars, directors,
+      filmography entries, parent/child taxa, related companies/works).
+    - Output a semicolon-separated list of at most 5 titles, e.g.
+      "Gene Kelly ; This Is England (film) ; ...". Output ONLY that list (or
+      empty if no referenced-but-missing title is present).
+    """
+
+    claim: str = dspy.InputField()
+    retrieved_titles: str = dspy.InputField(desc="Titles already retrieved (skip these).")
+    passages: str = dspy.InputField()
+    titles: str = dspy.OutputField(desc="Semicolon-separated list of verbatim referenced-but-missing Wikipedia titles.")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -86,8 +119,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.max_docs = 21
         self.batch_queries = 5
         self.batch_queries_2 = 2
+        self.ref_titles = 3
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
+
+# Small-k retriever used by the verbatim-cross-ref-title batch: a near-exact
+        # title query only needs a couple of top hits, so we avoid flooding the
+        # pool (which would crowd out supporting pages in the reranker).
+        self.retrieve_title_k = dspy.Retrieve(k=1)
 
         # One LM call generates several DIVERSE bridge queries at once, each
         # targeting a DIFFERENT missing supporting page (cross-ref titles and
@@ -97,6 +136,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Optional second refinement batch: more diverse bridge queries after
         # seeing the first batch's retrieved titles/passages.
         self.bridge_queries_2 = dspy.ChainOfThought(BridgeQueries)
+
+# Dedicated cross-ref title harvester: pulls EXACT verbatim Wikipedia titles
+        # referenced inside already-retrieved passages that aren't yet retrieved,
+        # then queries those titles directly. Recovers supporting pages the
+        # bridge queries miss because the LM latched onto a wrong bridging path.
+        self.ref_titles_lm = dspy.ChainOfThought(RefTitles)
 
         # Keep a short summary focused on entities/connections that bridge the claim.
         self.summarize = dspy.ChainOfThought(
@@ -199,6 +244,28 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             prior_docs = prior_docs + docs
         return prior_docs
 
+    def _run_ref_titles_batch(self, claim, prior_docs, used_queries, hop_lists, limit):
+        """Harvest verbatim referenced-but-missing titles from retrieved
+        passages and query each as-is (verbatim). Dedup against already-used
+        queries/titles."""
+        passages = prior_docs[-100:] if len(prior_docs) > 100 else prior_docs
+        res = self.ref_titles_lm(
+            claim=claim,
+            retrieved_titles=self._titles(prior_docs),
+            passages=passages,
+        )
+        titles = self._parse_queries(res.titles)[:limit]
+        retrieved_titles = {self._norm_q(d.split(" | ")[0]) for d in prior_docs}
+        for t in titles:
+            nq = self._norm_q(t)
+            if not t or nq in used_queries or nq in retrieved_titles:
+                continue
+            used_queries.add(nq)
+            docs = self.retrieve_title_k(t).passages
+            hop_lists.append(docs)
+            prior_docs = prior_docs + docs
+        return prior_docs
+
     def forward(self, claim):
         # HOP 1: retrieve directly with the raw claim.
         used_queries = {self._norm_q(claim)}
@@ -218,6 +285,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         prior_docs = self._run_bridge_batch(
             self.bridge_queries_2, claim, prior_docs, used_queries, hop_lists,
             self.batch_queries_2,
+        )
+
+# BATCH 3: harvest verbatim cross-ref titles from all retrieved passages
+        # and query them as-is. Recovers supporting pages the bridge queries miss.
+        prior_docs = self._run_ref_titles_batch(
+            claim, prior_docs, used_queries, hop_lists, self.ref_titles,
         )
 
         # Build the full candidate pool (dedup, order hop1 first then by rank).
