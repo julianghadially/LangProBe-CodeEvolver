@@ -283,6 +283,17 @@ class GenerateAnswer(dspy.Signature):
         figures, version numbers) the context does not state. If such a detail matters but
         is absent, give the governing principle ("the value depends on the device / version")
         rather than a precise invented number.
+      - Do NOT append speculative secondary mechanics, caller-side effects, or self-help
+        remedies unless the retrieved context actually states them or they are plainly
+        well-established. Common traps that read as untruthful padding and lose comparisons:
+        inventing what happens on the *other* party's end of a call/email ("the call rings
+        through to voicemail without notifying them", "the email bounces back") when you only
+        know blocking prevents delivery; inventing an opt-out / cancellation / appeal
+        procedure ("you can opt out by contacting your bank", "request reactivation via
+        support") the context does not describe; inventing a recovery / troubleshooting
+        sequence the context does not provide. A concise, grounded answer beats one padded
+        with a plausible-but-unverified behavioral tail. If you are not certain a secondary
+        effect is real, leave it out rather than guess.
       - Stay on the ASKED product/topic. If the context lacks a specifics-level answer for the
         product named in the question (e.g. the clock icon in *Messenger*), answer it directly
         using well-established platform knowledge -- do NOT pivot to a different product
