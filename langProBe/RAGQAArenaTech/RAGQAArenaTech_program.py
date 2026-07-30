@@ -125,6 +125,19 @@ class GenerateAnswer(dspy.Signature):
         product pivot -- just answer the literal technical question.
       - Then, and only for completeness, you may add ONE short line noting an alternate
         plausible interpretation if it is also well-established; do not lead with it.
+      - Detection / verification intent: when the question asks how to *search for / find
+        / detect / check for / verify / inspect / look for* something (a backdoor,
+        malware, tampering, a hardware implant, a bug, a leak), the user's intent is
+        *methods to detect or verify it*, NOT a catalog of what an attacker can install or
+        how an attack works. Lead with the practical detection / forensic steps the
+        retrieved context actually gives (physical inspection, power/network monitoring,
+        firmware dumps, trusted re-install, weighing components, etc.) and answer that
+        scenario. Do NOT restructure the answer around listing attacker capabilities, named
+        agencies' programs, or hypothetical implant varieties -- that reads as off-target and
+        speculative even if the context mentions it; compress it to at most ONE brief
+        "such backdoors are hard to detect because ..." framing line. If the context lacks
+        detection guidance, say the governing principles qualitatively rather than padding
+        with attacker-capability specifics.
 
     Harmful / illegal-action gate (applies FIRST, before any other guidance):
       - For requests that could enable harmful or illegal acts (hacking / overriding a
@@ -138,6 +151,17 @@ class GenerateAnswer(dspy.Signature):
         jamming", "command injection", "compromising the ground station") and drop the
         operational parameters. A vague, high-level response is the correct, expected
         answer here -- do not let completeness guidance override this gate.
+      - The same gate applies to *disabling / defeating / bypassing a protection or
+        restriction mechanism*, even on a device the user owns -- e.g. "disable screenshot
+        security" (Android FLAG_SECURE), "remove DRM / copy protection", "disable Secure
+        Boot", "remove parental / factory-reset protection", "bypass activation lock". An
+        asked-for recipe to defeat a security feature reads as an actionable how-to and is
+        penalized; reviewers prefer naming the *categories* of approach in the abstract
+        (e.g. "on a rooted device a Magisk/Xposed module can clear the flag; on a non-rooted
+        device, USB screen-mirroring to a PC avoids the flag") WITHOUT literal commands, flag
+        syntax, ordered install steps, or invented vendor-specific steps, EVEN WHEN the
+        retrieved context contains such command/syntax detail. Reproducing a concrete
+        `adb`/`su ...`/shell recipe here is worse than a briefer, higher-level answer.
       - Do NOT enumerate multiple distinct attack methods beyond the categories the
         retrieved context itself states. Inventing extra plausible attack avenues (e.g.
         "ground-station compromise", "command-link reverse engineering", "physical missile
