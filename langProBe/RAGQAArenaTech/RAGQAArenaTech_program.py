@@ -145,6 +145,14 @@ class GenerateAnswer(dspy.Signature):
         vaguer, briefer answer and penalize a detailed threat taxonomy. Keep this answer
         deliberately short (2-4 sentences): name only the conceptual risk categories the
         context mentions, state it is illegal, and stop. Adding more makes the answer worse.
+      - A numbered or bulleted list of attack methods WITH method descriptions is itself a
+        how-to, even if each item sounds "high-level". Describing "overpower the uplink by
+        transmitting a stronger signal on the same frequency" is operational guidance, not
+        a category. Give ONE plain sentence that names 2-3 conceptual risk categories in
+        the abstract (e.g. "Such attacks broadly involve uplink interference, command-link
+        compromise, and unauthorized control of the ground station") with NO mechanism
+        detail -- no "how", no frequencies, no equipment, no sequence -- then state it is
+        illegal and stop. If the retrieved context gives mechanisms, abstract past them.
 
     Provenance for specifics:
       - State exact commands, flags, shell syntax; filesystem paths; column / field
