@@ -20,6 +20,15 @@ class GenerateSearchQuery(dspy.Signature):
     the vendor term). When the question is unambiguous, alt_query should still be a useful
     reformulation (synonyms / rewording) rather than a copy of ``query``. Never leave
     alt_query empty.
+
+    CRITICAL -- never pivot to a DIFFERENT named product in alt_query. If the question
+    already names a specific product / app / service (e.g. "Messenger", "WhatsApp",
+    "iPhone", "Notepad++"), BOTH query and alt_query must stay scoped to THAT product.
+    Reformulate synonyms or describe the concrete feature within that product, but do
+    NOT substitute a competing product (e.g. for "clock symbol on Messenger" never write
+    a WhatsApp/Telegram query; for "block on WhatsApp" never query about iMessage). A
+    cross-product alt_query poisons retrieval with the wrong product's docs and forces a
+    wrong-product answer.
     """
 
     context = dspy.InputField(desc="may contain relevant facts")
