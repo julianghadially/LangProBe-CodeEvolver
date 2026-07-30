@@ -213,6 +213,50 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     merged.append(doc)
         return merged
 
+    def _mention_counts(self, pool, max_words=5):
+        """Return {norm_title: mention_count} where mention_count is the
+        number of OTHER pool docs whose body verbatim-mentions the title
+        (whole-word, lowercased).
+
+        Only SHORT titles (proper-noun-style entity/work names, <=5 words) are
+        tracked, so generic long descriptor titles don't pollute the counts.
+        Used to select cross-reference *anchors* (highly-mentioned bridging
+        pages that should never be dropped below the 21-doc cap).
+        """
+        import re
+
+        prepared = []
+        for d in pool:
+            parts = d.split(" | ", 1)
+            title = parts[0].strip()
+            body = (parts[1] if len(parts) > 1 else "").lower()
+            prepared.append((title, body))
+
+        counts = {}
+        for i, (title, _) in enumerate(prepared):
+            tl = title.lower().strip()
+            if not tl or len(tl.split()) > max_words:
+                continue
+            pat = re.compile(r"(?<![a-z0-9])" + re.escape(tl) + r"(?![a-z0-9])")
+            c = sum(1 for j, (_, bl) in enumerate(prepared) if i != j and pat.search(bl))
+            nt = self._norm_q(title)
+            if c > counts.get(nt, 0):
+                counts[nt] = c
+        return counts
+
+    def _cross_ref_anchors(self, pool, min_mentions=2, top=8):
+        """Pool pages whose (short) title is verbatim-mentioned by at least
+        ``min_mentions`` OTHER pool pages. These are the most-linked bridging
+        entities — the strongest "this is a supporting page we must not drop"
+        signal — and are promoted to anchor status so ``_inject_anchors`` can
+        rescue them when the reranker truncates or the interleave fallback
+        pushes them below the 21-doc cap. Only the ``top`` most-mentioned
+        titles become anchors (caps displacement of other slots)."""
+        counts = self._mention_counts(pool)
+        top_norm = [nt for nt, c in counts.items() if c >= min_mentions]
+        top_norm.sort(key=lambda nt: counts[nt], reverse=True)
+        return set(top_norm[:top])
+
     def _render_candidates(self, docs):
         """Render docs as a numbered list '#<id> | <title>'. Truncated preview
         of passage text keeps the prompt small while preserving distinguishability."""
@@ -350,9 +394,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim=claim, passages=interleave_fallback[:40]
         ).summary
 
+        # Cross-reference anchors: pool pages whose (short) title is
+        # verbatim-mentioned by several OTHER pool pages are the most-linked
+        # bridging entities and the strongest "this is a supporting page we
+        # must not drop" signal. Add them to the anchor set so the reranker
+        # cannot silently drop them below the 21-doc cap.
+        cross_ref = self._cross_ref_anchors(pool)
+        anchor_norms = set(used_queries) | cross_ref
+
         reranked = self._rerank_to_max(
             pool, claim, rerank_summary, interleave_fallback, hop_lists,
-            anchor_norms=used_queries,
+            anchor_norms=anchor_norms,
         )
         return dspy.Prediction(retrieved_docs=reranked)
 
