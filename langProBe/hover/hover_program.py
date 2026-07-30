@@ -323,20 +323,31 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             prior_docs = prior_docs + docs
         return prior_docs
 
-    def _render_passage_previews(self, docs, preview_chars=260, cap=200):
+    def _render_passage_previews(self, docs, preview_chars=600, cap=220,
+                                char_budget=110000):
         """Render docs as 'TITLE: <first preview_chars of body>' so the
         harvester can scan MANY passages (and their opening cross-references)
         within a modest prompt budget, instead of a few full passages that it
-        ends up skimming. Wikipedia cross-reference titles almost always appear
-        in the lead sentence, so a short preview preserves them while letting
-        the LM see far more candidate passages at once."""
+        ends up skimming. Wikipedia cross-reference titles often appear a few
+        hundred chars into the passage (e.g. a discography/list page that names
+        a supporting work only after its lead sentence, or a passage whose
+        gap-filling entity is in the second sentence), so a generous
+        preview_chars is essential. An overall char_budget keeps the prompt
+        bounded: the oldest (hop1) passages are kept first within the last
+        `cap` docs, and once the budget is exhausted the newest docs are
+        dropped — hop1 cross-refs are the highest-signal and stay."""
         lines = []
+        total = 0
         for doc in docs[-cap:]:
             parts = doc.split(" | ", 1)
             title = parts[0]
             body = parts[1] if len(parts) > 1 else ""
             preview = body[:preview_chars].replace("\n", " ")
-            lines.append(f"{title}: {preview}")
+            line = f"{title}: {preview}"
+            if total + len(line) > char_budget:
+                break
+            lines.append(line)
+            total += len(line)
         return "\n".join(lines)
 
     def _run_ref_titles_batch(self, claim, prior_docs, used_queries, hop_lists, limit):
