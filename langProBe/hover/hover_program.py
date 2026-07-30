@@ -285,13 +285,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 out.append(q)
         return out
 
+    def _safe_lm(self, predictor, field, **kwargs):
+        """Call a DSPy predictor and return its Prediction, tolerating LM
+        refusals / unparseable responses (e.g. non-JSON refusals) by returning
+        a Prediction whose ``field`` is the empty string.
+
+        A single refusal must NOT abort the whole pipeline: a document
+        retrieval run can still return a valid 21-doc pool built from the
+        ColBERT hop1 + already-retrieved passages, even if every LM reasoning
+        step refuses for this particular claim."""
+        try:
+            return predictor(**kwargs)
+        except Exception:
+            return dspy.Prediction(**{field: ""})
+
     def _run_bridge_batch(self, predictor, claim, prior_docs, used_queries, hop_lists, limit):
         """Generate a batch of diverse bridge queries and retrieve each (after
         dedup). Append each retrieval result to hop_lists in place. Returns
         updated prior_docs."""
         # Cap passage payload size to keep the prompt manageable.
         passages = prior_docs[-100:] if len(prior_docs) > 100 else prior_docs
-        res = predictor(
+        res = self._safe_lm(
+            predictor,
+            "queries",
             claim=claim,
             retrieved_titles=self._titles(prior_docs),
             passages=passages,
@@ -328,7 +344,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         passages and query each as-is (verbatim). Dedup against already-used
         queries/titles."""
         passages = self._render_passage_previews(prior_docs)
-        res = self.ref_titles_lm(
+        res = self._safe_lm(
+            self.ref_titles_lm,
+            "titles",
             claim=claim,
             retrieved_titles=self._titles(prior_docs),
             passages=passages,
@@ -371,7 +389,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
 
         # BATCH 2: a small refinement batch after seeing batch-1 retrievals.
-        summary_2 = self.summarize(claim=claim, passages=prior_docs).summary  # noqa: F841
+        summary_2 = self._safe_lm(
+            self.summarize, "summary", claim=claim, passages=prior_docs
+        ).summary  # noqa: F841
         prior_docs = self._run_bridge_batch(
             self.bridge_queries_2, claim, prior_docs, used_queries, hop_lists,
             self.batch_queries_2,
@@ -390,8 +410,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         interleave_fallback = self._interleave_dedup(hop_lists, len(pool))
 
         # Distilled gap analysis over all gathered passages.
-        rerank_summary = self.summarize(
-            claim=claim, passages=interleave_fallback[:40]
+        rerank_summary = self._safe_lm(
+            self.summarize, "summary", claim=claim, passages=interleave_fallback[:40]
         ).summary
 
         # Cross-reference anchors: pool pages whose (short) title is
@@ -475,8 +495,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if len(pool) <= self.max_docs:
             return self._inject_anchors(pool[: self.max_docs], pool, anchor_norms)
         candidates = self._render_candidates(pool)
-        ranked_ids_raw = self.rerank(
-            claim=claim, summary=summary, candidates=candidates
+        ranked_ids_raw = self._safe_lm(
+            self.rerank, "ranked_ids",
+            claim=claim, summary=summary, candidates=candidates,
         ).ranked_ids or ""
         ordered_ids = []
         seen = set()
