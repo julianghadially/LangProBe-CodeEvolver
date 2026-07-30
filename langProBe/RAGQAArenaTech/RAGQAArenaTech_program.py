@@ -56,6 +56,19 @@ def _is_placeholder_response(text: str) -> bool:
         return True  # an all-ellipsis string is never a real answer
     if deellipsed.lower() in _BARE_PLACEHOLDER_WORDS:
         return True
+    # Catch short fragments that collapse entirely to template/placeholder
+    # vocabulary with no content words, e.g. "response text", "insert text here",
+    # "answer above" -- the LM echoed placeholder instruction words instead of
+    # filling in a real answer. A genuine answer always contains at least one
+    # non-generic content word (a noun/name/command/number), so this stays
+    # free of false positives: a real answer never reduces to *only* the words
+    # "answer|response|context|question|...". Limit length so longer prose that
+    # happens to weave in words like "above" or "context" is never flagged.
+    words = re.findall(r"[A-Za-z]+", deellipsed)
+    if 1 <= len(words) <= 8 and all(
+        _GENERIC_TOKEN_RE.search(w) is not None for w in words
+    ):
+        return True
     if _MUSTACHE_LITERAL_RE.match(deellipsed):
         inner = deellipsed.strip("{} ").strip()
         if 1 <= len(inner.split()) <= 28 and (
@@ -118,6 +131,14 @@ class GenerateAnswer(dspy.Signature):
         "either interpretation is possible") rather than inventing a precise value. Do not
         invent named programs, companies, or historical incidents that the context does not
         actually state -- tangential unsupported specifics are penalized as untruthful.
+        NEVER invent a specific named product feature ("Send Later", a named settings panel),
+        a third-party app name ("Fine Volume Control", "Maven Music Player", "VolumeSteps+"),
+        or a vendor-documented behavior UNLESS it literally appears in the retrieved context.
+        For "what does X mean on Y?" / "how do I do X on Y?" questions, give the standard,
+        widely-known meaning for the named product FIRST (a pending clock icon = the message has
+        not yet been sent; do not invent a "scheduled send" feature), and only mention an
+        alternate interpretation if it is also well-established. Made-up named specifics are the
+        single most heavily penalized form of untruthfulness here, worse than a briefer grounded answer.
       - When the retrieved context contains several distinct values / estimates / OS- or
         version-specific answers, name them all with the platform / version they apply to
         instead of collapsing to one generic figure -- but only those actually present in
