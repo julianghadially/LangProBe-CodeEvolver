@@ -86,18 +86,35 @@ class RefTitles(dspy.Signature):
     of whether they confirm the claim — the retrieval task needs EVERY
     supporting page.
 
+    PRIORITY — scan the FIRST SENTENCE of every passage for the entity that
+    FILLS THE CLAIM'S GAP. A claim describes a missing subject indirectly
+    ("the company that made X", "this religion", "the director of Y",
+    "the choreographer born in YYYY", "the genus of ..."). The passage then
+    NAMES that subject verbatim in its lead sentence (e.g. claim "the company
+    that made Welcome to Macintosh" -> passage says "...focusing on computer
+    company Apple Inc."; claim "In this religion, where Mehet-Weret..." ->
+    passage says "a goddess of the sky in Ancient Egyptian religion"). ALWAYS
+    output that named gap-filling entity first, in its exact printed form
+    ("Apple Inc.", "Ancient Egyptian religion", "Gene Kelly",
+    "Best Foot Forward (musical)"), as a standalone title.
+
     Rules:
     - Output ONLY exact verbatim titles copied from the passage text (use the
       disambiguated form printed in the text, e.g. 'This Is England (film)',
       'Best Foot Forward (musical)', 'Secret Agent (TV series)',
-      'Josh Flitter', 'Gene Kelly', 'Airlines of Africa', 'Warren Fu').
+      'Josh Flitter', 'Gene Kelly', 'Airlines of Africa', 'Warren Fu',
+      'Apple Inc.', 'Ancient Egyptian religion').
     - Do NOT invent or paraphrase; do NOT include a title already in
       retrieved_titles; do NOT include the page's own title.
-    - Prefer titles that bridge a still-missing hop (co-stars, directors,
+    - Prefer the GAP-FILLING subject of the claim over obscure tangential
+      cross-references; then add other bridging titles (co-stars, directors,
       filmography entries, parent/child taxa, related companies/works).
-    - Output a semicolon-separated list of at most 5 titles, e.g.
-      "Gene Kelly ; This Is England (film) ; ...". Output ONLY that list (or
-      empty if no referenced-but-missing title is present).
+    - Do NOT skip a title because it is a large/famous entity (Apple Inc.,
+      Gene Kelly) — if it is named in a passage and not yet retrieved, output
+      it.
+    - Output a semicolon-separated list of at most 6 titles, e.g.
+      "Apple Inc. ; Ancient Egyptian religion ; Gene Kelly ; ...". Output ONLY
+      that list (or empty if no referenced-but-missing title is present).
     """
 
     claim: str = dspy.InputField()
@@ -119,8 +136,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.max_docs = 21
         self.batch_queries = 5
         self.batch_queries_2 = 2
-        self.ref_titles = 3
-        self.ref_titles_early = 3
+        self.ref_titles = 4
+        self.ref_titles_early = 4
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
