@@ -51,7 +51,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 20
+        self.k = 25
         self.max_docs = 21
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
