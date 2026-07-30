@@ -246,11 +246,27 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             prior_docs = prior_docs + docs
         return prior_docs
 
+    def _render_passage_previews(self, docs, preview_chars=260, cap=200):
+        """Render docs as 'TITLE: <first preview_chars of body>' so the
+        harvester can scan MANY passages (and their opening cross-references)
+        within a modest prompt budget, instead of a few full passages that it
+        ends up skimming. Wikipedia cross-reference titles almost always appear
+        in the lead sentence, so a short preview preserves them while letting
+        the LM see far more candidate passages at once."""
+        lines = []
+        for doc in docs[-cap:]:
+            parts = doc.split(" | ", 1)
+            title = parts[0]
+            body = parts[1] if len(parts) > 1 else ""
+            preview = body[:preview_chars].replace("\n", " ")
+            lines.append(f"{title}: {preview}")
+        return "\n".join(lines)
+
     def _run_ref_titles_batch(self, claim, prior_docs, used_queries, hop_lists, limit):
         """Harvest verbatim referenced-but-missing titles from retrieved
         passages and query each as-is (verbatim). Dedup against already-used
         queries/titles."""
-        passages = prior_docs[-100:] if len(prior_docs) > 100 else prior_docs
+        passages = self._render_passage_previews(prior_docs)
         res = self.ref_titles_lm(
             claim=claim,
             retrieved_titles=self._titles(prior_docs),
