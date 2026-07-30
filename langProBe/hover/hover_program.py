@@ -120,13 +120,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.batch_queries = 5
         self.batch_queries_2 = 2
         self.ref_titles = 3
+        self.ref_titles_early = 3
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
 # Small-k retriever used by the verbatim-cross-ref-title batch: a near-exact
         # title query only needs a couple of top hits, so we avoid flooding the
-        # pool (which would crowd out supporting pages in the reranker).
-        self.retrieve_title_k = dspy.Retrieve(k=1)
+        # pool (which would crowd out supporting pages in the reranker). k=2
+        # guards against the exact-title page not being colbert's #1 hit.
+        self.retrieve_title_k = dspy.Retrieve(k=2)
 
         # One LM call generates several DIVERSE bridge queries at once, each
         # targeting a DIFFERENT missing supporting page (cross-ref titles and
@@ -273,8 +275,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         hop1_docs = self.retrieve_k(claim).passages
         hop_lists.append(hop1_docs)
 
-        # BATCH 1: several diverse bridge queries from claim + hop1 passages.
+        # BATCH 0 (early): harvest verbatim cross-ref titles straight from the
+        # high-signal hop1 passages and retrieve them BEFORE the bridge batches
+        # run. Hop1 is a pure colbert match for the claim and frequently names
+        # the still-missing supporting pages right in its text; harvesting them
+        # early (a) places those supporting pages in the pool before the bridge
+        # LM can latch onto a wrong bridging path, and (b) gives the bridge
+        # batches richer context (the harvested titles' passages) to build on.
         prior_docs = list(hop1_docs)
+        prior_docs = self._run_ref_titles_batch(
+            claim, prior_docs, used_queries, hop_lists, self.ref_titles_early,
+        )
+
+        # BATCH 1: several diverse bridge queries from claim + hop1 passages.
         prior_docs = self._run_bridge_batch(
             self.bridge_queries, claim, prior_docs, used_queries, hop_lists,
             self.batch_queries,
