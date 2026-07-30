@@ -21,25 +21,48 @@ class RerankPassages(dspy.Signature):
     ranked_ids: str = dspy.OutputField()
 
 
-class BridgeQuery(dspy.Signature):
-    """Generate a Wikipedia search query to find a supporting document that is
-    still MISSING for verifying a multi-hop claim.
+class BridgeQueries(dspy.Signature):
+    """Generate several DIVERSE Wikipedia search queries — one per DIFFERENT
+    still-missing supporting page — to retrieve pages for verifying a multi-hop
+    claim.
 
-    The claim connects several entities. The passages already retrieved mention
-    other entities that bridge those connections (e.g. a brand advertised in a
-    song, a parent company of a product, a place where a road ends). To retrieve
-    the missing supporting Wikipedia page, identify the SPECIFIC named entity
-    from the retrieved passages that bridges the claim but does not yet have its
-    own Wikipedia page in the retrieved set, and build a concise query from that
-    entity's name (and a disambiguating word if the name is ambiguous, e.g.
-    "Sunkist soft drink", "Microchip Technology company").
-    Output only the search query text.
+    A multi-hop claim has ~3 supporting Wikipedia pages. retrieved_titles
+    already holds some of these (or related pages). Each query you output MUST
+    target a DIFFERENT still-missing supporting page. Use BOTH strategies across
+    your outputs:
+
+    A) CROSS-REF TITLE — scan the passages' text for a Wikipedia page title that
+    is *referenced* inside a retrieved passage (a work title in quotes/italics, a
+    person's full name, a linked-style entity) and that BRIDGES the claim, but
+    whose own page is NOT in retrieved_titles. Use that exact title.
+
+    B) COMBINED-ENTITY QUERY — build a query that JOINS TWO key named entities
+    (prefer one entity from the claim + one entity from the retrieved passages
+    that completes the chain), separated by a single concise domain term likely
+    to appear on the missing page, e.g.
+        "Charles Bronson Leslie Nielsen comedy director"
+        "The Secret Agent Stephen Graham"
+        "New York Islanders 1974 75 season"
+        "Dieffenbachia Carlina flowering plant genus"
+    A combined query surfaces the page that BRIDGES two entities, which
+    single-entity queries routinely miss.
+
+    Rules:
+    - Each query must target a DIFFERENT missing supporting entity/page.
+    - Do NOT output a single entity name already present in retrieved_titles.
+    - Do NOT echo the whole claim and do NOT repeat entities/queries.
+    - If a claim entity is misspelled or a garbled quote, correct it using the
+      plausible spelling guided by the passages.
+    - Prefer named-entity / title cross-references over generic descriptor
+      phrases; include at most one generic descriptor-style combined query.
+    - Output a semicolon-separated list of queries, e.g.
+      "q1 ; q2 ; q3". Output ONLY that list.
     """
 
     claim: str = dspy.InputField()
     retrieved_titles: str = dspy.InputField(desc="Titles already retrieved.")
     passages: str = dspy.InputField()
-    query: str = dspy.OutputField()
+    queries: str = dspy.OutputField(desc="Semicolon-separated list of diverse search queries.")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -53,14 +76,19 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         super().__init__()
         self.k = 25
         self.max_docs = 21
+        self.batch_queries = 5
+        self.batch_queries_2 = 2
 
         self.retrieve_k = dspy.Retrieve(k=self.k)
 
-        # Bridge-aware query generators using passage content to find missing entities.
-        self.create_query_hop2 = dspy.ChainOfThought(BridgeQuery)
-        self.create_query_hop3 = dspy.ChainOfThought(BridgeQuery)
-        self.create_query_hop4 = dspy.ChainOfThought(BridgeQuery)
-        self.create_query_hop5 = dspy.ChainOfThought(BridgeQuery)
+        # One LM call generates several DIVERSE bridge queries at once, each
+        # targeting a DIFFERENT missing supporting page (cross-ref titles and
+        # combined-entity queries). Far higher recall than one query per hop.
+        self.bridge_queries = dspy.ChainOfThought(BridgeQueries)
+
+        # Optional second refinement batch: more diverse bridge queries after
+        # seeing the first batch's retrieved titles/passages.
+        self.bridge_queries_2 = dspy.ChainOfThought(BridgeQueries)
 
         # Keep a short summary focused on entities/connections that bridge the claim.
         self.summarize = dspy.ChainOfThought(
@@ -126,67 +154,81 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 break
         return "\n".join(lines)
 
+    def _parse_queries(self, raw):
+        """Parse a semicolon-separated (or newline) list of queries."""
+        out = []
+        if not raw:
+            return out
+        for part in raw.replace(",", ";").replace("\n", ";").split(";"):
+            q = part.strip().strip('"').strip("'").strip()
+            # Drop leading list markers like "1)" / "-".
+            q = q.lstrip("-").strip()
+            if " " in q and q[:2].rstrip(")").isdigit():
+                q = q.split(None, 1)[1].strip()
+            if q:
+                out.append(q)
+        return out
+
+    def _run_bridge_batch(self, predictor, claim, prior_docs, used_queries, hop_lists, limit):
+        """Generate a batch of diverse bridge queries and retrieve each (after
+        dedup). Append each retrieval result to hop_lists in place. Returns
+        updated prior_docs."""
+        # Cap passage payload size to keep the prompt manageable.
+        passages = prior_docs[-100:] if len(prior_docs) > 100 else prior_docs
+        res = predictor(
+            claim=claim,
+            retrieved_titles=self._titles(prior_docs),
+            passages=passages,
+        )
+        queries = self._parse_queries(res.queries)[:limit]
+        for q in queries:
+            nq = self._norm_q(q)
+            if not q or nq in used_queries:
+                continue
+            used_queries.add(nq)
+            docs = self.retrieve_k(q).passages
+            hop_lists.append(docs)
+            prior_docs = prior_docs + docs
+        return prior_docs
+
     def forward(self, claim):
         # HOP 1: retrieve directly with the raw claim.
         used_queries = {self._norm_q(claim)}
+        hop_lists = []
         hop1_docs = self.retrieve_k(claim).passages
-        summary_1 = self.summarize(claim=claim, passages=hop1_docs).summary
+        hop_lists.append(hop1_docs)
 
-        def _bridge(predictor, prior_docs):
-            q = predictor(
-                claim=claim,
-                retrieved_titles=self._titles(prior_docs),
-                passages=prior_docs,
-            ).query
-            nq = self._norm_q(q)
-            if not q or nq in used_queries:
-                return []
-            used_queries.add(nq)
-            return self.retrieve_k(q).passages
+        # BATCH 1: several diverse bridge queries from claim + hop1 passages.
+        prior_docs = list(hop1_docs)
+        prior_docs = self._run_bridge_batch(
+            self.bridge_queries, claim, prior_docs, used_queries, hop_lists,
+            self.batch_queries,
+        )
 
-        # HOP 2: derive a bridge query targeting an entity named in the
-        # retrieved passages but not yet retrieved as its own page.
-        hop2_docs = _bridge(self.create_query_hop2, hop1_docs)
-        summary_2 = self.summarize(
-            claim=claim, passages=hop1_docs + hop2_docs
-        ).summary
-
-        # HOP 3: bridge query after considering hop1 + hop2 retrieved titles.
-        hop3_docs = _bridge(self.create_query_hop3, hop1_docs + hop2_docs)
-
-        # HOP 4: a final bridge query targeting any entity still missing after
-        # the first three retrievals (uses all passages gathered so far).
-        all_prior_docs = hop1_docs + hop2_docs + hop3_docs
-        hop4_docs = _bridge(self.create_query_hop4, all_prior_docs)
-
-        # HOP 5: extra bridge query if entities still appear missing.
-        all_prior_docs_4 = hop1_docs + hop2_docs + hop3_docs + hop4_docs
-        hop5_docs = _bridge(self.create_query_hop5, all_prior_docs_4)
+        # BATCH 2: a small refinement batch after seeing batch-1 retrievals.
+        summary_2 = self.summarize(claim=claim, passages=prior_docs).summary  # noqa: F841
+        prior_docs = self._run_bridge_batch(
+            self.bridge_queries_2, claim, prior_docs, used_queries, hop_lists,
+            self.batch_queries_2,
+        )
 
         # Build the full candidate pool (dedup, order hop1 first then by rank).
-        pool = self._pool(
-            [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs],
-            self.max_docs,
-        )
+        pool = self._pool(hop_lists, self.max_docs)
 
         # Single-hop fallback ordering for documents the reranker omits.
-        interleave_fallback = self._interleave_dedup(
-            [hop1_docs, hop2_docs, hop3_docs, hop4_docs, hop5_docs],
-            len(pool),
-        )
+        interleave_fallback = self._interleave_dedup(hop_lists, len(pool))
 
-        # Distilled gap analysis over all gathered passages: a concise statement
-        # of the entities/relations that bridge the claim. Feeding it to the
-        # listwise reranker grounds relevance on the claim's support structure,
-        # helping borderline supporting pages rank above look-alikes.
+        # Distilled gap analysis over all gathered passages.
         rerank_summary = self.summarize(
             claim=claim, passages=interleave_fallback[:40]
         ).summary
 
-        reranked = self._rerank_to_max(pool, claim, rerank_summary, interleave_fallback)
+        reranked = self._rerank_to_max(
+            pool, claim, rerank_summary, interleave_fallback, hop_lists
+        )
         return dspy.Prediction(retrieved_docs=reranked)
 
-    def _rerank_to_max(self, pool, claim, summary, fallback):
+    def _rerank_to_max(self, pool, claim, summary, fallback, hop_lists=None):
         """Use the listwise reranker to order the pool then cap at max_docs.
         Any pool docs the LM omits are appended in fallback order so the
         returned count is exactly max_docs."""
