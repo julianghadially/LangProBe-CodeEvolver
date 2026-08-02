@@ -4,10 +4,14 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
 from .RAGQAArenaTech_utils import GenerateSearchQuery
 
-# A leaked template placeholder, e.g. "{response}" or "{reasoning}" -- the
-# reasoning model occasionally echoes the unfilled output-field marker verbatim
-# instead of producing real content (seen as full-credit losses in traces).
-_PLACEHOLDER_RE = re.compile(r"^\s*\{\s*[a-zA-Z_]+\s*\}\s*$")
+# Leaked template placeholders the reasoning model occasionally echoes verbatim
+# instead of producing real content (seen as full-credit losses in traces):
+# e.g. "{response}", "{reasoning}", "(actual answer)", "[response]".
+_CURLY_PLACEHOLDER_RE = re.compile(r"^\s*\{\s*[a-zA-Z_][\w]*\s*\}\s*$")
+_BRACKETED_RE = re.compile(r"^\s*[\[(<]\s*[a-zA-Z_][\w\s]*\s*[\])>]\s*$")
+_SLOT_WORD_RE = re.compile(
+    r"\b(answer|response|output|result|reasoning|placeholder|insert)\b", re.I
+)
 
 
 def _is_degenerate(text) -> bool:
@@ -17,25 +21,38 @@ def _is_degenerate(text) -> bool:
     s = str(text).strip()
     if not s:
         return True
-    return bool(_PLACEHOLDER_RE.match(s))
+    # Unambiguous template slot: a single {identifier} such as "{response}".
+    if _CURLY_PLACEHOLDER_RE.match(s):
+        return True
+    # A short bracketed/parenthetical/angle phrase naming a slot, e.g.
+    # "(actual answer)", "[response]", "<answer>".
+    if len(s) <= 40 and _BRACKETED_RE.match(s) and _SLOT_WORD_RE.search(s):
+        return True
+    return False
 
 
 class GenerateAnswer(dspy.Signature):
     """Answer the user's question using the retrieved context.
 
     - Answer the SPECIFIC question being asked, using the question's own framing
-      and scope. Do not reinterpret a narrow question as a general one (e.g. if
-      it asks about a particular feature, icon, or behavior, answer about that,
+      and scope. Do not reinterpret a narrow question as a general one (e.g. if it
+      asks about a particular feature, icon, or behavior, answer about that,
       not the broad topic it happens to mention).
-    - Be complete: include every relevant fact, method, alternative, and caveat
-      present in the context that bears on the question. When several approaches
-      or details are relevant, mention all of them rather than just one.
-    - Ground every claim in the retrieved context. Do not add information,
-      generalizations, or opinions that the context does not support.
+    - Give a clear, direct answer. State the correct answer plainly; only present
+      competing views when the topic is genuinely contested, rather than hedging
+      with "there is no single definitive answer".
+    - Be complete: cover every relevant fact, method, alternative, and caveat
+      that bears on the question. When several approaches or details are
+      relevant, mention all of them rather than just one.
+    - Treat the retrieved context as your primary evidence and do not contradict
+      it. When it contains relevant passages, ground your answer in them and
+      avoid unsupported claims. When a directly relevant passage is missing, do
+      NOT refuse or say "the context does not contain..." -- answer the question
+      as accurately as you can.
     - Write a clear, self-contained answer in natural prose, using short lists or
       commands only when the question calls for them.
     - Output the actual answer text. Never output a placeholder such as
-      "{response}" or an empty answer.
+      "{response}", "(actual answer)", or an empty answer.
     """
 
     context = dspy.InputField(desc="retrieved passages that may help answer the question")
