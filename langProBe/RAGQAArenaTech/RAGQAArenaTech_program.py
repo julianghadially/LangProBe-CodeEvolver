@@ -235,15 +235,29 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         scores 0 on a row that retrieval could otherwise have answered).
         """
         try:
-            return self.generate_query[hop](context=context, question=question).query
+            q = self.generate_query[hop](context=context, question=question).query
         except Exception:
-            return question
+            q = question
+        # Strip leaked DSPy delimiters (e.g. "[[ ## completed ## ]]") that the
+        # reasoning model occasionally appends to the query field; these
+        # pollute the dense-retrieval embedding and degrade result relevance.
+        return _clean_response(q)
 
     def forward(self, question):
         context = []
         for hop in range(self.max_hops):
             query = self._safe_query(hop, context, question)
             passages = self.search(query, k=self.num_docs)
+            # First hop: also search with the raw question so the original
+            # terms (proper nouns, product names, exact error strings) always
+            # reach the retriever.  The generated query may rephrase or drop
+            # critical terms, causing retrieval misses; the raw-question
+            # supplementary search is a safety net that costs one extra
+            # retrieval call but substantially improves recall on questions
+            # whose own wording matches the corpus best.
+            if hop == 0 and query.strip() != question.strip():
+                raw_passages = self.search(question, k=self.num_docs)
+                passages = deduplicate(passages + raw_passages)
             context = deduplicate(context + passages)
         # The main answer predictor (ChainOfThought) can raise AdapterParseError
         # when the LM returns an empty/unparseable body (e.g. "{}"), which aborts
