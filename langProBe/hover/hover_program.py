@@ -17,40 +17,56 @@ class ClaimEntities(dspy.Signature):
 class QueryExpansion(dspy.Signature):
     """You are retrieving Wikipedia documents for a claim. This is PURE DOCUMENT RETRIEVAL —
     do NOT verify, fact-check, or judge whether the claim is true, and do NOT decide the claim is
-    "supported". Your only job: output search queries for documents STILL MISSING.
+    "supported". Your ONLY job: output search queries for documents STILL MISSING.
 
-    What "missing" means (read carefully):
+    ## What "missing" means (read carefully)
     - An entity is COVERED only if one of the retrieved document TITLES is (or matches) that
       entity. An entity merely MENTIONED inside another article's snippet is NOT covered — it
-      still needs its own article. (e.g. if an award snippet lists "S. Truett Cathy" as a recipient
+      still needs its OWN article. (e.g. if an award snippet lists "S. Truett Cathy" as a recipient
       but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy" is missing.)
-    - Even entities named directly in the claim may NOT have been retrieved yet. Compare the
-      retrieved TITLES to the claim; any claim entity with no matching title is missing.
-    - Mine the retrieved SNIPPETS for proper nouns the claim depends on but that lack their own
-      article: the winner named in a tournament article, the recipient named in an award article,
-      the cast named in a film article, the town a school serves, the director of a video, the
-      founder of a company, the band behind an album, the spouse of a person, the subject of a
-      biographical film. Output each such name as a query.
-    - ALSO use your own world knowledge to infer entities the claim refers to that are not yet
-      in the retrieved titles, even if they are not explicitly mentioned in the snippets.
-      For example: if the claim mentions "The Broken Tower" (a film), use your knowledge that
-      it is about the poet "Hart Crane"; if the claim mentions a person who co-founded a city,
-      use your knowledge of their spouse if the claim depends on them.
+    - Compare the retrieved TITLES to the claim; any entity the claim depends on that has no
+      matching retrieved TITLE is missing.
+    - Also compare against the claim's own entities: a claim-named entity with no matching title
+      is still missing even if it appears in a snippet.
 
-    Rules:
-    - Each query targets ONE entity and is its exact Wikipedia-style title/name, short (1-5
-      words), e.g. "Amanda Wyss", "Lisa Raymond", "S. Truett Cathy", "Chick-fil-A",
-      "Eighth Wonder", "Bass (voice type)", "Warren Fu", "Vision of the Future".
+    ## CRITICAL: mine the snippets for the EXACT proper-noun name
+    The retrieved snippets almost always CONTAIN the exact name of the missing entity. Scan every
+    snippet for proper nouns the claim depends on, and output a query equal to that EXACT name —
+    quoted verbatim from the snippet — not a paraphrase, not a role, not a description.
+      - snippet "...directed by Mick Napier"            -> "Mick Napier"   (NOT "Director of Splatter Theatre")
+      - snippet "...remake of 2003 Tamil film Dhool"    -> "Dhool"          (NOT "remake of Ranja", NOT a guess like "Sethu")
+      - snippet "...ninth season of Deutschland sucht den Superstar" -> "Deutschland sucht den Superstar (season 9)"
+      - snippet "...nominated ... in the 24th Hong Kong Film Awards"  -> "24th Hong Kong Film Awards" (NOT "Hong Kong Film Awards")
+      - snippet "...won by Ross Case"                    -> "Ross Case"
+    Prefer the SPECIFIC disambiguated title a snippet gives (with its year/ordinal/season) over the
+    generic version, because the generic version retrieves the wrong/neighbor article.
+
+    ## Map prose references to Wikipedia disambiguated titles
+    - "ninth season" -> append "(season 9)"; "season 4" -> "(season 4)".
+    - A year/edition ordinal in a snippet is part of the title — keep it exact
+      ("24th Hong Kong Film Awards", "1974 Pacific Coast Open", "2046 (film)").
+    - People: use their common Wikipedia name ("Mick Napier", "Shim Ji-ho", "Ross Case").
+
+    ## Also use world knowledge
+    If a missing entity is implied by the claim but not in any snippet yet (e.g. the director of a
+    named film, a cast member, the election a politician lost, the band behind an album, the spouse
+    of a person), use your knowledge to NAME it. Still output a proper-noun name, never a role.
+
+    ## Rules
+    - Each query targets ONE entity, is its exact Wikipedia-style title/name, short (1-5 words).
     - Do NOT write full sentences, questions, or justification/verification text.
-    - Do NOT repeat a query whose name already matches a retrieved document title.
+    - Do NOT repeat a query whose name already matches a retrieved document TITLE, and do not
+      repeat any query you can see was already issued (it will be filtered, so pick a NEW entity).
     - Cover DISTINCT missing entities; queries must be non-redundant.
-    - Do NOT return an empty list unless every entity named in the claim AND every entity the
-      claim depends on already has its own retrieved article (by title). When unsure, output a
-      query rather than none.
+    - NEVER output a role/description ("director of X", "host of X", "remake of X", "winner of X").
+      Always output a PROPER-NOUN NAME. If you cannot name it from a snippet or knowledge, SKIP it
+      rather than emit a description.
+    - When unsure whether an entity is covered, output a query rather than none — a missed document
+      zeros the entire score.
     """
     claim = dspy.InputField(desc="The claim to find supporting documents for")
     retrieved_docs = dspy.InputField(desc="Documents retrieved so far as '<title> | <snippet>', one per line")
-    queries: list[str] = dspy.OutputField(desc="Concise entity-name search queries for missing documents")
+    queries: list[str] = dspy.OutputField(desc="Concise Wikipedia-style search queries — EXACT proper-noun names mined from snippets — for still-missing documents")
 
 
 class ClaimAnalysis(dspy.Signature):
@@ -61,22 +77,27 @@ class ClaimAnalysis(dspy.Signature):
     is true. Just identify what the claim is referring to and output Wikipedia-style search
     queries for those entities.
 
-    Examples of what to infer:
-    - "The actor who starred in an Oscar winning film with Amber Tamblyn" → the film is
-      "127 Hours", so output "127 Hours"
-    - "A genus containing Butein" → the genus is "Dahlia", so output "Dahlia"
-    - "The followup novel to the Heir to the Empire trilogy" → "Vision of the Future"
-    - "The director of Pacific Rim" → "Guillermo del Toro" (if not already named)
-    - "The band behind an album" → the band's name
+    Examples of what to infer (output a PROPER-NOUN NAME, never a description/role):
+    - "The actor who starred in an Oscar winning film with Amber Tamblyn" -> "127 Hours"
+    - "A genus containing Butein" -> "Dahlia"
+    - "The followup novel to the Heir to the Empire trilogy" -> "Vision of the Future"
+    - "The director of Pacific Rim" -> "Guillermo del Toro"
+    - "The director of Splatter Theatre" -> "Mick Napier"
+    - "the film that Ranja is a remake of" -> the original film's name
+    - "the season Vanessa Krasniqi took part in" -> "Deutschland sucht den Superstar (season 9)"
 
     Rules:
-    - Each query is a short Wikipedia-style title/name (1-5 words).
+    - Each query is a short Wikipedia-style title/name (1-5 words), a PROPER NOUN.
+    - NEVER output a description or role ("director of X", "host of X", "remake of X"). Always
+      output the actual name; if you cannot name it, skip it.
+    - Map prose to disambiguated Wikipedia titles ("ninth season" -> "(season 9)"; keep a year or
+      ordinal that the claim gives exact).
     - Do NOT repeat entities already explicitly named in the claim.
     - Do NOT verify whether the claim is true. Just identify what it refers to.
     - When unsure, output a query rather than nothing — missing documents cost the entire score.
     """
     claim = dspy.InputField(desc="The claim to analyze")
-    queries: list[str] = dspy.OutputField(desc="Wikipedia-style search queries for entities the claim refers to")
+    queries: list[str] = dspy.OutputField(desc="Wikipedia-style search queries — proper-noun names — for entities the claim refers to")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -118,9 +139,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return out
 
     def _retrieve_many(self, queries):
-        return [self.retrieve_k(q).passages for q in queries]
+        return [(q, self.retrieve_k(q).passages) for q in queries]
 
-    def _context_docs(self, docs, n=45, max_snippet=600):
+    def _context_docs(self, docs, n=45, max_snippet=1200):
         seen = set()
         uniq = []
         for d in docs:
@@ -166,11 +187,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         except Exception:
             return []
 
-    def _select(self, hop1, other_lists):
-        """Dilution-robust selection: always keep hop1's top docs (claim-named golds land here)
-        and the top hit of every query (directly-targeted / discovered golds land here), then fill
-        the rest with round-robin for breadth. This keeps claim-named golds regardless of how many
-        query-lists are used, so extra queries can't dilute them out."""
+    def _select(self, hop1, query_lists):
+        """Dilution-robust selection. Always keep hop1's top docs (claim-named golds land here).
+        For each query, keep its EXACT-title match if one was retrieved — a doc titled exactly the
+        query is unambiguously the targeted article and must outrank near-miss disambiguations
+        (e.g. query "Boy Hits Car" should keep the band article "Boy Hits Car", not "Boy Hits Car
+        (album)"; query "Ross Case" should keep the tennis player, not legal cases "In re Ross").
+        Fall back to the query's top hit when no exact-title doc exists. Then round-robin for breadth.
+        This keeps claim-named and directly-targeted golds regardless of how many query-lists are
+        used, so extra queries can't dilute them out."""
         seen = set()
         keep = []
 
@@ -180,12 +205,23 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 seen.add(t)
                 keep.append(doc)
 
+        def headline(q, lst):
+            if not lst:
+                return None
+            ql = q.strip().lower()
+            for doc in lst:
+                if self._title(doc) == ql:
+                    return doc
+            return lst[0]
+
         for d in hop1[: self.hop1_keep]:
             add(d)
-        for lst in other_lists:
-            if lst:
-                add(lst[0])
-        for d in self._round_robin([hop1] + other_lists):
+        for q, lst in query_lists:
+            h = headline(q, lst)
+            if h is not None:
+                add(h)
+        lists = [hop1] + [lst for _, lst in query_lists]
+        for d in self._round_robin(lists):
             if len(keep) >= MAX_RETRIEVED_DOCS:
                 break
             add(d)
@@ -215,7 +251,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if hop2_q:
             hop2_lists = self._retrieve_many(hop2_q)
             other_lists.extend(hop2_lists)
-            for lst in hop2_lists:
+            for _, lst in hop2_lists:
                 all_docs.extend(lst)
 
         # Hop 3: expansion that mines hop 2's newly retrieved snippets for further entities
@@ -227,7 +263,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if hop3_q:
             hop3_lists = self._retrieve_many(hop3_q)
             other_lists.extend(hop3_lists)
-            for lst in hop3_lists:
+            for _, lst in hop3_lists:
                 all_docs.extend(lst)
 
         # Hop 4: final expansion pass to catch deeply-nested entities
@@ -238,7 +274,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         if hop4_q:
             hop4_lists = self._retrieve_many(hop4_q)
             other_lists.extend(hop4_lists)
-            for lst in hop4_lists:
+            for _, lst in hop4_lists:
                 all_docs.extend(lst)
 
         final = self._select(hop1, other_lists)
