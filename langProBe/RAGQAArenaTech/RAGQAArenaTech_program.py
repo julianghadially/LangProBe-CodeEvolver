@@ -74,6 +74,43 @@ def _is_degenerate(text) -> bool:
     return False
 
 
+# Leaked DSPy output delimiters (e.g. "[[ ## completed ## ]]") that sometimes
+# bleed into the response field, and passage-citation references the model
+# emits despite the prompt's prohibition (e.g. "passage [9]", "passage 3",
+# "snippet [1]", "Passage 1", "passages [10], [12]"). Stripping these is pure
+# cleanup -- they never belong in the scored response.
+_DSPY_MARKER_RE = re.compile(r"\[\[ ## \w+ ## \]\]")
+
+# Parenthesized passage/snippet citations: "(passage 3)", "(see passage [9])",
+# "(as discussed in passage [8])", "(passages [10], [12])".
+_CITATION_PAREN_RE = re.compile(
+    r"\s*\((?:see |as discussed in |as per |in )?"
+    r"(?:passages?|snippets?|sources?) "
+    r"(?:\[\d+\](?:, ?\[\d+\])*|\d+(?:, ?\d+)*)\)",
+    re.I,
+)
+
+# Inline passage/snippet citations (not in parentheses): "passage [9]",
+# "passage 3", "Passage 1 mentions", "see passage [9]".
+_CITATION_INLINE_RE = re.compile(
+    r"\s*(?:see |as discussed in |as per )?"
+    r"(?:passages?|snippets?) "
+    r"(?:\[\d+\](?:, ?\[\d+\])*|\d+)",
+    re.I,
+)
+
+
+def _clean_response(text):
+    """Strip leaked DSPy delimiters and passage-citation references."""
+    if not text:
+        return text
+    s = str(text)
+    s = _DSPY_MARKER_RE.sub("", s)
+    s = _CITATION_PAREN_RE.sub("", s)
+    s = _CITATION_INLINE_RE.sub("", s)
+    return s.strip()
+
+
 class GenerateAnswer(dspy.Signature):
     """Answer the user's question using the retrieved context.
 
@@ -133,7 +170,8 @@ class GenerateAnswer(dspy.Signature):
       possible without enumerating concrete exploit steps.
     - Write a clear, self-contained answer in natural prose, using short lists or
       commands only when the question calls for them. Do not add citation markers
-      (e.g. [1], "(source 1)"); write plain prose with no source references.
+      or passage references (e.g. [1], "(source 1)", "passage [9]", "snippet [1]",
+      "Passage 1"); write plain prose with no source references at all.
     - Output the actual answer text. Never output a placeholder such as
       "{response}", "(actual answer)", or an empty answer.
     """
@@ -241,6 +279,11 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
                 # because it uses the simpler dspy.Predict adapter.
                 if _is_degenerate(getattr(pred, "response", None)):
                     pred.response = ""
+        # Strip leaked DSPy delimiters and passage-citation references from the
+        # final response (pure cleanup -- they never belong in the scored text).
+        resp = getattr(pred, "response", None)
+        if resp:
+            pred.response = _clean_response(resp)
         # Carry the retrieved passages on the prediction so downstream metrics
         # (e.g. faithfulness/groundedness) can see the evidence the answer was
         # generated from. Mirrors hover_program.py's dspy.Prediction(retrieved_docs=...).
