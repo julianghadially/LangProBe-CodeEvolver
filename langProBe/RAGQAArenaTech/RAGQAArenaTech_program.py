@@ -13,9 +13,44 @@ _SLOT_WORD_RE = re.compile(
     r"\b(answer|response|output|result|reasoning|placeholder|insert)\b", re.I
 )
 
+# Vocabulary of short context-referral / placeholder fragments the reasoning
+# model sometimes emits INSTEAD of the real answer -- pointing back at the
+# retrieved context rather than stating it (seen as full-credit losses in
+# traces): e.g. "Above", "See above", "As noted in the passage", "N/A",
+# "None". A fragment is degenerate only when EVERY one of its tokens is in this
+# set, so genuine short answers ("Use cron.", "Yes.") are never matched --
+# they carry real-content tokens not listed here.
+_ECHO_VOCAB = {
+    "above", "below", "see", "refer", "to", "back", "per", "cf", "c.f",
+    "as", "noted", "stated", "described", "shown", "mentioned", "seen",
+    "the", "a", "an", "in", "from", "of", "at", "on", "for", "and", "or",
+    "passage", "passages", "context", "document", "doc", "source", "sources",
+    "reference", "references", "link", "links", "n/a", "na", "none", "null",
+    "nil", "todo", "tbd", "placeholder", "example", "idk", "unknown",
+    "result", "answer", "response", "output", "text",
+}
+_WORD_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z'/-]*|[0-9]+")
+
+
+def _is_echo_or_referral(s: str) -> bool:
+    """True for a short fragment that only refers to/echoes the context.
+
+    Applied only to short strings (real answers are full sentences), this
+    catches "Above", "See above", "As noted in the passage", "N/A", "None",
+    "...", etc. -- bare referrals and placeholders with no actual content.
+    """
+    if len(s) > 40:
+        return False
+    toks = _WORD_TOKEN_RE.findall(s)
+    if not toks:
+        # Pure punctuation/symbols, e.g. "..." "-" "??" -- no content at all.
+        return True
+    return all(t.lower() in _ECHO_VOCAB for t in toks)
+
 
 def _is_degenerate(text) -> bool:
-    """True if the LM emitted an empty string or a leaked template placeholder."""
+    """True if the LM emitted an empty string, a leaked template placeholder,
+    or a bare context-referral fragment instead of a real answer."""
     if text is None:
         return True
     s = str(text).strip()
@@ -27,6 +62,11 @@ def _is_degenerate(text) -> bool:
     # A short bracketed/parenthetical/angle phrase naming a slot, e.g.
     # "(actual answer)", "[response]", "<answer>".
     if len(s) <= 40 and _BRACKETED_RE.match(s) and _SLOT_WORD_RE.search(s):
+        return True
+    # A bare context-referral / placeholder fragment with no real content
+    # (e.g. "Above", "See above", "N/A", "None"). These score as full-credit
+    # losses; recover them via the rewrite path.
+    if _is_echo_or_referral(s):
         return True
     return False
 
@@ -41,14 +81,21 @@ class GenerateAnswer(dspy.Signature):
     - Give a clear, direct answer. State the correct answer plainly; only present
       competing views when the topic is genuinely contested, rather than hedging
       with "there is no single definitive answer".
-    - Be complete: cover every relevant fact, method, alternative, and caveat
-      that bears on the question. When several approaches or details are
-      relevant, mention all of them rather than just one.
-    - Treat the retrieved context as your primary evidence and do not contradict
-      it. When it contains relevant passages, ground your answer in them and
-      avoid unsupported claims. When a directly relevant passage is missing, do
-      NOT refuse or say "the context does not contain..." -- answer the question
-      as accurately as you can.
+    - Be complete on what is well-established and supported: cover the relevant
+      facts, methods, and caveats the retrieved context states. When several
+      approaches are genuinely relevant AND supported, mention them rather than
+      just one -- but omit speculative or marginally-relevant options you are not
+      confident are accurate; do not pad the answer with extra alternatives.
+    - Ground every claim in the retrieved context and do not contradict it. Do
+      NOT invent or extrapolate specifics the context does not state -- exact
+      version numbers, file paths, configuration mechanisms, or absolute claims
+      such as "impossible"/"always". If a detail is not directly supported, omit
+      it rather than assert it: an untruthful specific is penalized more harshly
+      than a missing one. Do not mirror a one-sided framing in the retrieved
+      passages as established fact -- give the balanced, mainstream-correct
+      answer. When a directly relevant passage is missing, do NOT refuse or say
+      "the context does not contain..." -- answer as accurately as you can using
+      only what the context supports plus well-established general knowledge.
     - Write a clear, self-contained answer in natural prose, using short lists or
       commands only when the question calls for them.
     - Output the actual answer text. Never output a placeholder such as
@@ -104,13 +151,39 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     def search(self, query, k=5):
         return self.retriever.search(query, k=k)
 
+    def _safe_query(self, hop, context, question):
+        """Generate a search query, tolerating an empty/unparseable LM output.
+
+        The reasoning LM occasionally emits an empty body (e.g. "{}") that
+        DSPy's JSON adapter cannot parse, raising AdapterParseError before a
+        query is produced. Falling back to the raw question keeps retrieval
+        working for this hop instead of crashing the whole example (a crash
+        scores 0 on a row that retrieval could otherwise have answered).
+        """
+        try:
+            return self.generate_query[hop](context=context, question=question).query
+        except Exception:
+            return question
+
     def forward(self, question):
         context = []
         for hop in range(self.max_hops):
-            query = self.generate_query[hop](context=context, question=question).query
+            query = self._safe_query(hop, context, question)
             passages = self.search(query, k=self.num_docs)
             context = deduplicate(context + passages)
-        pred = self.respond(context=context, question=question)
+        # The main answer predictor (ChainOfThought) can raise AdapterParseError
+        # when the LM returns an empty/unparseable body (e.g. "{}"), which aborts
+        # the example and scores 0. Retry once (caching is disabled, so this is a
+        # fresh LM call); if it still fails, synthesize an empty prediction so the
+        # degenerate-output guard below rewrites a best-effort answer from the
+        # context rather than losing the whole row.
+        try:
+            pred = self.respond(context=context, question=question)
+        except Exception:
+            try:
+                pred = self.respond(context=context, question=question)
+            except Exception:
+                pred = dspy.Prediction(reasoning="", response="")
         # Guard against degenerate LM outputs (an empty response or a leaked
         # template placeholder such as "{response}"): recover the answer by
         # rewriting it from the (usually valid) reasoning + context. These
@@ -119,10 +192,19 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
             reasoning = getattr(pred, "reasoning", "")
             if _is_degenerate(reasoning):
                 reasoning = ""
-            rewritten = self.rewrite(
-                context=context, question=question, reasoning=reasoning or ""
-            )
-            pred.response = rewritten.response
+            try:
+                rewritten = self.rewrite(
+                    context=context, question=question, reasoning=reasoning or ""
+                )
+                pred.response = rewritten.response
+            except Exception:
+                # The repair call itself failed to parse: leave whatever the
+                # predictor produced (possibly empty). We never let a parse
+                # exception escape -- a low-scored row is still better than a
+                # crash that aborts scoring, and the rewrite path rarely fails
+                # because it uses the simpler dspy.Predict adapter.
+                if _is_degenerate(getattr(pred, "response", None)):
+                    pred.response = ""
         # Carry the retrieved passages on the prediction so downstream metrics
         # (e.g. faithfulness/groundedness) can see the evidence the answer was
         # generated from. Mirrors hover_program.py's dspy.Prediction(retrieved_docs=...).
