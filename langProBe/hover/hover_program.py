@@ -176,6 +176,36 @@ class ClaimAnalysis(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="Wikipedia-style search queries — proper-noun names — for entities the claim refers to")
 
 
+class DisambiguateEntity(dspy.Signature):
+    """A bare Wikipedia entity name is AMBIGUOUS: querying it retrieved several disambiguated
+    articles of DIFFERENT types (films, games, other topics) but NOT the intended article.
+    Determine the intended article's TYPE from the claim and the retrieved snippets, then output
+    the query WITH the correct Wikipedia type parenthetical so ColBERT retrieves that exact article.
+
+    This is PURE DOCUMENT RETRIEVAL — do NOT verify, fact-check, or judge the claim.
+
+    How to find the type:
+    - Scan the context snippets for each ambiguous name; the surrounding words usually state its
+      type:
+        "the glam-style metal band It's Alive"  -> type is band  -> "It's Alive (band)"
+        "the 1974 film It's Alive"              -> type is film  -> "It's Alive (film)"
+        "Crank, the 1994 album by ..."          -> type is album -> "Crank (album)"
+    - Common parentheticals: (band), (film), (song), (album), (TV series), (video game),
+      (novel), (book), (magazine), (play), (miniseries), (franchise).
+    - If the type is genuinely uncertain between two plausible types, output BOTH typed variants
+      as separate queries. If you cannot determine the type at all, output an empty list.
+
+    Rules:
+    - Each query is "<bare name> (<type>)" exactly, matching Wikipedia's disambiguation convention.
+    - Do NOT output the bare name again; do NOT output descriptions, roles, or full sentences.
+    - Output one typed query per ambiguous name (or two if the type is uncertain).
+    """
+    claim = dspy.InputField(desc="The claim")
+    ambiguous_names = dspy.InputField(desc="Each ambiguous bare name followed by the disambiguated titles retrieved for it")
+    context_snippets = dspy.InputField(desc="Retrieved snippets that may state each entity's type, '<title> | <snippet>' one per line")
+    queries: list[str] = dspy.OutputField(desc='Type-disambiguated queries like "It\'s Alive (band)"; empty list if type unknown')
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -194,6 +224,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
         self.analyze_claim = dspy.ChainOfThought(ClaimAnalysis)
+        self.disambiguate = dspy.ChainOfThought(DisambiguateEntity)
 
     @staticmethod
     def _title(doc):
@@ -260,6 +291,52 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _safe_analyze(self, claim):
         try:
             return getattr(self.analyze_claim(claim=claim), "queries", None) or []
+        except Exception:
+            return []
+
+    def _ambiguous(self, query_lists):
+        """Find bare queries (no parenthetical) that retrieved >=2 disambiguated variants of the
+        form '<query> (<specifier>)' (excluding disambiguation pages) but no exact-title match.
+        Such names are shared by multiple Wikipedia articles, so the bare query likely retrieved
+        the wrong one; a type-disambiguated query (e.g. 'It's Alive (band)') is needed."""
+        amb = []
+        for q, lst in query_lists:
+            ql = q.strip().lower()
+            if "(" in ql or not lst:
+                continue
+            if any(self._title(d) == ql for d in lst):
+                continue
+            variants = [d for d in lst
+                        if self._title(d).startswith(ql + " (") and "disambig" not in self._title(d)]
+            if len(variants) >= 2:
+                amb.append((q, variants))
+        return amb
+
+    def _safe_disambig(self, claim, ambiguous, all_docs):
+        try:
+            names_lc = {q.strip().lower() for q, _ in ambiguous}
+            focused = []
+            seen_t = set()
+            for d in all_docs:
+                t = self._title(d)
+                if t in seen_t:
+                    continue
+                seen_t.add(t)
+                blob = d.lower()
+                if any(n in blob for n in names_lc):
+                    parts = d.split(" | ", 1)
+                    title = parts[0]
+                    snippet = parts[1][:1500].replace("\n", " ") if len(parts) > 1 else ""
+                    focused.append(f"{title} | {snippet}")
+            context = "\n".join(focused[:40])
+            block = "\n".join(
+                f"NAME: {q}\nVARIANTS: " + "; ".join(self._title(d) for d in variants)
+                for q, variants in ambiguous
+            )
+            r = self.disambiguate(
+                claim=claim, ambiguous_names=block, context_snippets=context
+            )
+            return getattr(r, "queries", None) or []
         except Exception:
             return []
 
@@ -375,6 +452,29 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             other_lists.extend(hop2_lists)
             for _, lst in hop2_lists:
                 all_docs.extend(lst)
+
+        # Disambiguation refinement: a bare entity name (e.g. "It's Alive") may retrieve several
+        # wrong-type disambiguated articles (films, games) but not the intended one (the band).
+        # Detect such ambiguous queries and issue type-disambiguated variants ("It's Alive (band)")
+        # so ColBERT surfaces the targeted article. The new results are MERGED INTO the original
+        # bare query's list (rather than added as new query-lists) so the targeted article becomes
+        # that query's headline WITHOUT creating an extra headline slot that could displace other
+        # golds under the 21-doc cap. Placed before hop3 so later hops can expand on the new article.
+        amb = self._ambiguous(other_lists)
+        if amb:
+            list_for = {q: lst for q, lst in other_lists}
+            typed_q = self._build_queries(
+                self._safe_disambig(claim, amb, all_docs), seen_queries, 8
+            )
+            if typed_q:
+                import re as _re
+                for tq, lst in self._retrieve_many(typed_q):
+                    all_docs.extend(lst)
+                    bare = _re.sub(r"\s*\([^()]*\)\s*$", "", tq).strip()
+                    target = list_for.get(bare)
+                    if target is not None:
+                        # Prepend in place so the bare query's headline picks up the typed article.
+                        target[0:0] = lst
 
         # Hop 3: expansion that mines hop 2's newly retrieved snippets for further entities
         # (e.g. a song article naming its video director, an album article naming its band).
