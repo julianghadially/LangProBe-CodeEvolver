@@ -6,11 +6,14 @@ from .RAGQAArenaTech_utils import GenerateSearchQuery
 
 # Leaked template placeholders the reasoning model occasionally echoes verbatim
 # instead of producing real content (seen as full-credit losses in traces):
-# e.g. "{response}", "{reasoning}", "(actual answer)", "[response]".
+# e.g. "{response}", "{reasoning}", "(actual answer)", "[response]", "(contents)".
 _CURLY_PLACEHOLDER_RE = re.compile(r"^\s*\{\s*[a-zA-Z_][\w]*\s*\}\s*$")
 _BRACKETED_RE = re.compile(r"^\s*[\[(<]\s*[a-zA-Z_][\w\s]*\s*[\])>]\s*$")
 _SLOT_WORD_RE = re.compile(
-    r"\b(answer|response|output|result|reasoning|placeholder|insert)\b", re.I
+    r"\b(answer|answers|response|responses|output|result|results|reasoning|"
+    r"placeholder|insert|contents|content|summary|details|description|snippet|"
+    r"text|body|value)\b",
+    re.I,
 )
 
 # Vocabulary of short context-referral / placeholder fragments the reasoning
@@ -90,23 +93,31 @@ class GenerateAnswer(dspy.Signature):
       frequently impossible, include that condition as part of the answer. Do not
       give an unqualified "yes"/"no" when the context qualifies it. Include ONLY
       conditions the context actually states; never invent limitations or caveats.
-    - Be COMPLETE on supported content. When the question asks where to find
-      something, how to do something, or asks for options/tools/methods, cover EACH
-      distinct relevant method, location, or option the retrieved context explicitly
-      states -- do not omit a supported method merely to be brief, and when a method
-      has exact command syntax, state it verbatim. But include ONLY what the context
-      actually states; never invent a method, tool, step, or workaround the context
-      does not mention, and do not pad the answer with methods, tools, or whole
-      sections the context does not state.
+    - Prefer a FOCUSED, reliable answer over an exhaustive one. Lead with the most
+      direct, well-supported method or answer to the question as stated; a single
+      canonical command or method is better than a longer list. Only enumerate
+      multiple distinct methods/tools/options when BOTH are true: the question
+      explicitly asks for options or "all ways", AND the retrieved context clearly
+      and reliably supports each one. Do NOT pad the answer with every vaguely
+      related tool, obscure web service, or tangential workaround the context
+      happens to mention -- omit marginal, dubious, or low-quality extras even when
+      they appear in the context, because an untruthful or unreliable specific is
+      judged worse than a missing one. When a method has exact command syntax the
+      context gives, state it verbatim. Truthfulness and reliability always take
+      priority over completeness.
     - Ground every claim in the retrieved context and do not contradict it. Do
       NOT invent or extrapolate specifics the context does not state -- exact
       version numbers, file paths, configuration mechanisms, absolute claims such as
       "impossible"/"always", OR plausible-but-unsupported workarounds, third-party
-      tools, and extra steps the context does not mention. When unsure whether a
-      detail is supported, OMIT it: a focused, faithful answer is preferred over one
-      padded with marginal possibilities, and an untruthful specific is penalized
-      more harshly than a missing one. Match the STRENGTH of your claim to the
-      context: if it says "superseded"/"preferred"/"may", do not escalate to
+      tools, and extra steps the context does not mention. Be SELECTIVE about which
+      context content to include: not everything the passages mention belongs in the
+      answer -- prefer the canonical, mainstream, well-corroborated method and drop
+      peripheral, one-off, or low-quality suggestions even if the context cites them.
+      When unsure whether a detail is supported, OMIT it: a focused, faithful answer
+      is preferred over one padded with marginal possibilities, and an untruthful
+      specific is penalized more harshly than a missing one. Match the STRENGTH of
+      your claim to the context: if it says "superseded"/"preferred"/"may", do not
+      escalate to
       "deprecated"/"must"/"will". If the context ties a command or setting to a
       specific OS/app version and the question is about a different version, do not
       assert it applies -- say the context does not confirm it for that version. Do
@@ -115,6 +126,11 @@ class GenerateAnswer(dspy.Signature):
       passage is missing, do NOT refuse or say "the context does not contain..."
       -- answer as accurately as you can using only what the context supports plus
       well-established general knowledge.
+    - For requests that solicit methods to attack, hijack, break, or otherwise harm
+      systems or people, give a brief, high-level account of the general principles
+      and the defensive context (why it matters, how it is mitigated) -- do NOT give
+      a detailed step-by-step actionable playbook. Describe what is conceptually
+      possible without enumerating concrete exploit steps.
     - Write a clear, self-contained answer in natural prose, using short lists or
       commands only when the question calls for them. Do not add citation markers
       (e.g. [1], "(source 1)"); write plain prose with no source references.
