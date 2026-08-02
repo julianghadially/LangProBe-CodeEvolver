@@ -107,8 +107,21 @@ class QueryExpansion(dspy.Signature):
     ## Rules
     - Each query targets ONE entity, is its exact Wikipedia-style title/name, short (1-5 words).
     - Do NOT write full sentences, questions, or justification/verification text.
-    - Do NOT repeat a query whose name already matches a retrieved document TITLE, and do not
-      repeat any query you can see was already issued (it will be filtered, so pick a NEW entity).
+    - The `issued_queries` field lists EVERY query already issued (lowercased). Do NOT repeat any
+      of them — they are filtered out, so repeating them wastes the query budget. Instead mine NEW
+      proper nouns from snippets that are NOT in issued_queries and NOT already a retrieved TITLE.
+      Scan every snippet (especially freshly retrieved ones) for proper nouns the claim depends on
+      and output a query for EACH new one. A single snippet often lists MANY such names (full cast,
+      every band member, every partner) — output ALL of them, not just the first.
+    - If the claim specifies a MEDIUM/TYPE for an entity a snippet names (film, song, album, comic
+      book, video game, TV series, novel, band, play, musical), append the Wikipedia type
+      parenthetical so ColBERT retrieves the typed article instead of a different-type article
+      sharing the bare name:
+        - claim says "film" + snippet names "The Grapes of Wrath" -> "The Grapes of Wrath (film)"
+        - claim says "comic book" + the publication article is meant -> "Archie (comic book)"
+        - claim says "song" + snippet names "Figure It Out" -> "Figure It Out (song)"
+      Do this EVEN IF the bare name already has a retrieved article of a different type (e.g. the
+      novel) — the typed article is a DISTINCT supporting document.
     - Cover DISTINCT missing entities; queries must be non-redundant.
     - NEVER output a role/description ("director of X", "host of X", "remake of X", "winner of X").
       Always output a PROPER-NOUN NAME. If you cannot name it from a snippet or knowledge, SKIP it
@@ -118,6 +131,7 @@ class QueryExpansion(dspy.Signature):
     """
     claim = dspy.InputField(desc="The claim to find supporting documents for")
     retrieved_docs = dspy.InputField(desc="Documents retrieved so far as '<title> | <snippet>', one per line")
+    issued_queries = dspy.InputField(desc="Every search query already issued (lowercased); do NOT repeat any — mine NEW proper nouns from snippets instead")
     queries: list[str] = dspy.OutputField(desc="Concise Wikipedia-style search queries — EXACT proper-noun names mined from snippets — for still-missing documents")
 
 
@@ -157,8 +171,8 @@ class ClaimAnalysis(dspy.Signature):
           -> "Enkianthus").
     - Infer the publication/line a work belongs to. A character and the publication it appears in
       are DISTINCT articles and BOTH may be required: a "comic book character originally written by
-      X" -> output BOTH the character article ("Archie Andrews") AND the comic book's article
-      ("Archie comic book"); an album -> also the artist's article; a song -> also the album.
+      X" -> output BOTH the character article ("Archie Andrews") AND the comic book series article
+      ("Archie (comic book)"); an album -> also the artist's article; a song -> also the album.
     - ENUMERATE ALL members of a referenced group/movement/category/trend. When the claim says
       "another writer associated with the Nouveau Roman trend along with Alain Robbe-Grillet",
       output EVERY member of that group you can name (Claude Simon, Nathalie Sarraute, Marguerite
@@ -228,7 +242,8 @@ class LinkingEntity(dspy.Signature):
     all share; that title is the linking entity.
       - "actor A and actor B starred in the same film" -> the single film both A and B appear in.
       - "the comic book character that first appeared in magazine M" -> the comic book / comic
-        strip series the character headlines (separate article from the character).
+        strip series the character headlines, as its OWN article with the type parenthetical, e.g.
+        "Archie (comic book)" (separate from the character article "Archie Andrews").
       - "X used his inheritance to fund the founding of the city" -> the city, AND possibly X's
         SPOUSE (a founder's spouse is often a separate supporting article).
       - "the recording in Y's discography whose choreographer was born in 1912" -> the specific
@@ -329,9 +344,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         except Exception:
             return []
 
-    def _safe_expand(self, claim, context):
+    def _safe_expand(self, claim, context, issued_queries):
         try:
-            return getattr(self.expand_queries(claim=claim, retrieved_docs=context), "queries", None) or []
+            return getattr(self.expand_queries(claim=claim, retrieved_docs=context, issued_queries=issued_queries), "queries", None) or []
         except Exception:
             return []
 
@@ -505,7 +520,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # what the claim refers to), then snippet-mined expansion queries.
         context = self._context_docs(all_docs)
         hop2_q = self._build_queries(
-            claim_ents + self._safe_analyze(claim) + self._safe_expand(claim, context),
+            claim_ents + self._safe_analyze(claim) + self._safe_expand(claim, context, sorted(seen_queries)),
             seen_queries, self.hop2_queries
         )
         # Add ordinal spelling variants (e.g. "3rd Pursuit Group" -> "3d Pursuit Group") —
@@ -551,7 +566,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # (e.g. a song article naming its video director, an album article naming its band).
         context = self._context_docs(all_docs)
         hop3_q = self._build_queries(
-            self._safe_expand(claim, context), seen_queries, self.hop3_queries
+            self._safe_expand(claim, context, sorted(seen_queries)), seen_queries, self.hop3_queries
         )
         if hop3_q:
             hop3_lists = self._retrieve_many(hop3_q)
@@ -562,7 +577,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Hop 4: final expansion pass to catch deeply-nested entities
         context = self._context_docs(all_docs)
         hop4_q = self._build_queries(
-            self._safe_expand(claim, context), seen_queries, self.hop4_queries
+            self._safe_expand(claim, context, sorted(seen_queries)), seen_queries, self.hop4_queries
         )
         if hop4_q:
             hop4_lists = self._retrieve_many(hop4_q)
