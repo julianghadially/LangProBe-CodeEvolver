@@ -1,3 +1,5 @@
+import re
+
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
@@ -5,32 +7,34 @@ MAX_RETRIEVED_DOCS = 21
 
 
 class QueryExpansion(dspy.Signature):
-    """Given a claim and a summary of the Wikipedia documents retrieved so far, generate
-    diverse search queries to find the remaining documents needed to verify the claim.
+    """You are retrieving Wikipedia documents to support a factual claim. You are given the
+    claim and the documents retrieved so far (title + short snippet, one per line).
 
-    Each query must target a DIFFERENT entity, attribute, or relationship that is mentioned
-    or implied in the claim but not yet covered by retrieved documents. Use the most specific
-    entity names available (people, places, organizations, works, dates). The queries must be
-    non-redundant with one another so that different queries retrieve different documents.
+    Output concise SEARCH QUERIES that will retrieve the documents STILL MISSING.
+
+    How to decide what is missing:
+    1. Enumerate every distinct entity the claim depends on — people, works, organizations,
+       places, events, concepts. Some are named in the claim; many are only IMPLIED and must be
+       discovered (e.g. "the winner of X", "the founder of Y", "the school serving place Z").
+    2. READ the retrieved snippets: they frequently NAME the missing entities. An award article
+       lists its recipients; a tournament article names the winner; a school article names the
+       town it serves; a film article names its cast. Extract those names.
+    3. Cross-reference the claim with those names. If the claim says "the man who founded a fast
+       food chain in Georgia was given the President's Volunteer Service Award" and a retrieved
+       snippet lists "S. Truett Cathy" as an awardee, then "S. Truett Cathy" and "Chick-fil-A"
+       are missing entities to retrieve.
+
+    Rules:
+    - Each query targets ONE entity and is the entity's exact Wikipedia-style title/name, short
+      (1-5 words), e.g. "Amanda Wyss", "Lisa Raymond", "S. Truett Cathy", "Chick-fil-A",
+      "Vision of the Future", "Bass (voice type)", "Garden City South, New York".
+    - Do NOT write full sentences, questions, or verification/justification text.
+    - Do NOT repeat a query whose name already matches a retrieved document title.
+    - Cover DISTINCT missing entities; queries must be non-redundant with one another.
     """
     claim = dspy.InputField(desc="The claim to find supporting documents for")
-    context = dspy.InputField(desc="Summary of the documents retrieved so far")
-    queries: list[str] = dspy.OutputField(desc="A list of diverse, non-redundant search queries")
-
-
-class DocReranker(dspy.Signature):
-    """Below is a numbered list of candidate Wikipedia documents (title + snippet) retrieved
-    for a claim. Select the documents most relevant to verifying the claim — i.e. documents
-    about the entities mentioned or implied in the claim that could supply supporting facts.
-
-    Prefer documents whose titles correspond to entities named in the claim, and ensure the
-    selected set covers the distinct entities in the claim rather than many documents about a
-    single entity. Return the 1-based index numbers of the most relevant documents, most
-    relevant first.
-    """
-    claim = dspy.InputField(desc="The claim to find supporting documents for")
-    candidate_passages = dspy.InputField(desc="Numbered list of candidate documents (1-based index, then title)")
-    selected_indices: list[int] = dspy.OutputField(desc="1-based index numbers of the most relevant documents, most relevant first")
+    retrieved_docs = dspy.InputField(desc="Documents retrieved so far as '<title> | <snippet>', one per line")
+    queries: list[str] = dspy.OutputField(desc="Up to 4 concise entity-name search queries, one per missing entity")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -42,18 +46,24 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 10
+        self.k = 20
         self.num_queries = 4
-        self._use_reranker = True
+        self.max_per_cluster = 3
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
-        self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
-        self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
-        self.reranker = dspy.ChainOfThought(DocReranker)
 
     @staticmethod
     def _title(doc):
         return doc.split(" | ", 1)[0].strip().lower()
+
+    @staticmethod
+    def _cluster_key(title):
+        t = title.lower()
+        t = re.sub(r"\([^)]*\)", "", t)
+        t = re.sub(r"^\d{4}[\u2013\-]\s*\d{0,4}\s*", "", t)  # leading "1979-80 " or "2005-"
+        t = re.sub(r"^\d{4}\s+", "", t)  # leading "2005 "
+        t = re.sub(r"[^a-z0-9]+", " ", t).strip()
+        return t
 
     @staticmethod
     def _round_robin_dedup(lists):
@@ -70,84 +80,66 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                         out.append(doc)
         return out
 
-    def _retrieve_many(self, queries):
-        return [self.retrieve_k(q).passages for q in queries]
-
-    def _build_queries(self, raw, claim, fallback_extra):
-        seen = set()
+    def _diversity_cap(self, docs, max_per_cluster):
+        counts = {}
         out = []
-        for q in (raw or []):
-            q = (q or "").strip()
-            if q and q.lower() not in seen:
-                seen.add(q.lower())
-                out.append(q)
-        for q in [claim, fallback_extra]:
-            q = (q or "").strip()
-            if q and q.lower() not in seen and len(out) < self.num_queries:
-                seen.add(q.lower())
-                out.append(q)
-        return out[: self.num_queries] if out else [claim]
-
-    def _rerank(self, claim, candidates):
-        n = len(candidates)
-        pool = candidates[:60] if n > 60 else candidates
-        npool = len(pool)
-        numbered = [f"{i + 1}. {pool[i].split(' | ', 1)[0]}" for i in range(npool)]
-        try:
-            res = self.reranker(claim=claim, candidate_passages="\n".join(numbered))
-            indices = getattr(res, "selected_indices", None) or []
-        except Exception:
-            indices = []
-
-        seen_idx = set()
-        ordered = []
-        for idx in indices:
-            try:
-                i = int(idx) - 1
-            except (ValueError, TypeError):
-                continue
-            if 0 <= i < npool and i not in seen_idx:
-                seen_idx.add(i)
-                ordered.append(pool[i])
-
-        ordered += [pool[i] for i in range(npool) if i not in seen_idx]
-        ordered += candidates[npool:]
-
-        seen_t = set()
-        out = []
-        for d in ordered:
-            t = self._title(d)
-            if t not in seen_t:
-                seen_t.add(t)
+        for d in docs:
+            key = self._cluster_key(d.split(" | ", 1)[0])
+            if counts.get(key, 0) < max_per_cluster:
+                counts[key] = counts.get(key, 0) + 1
                 out.append(d)
         return out
 
+    def _retrieve_many(self, queries):
+        return [self.retrieve_k(q).passages for q in queries]
+
+    def _context_docs(self, docs, n=25, max_snippet=350):
+        seen = set()
+        uniq = []
+        for d in docs:
+            t = self._title(d)
+            if t not in seen:
+                seen.add(t)
+                uniq.append(d)
+        lines = []
+        for d in uniq[:n]:
+            parts = d.split(" | ", 1)
+            title = parts[0]
+            snippet = parts[1][:max_snippet].replace("\n", " ") if len(parts) > 1 else ""
+            lines.append(f"{title} | {snippet}")
+        return "\n".join(lines)
+
+    def _build_queries(self, raw, seen_queries, limit):
+        out = []
+        for q in (raw or []):
+            q = (q or "").strip()
+            ql = q.lower()
+            if q and ql not in seen_queries:
+                seen_queries.add(ql)
+                out.append(q)
+            if len(out) >= limit:
+                break
+        return out
+
     def forward(self, claim):
+        seen_queries = {claim.strip().lower()}
         hop1 = self.retrieve_k(claim).passages
 
-        summary_1 = self.summarize1(claim=claim, passages=hop1).summary
+        all_docs = list(hop1)
+        retrieval_lists = [hop1]
 
-        queries2 = self.expand_queries(claim=claim, context=summary_1).queries
-        queries2 = self._build_queries(queries2, claim, summary_1)
-        hop2_lists = self._retrieve_many(queries2)
+        for _ in range(2):  # two entity-discovery expansion hops
+            context = self._context_docs(all_docs)
+            raw = self.expand_queries(claim=claim, retrieved_docs=context).queries
+            queries = self._build_queries(raw, seen_queries, self.num_queries)
+            if not queries:
+                break
+            hop_lists = self._retrieve_many(queries)
+            retrieval_lists.extend(hop_lists)
+            for lst in hop_lists:
+                all_docs.extend(lst)
 
-        all_hop2 = [d for lst in hop2_lists for d in lst]
-        summary_2 = self.summarize2(
-            claim=claim, context=summary_1, passages=all_hop2
-        ).summary
-
-        queries3 = self.expand_queries(claim=claim, context=summary_2).queries
-        queries3 = self._build_queries(queries3, claim, summary_2)
-        hop3_lists = self._retrieve_many(queries3)
-
-        retrieval_lists = [hop1] + hop2_lists + hop3_lists
         candidates = self._round_robin_dedup(retrieval_lists)
-
-        if len(candidates) <= MAX_RETRIEVED_DOCS:
-            final = candidates
-        elif getattr(self, "_use_reranker", True):
-            final = self._rerank(claim, candidates)[:MAX_RETRIEVED_DOCS]
-        else:
-            final = candidates[:MAX_RETRIEVED_DOCS]
-
+        candidates = self._diversity_cap(candidates, self.max_per_cluster)
+        final = candidates[:MAX_RETRIEVED_DOCS]
         return dspy.Prediction(retrieved_docs=final)
