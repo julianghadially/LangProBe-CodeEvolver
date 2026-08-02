@@ -206,6 +206,52 @@ class DisambiguateEntity(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc='Type-disambiguated queries like "It\'s Alive (band)"; empty list if type unknown')
 
 
+class LinkingEntity(dspy.Signature):
+    """The claim names several entities that share an UNNAMED work or relation — a movie, film,
+    musical, comic book / comic strip, album, song, TV show, band, book, video game, a city a
+    person founded, a person's spouse or relative, a director/creator of a work, etc. The claim
+    refers to this unnamed entity only RELATIONALLY ("the movie X starred in", "the comic book
+    character", "the recording in the discography", "the city X founded", "the spouse of X",
+    "the band behind the album", "the director of X").
+
+    Identify the SINGLE Wikipedia article that is this unnamed LINKING entity — the work or
+    person that the named entities in the claim SHARE. Use world knowledge.
+
+    This is PURE DOCUMENT RETRIEVAL — do NOT verify whether the claim is true. Just NAME the
+    linking entity.
+
+    ## The intersection is the key signal
+    Name the work/relation that ALL (or the relevant pair) of the named entities share, NOT a
+    work that only ONE of them is famous for. If a film starring actor A also features actors B
+    and C, that film is the linking entity — even if A is far more famous for other films. Walk
+    each named person's filmography / discography / credits until you find the ONE title they
+    all share; that title is the linking entity.
+      - "actor A and actor B starred in the same film" -> the single film both A and B appear in.
+      - "the comic book character that first appeared in magazine M" -> the comic book / comic
+        strip series the character headlines (separate article from the character).
+      - "X used his inheritance to fund the founding of the city" -> the city, AND possibly X's
+        SPOUSE (a founder's spouse is often a separate supporting article).
+      - "the recording in Y's discography whose choreographer was born in 1912" -> the specific
+        cast album / musical / recording in Y's discography.
+
+    ## Also infer unnamed immediate family / co-creators
+    When a claim about a person's founding, marriage, or inheritance implies a SPOUSE,
+    co-founder, or close relative, name that relative too (a founder's wife/husband, the
+    co-writer of a work, etc., are common separate supporting articles).
+
+    Rules:
+    - Output proper-noun Wikipedia titles ONLY, with the disambiguator parenthetical when needed
+      (e.g. "Some Film (film)", "Some Musical (musical)", "Some Comic (comic book)"). Never
+      output a description, role, or full sentence.
+    - If several linking entities are plausible, output EACH as a separate query.
+    - If the claim already names every entity it depends on (no unnamed linking entity), output
+      an EMPTY list. Do NOT invent unrelated entities.
+    """
+    claim = dspy.InputField(desc="The claim")
+    named_entities = dspy.InputField(desc="Comma-separated entities explicitly named in the claim")
+    queries: list[str] = dspy.OutputField(desc="Wikipedia titles of the unnamed linking entities, or an empty list if the claim names everything")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -225,6 +271,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
         self.analyze_claim = dspy.ChainOfThought(ClaimAnalysis)
         self.disambiguate = dspy.ChainOfThought(DisambiguateEntity)
+        self.linking = dspy.ChainOfThought(LinkingEntity)
 
     @staticmethod
     def _title(doc):
@@ -291,6 +338,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _safe_analyze(self, claim):
         try:
             return getattr(self.analyze_claim(claim=claim), "queries", None) or []
+        except Exception:
+            return []
+
+    def _safe_linking(self, claim, entities):
+        try:
+            ents = [e for e in (entities or []) if e]
+            r = self.linking(claim=claim, named_entities=", ".join(ents))
+            return getattr(r, "queries", None) or []
         except Exception:
             return []
 
@@ -427,8 +482,24 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # they land at rank 1. Entities already in hop1's top results are kept by _select, so we
         # skip them to avoid adding redundant query-lists.
         hop1_top_titles = {self._title(d) for d in hop1[: self.hop1_keep]}
-        claim_ents = [e for e in self._safe_entities(claim)
+        raw_entities = self._safe_entities(claim)
+        claim_ents = [e for e in raw_entities
                       if self._title(e) not in hop1_top_titles]
+
+        # Linking-entity inference: a claim often refers to an UNNAMED work/person that the named
+        # entities share (the film several actors appeared in, the comic book a character
+        # headlines, the spouse of a named founder, the recording in a discography). The general
+        # ClaimAnalysis/expansion prompts frequently miss these because the gold is the
+        # INTERSECTION of the named entities' credits, not any single person's most-famous work.
+        # This focused module names that intersection. It is SELF-GATING: for claims that already
+        # name every entity, it returns an empty list, so passing examples incur no extra searches.
+        # Run before hop2 so hop2's snippet-mining expansion sees the linking articles' snippets.
+        linking_q = self._build_queries(self._safe_linking(claim, raw_entities), seen_queries, 4)
+        if linking_q:
+            linking_lists = self._retrieve_many(linking_q)
+            other_lists.extend(linking_lists)
+            for _, lst in linking_lists:
+                all_docs.extend(lst)
 
         # Hop 2: claim-named entities first, then claim analysis queries (LM knowledge to infer
         # what the claim refers to), then snippet-mined expansion queries.
