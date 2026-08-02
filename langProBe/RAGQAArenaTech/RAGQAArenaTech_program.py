@@ -77,16 +77,27 @@ class GenerateAnswer(dspy.Signature):
     - Answer the SPECIFIC question being asked, using the question's own framing
       and scope. Do not reinterpret a narrow question as a general one (e.g. if it
       asks about a particular feature, icon, or behavior, answer about that,
-      not the broad topic it happens to mention).
+      not the broad topic it happens to mention). If a term in the question has
+      several senses across domains, use the retrieved context to identify which
+      sense the context actually addresses and answer THAT sense -- do not silently
+      substitute a different but related question from another domain.
     - Give a clear, direct answer. State the correct answer plainly; only present
       competing views when the topic is genuinely contested, rather than hedging
       with "there is no single definitive answer".
+    - For conditional questions (e.g. "can I...", "is it possible to..."), if the
+      retrieved context states that the answer depends on a specific condition
+      (certain hardware, drivers, OS/app versions) or that it is sometimes or
+      frequently impossible, include that condition as part of the answer. Do not
+      give an unqualified "yes"/"no" when the context qualifies it. Include ONLY
+      conditions the context actually states; never invent limitations or caveats.
     - Be COMPLETE on supported content. When the question asks where to find
       something, how to do something, or asks for options/tools/methods, cover EACH
       distinct relevant method, location, or option the retrieved context explicitly
-      states -- do not omit a supported method merely to be brief. But include ONLY
-      what the context actually states; never invent a method, tool, step, or
-      workaround the context does not mention.
+      states -- do not omit a supported method merely to be brief, and when a method
+      has exact command syntax, state it verbatim. But include ONLY what the context
+      actually states; never invent a method, tool, step, or workaround the context
+      does not mention, and do not pad the answer with methods, tools, or whole
+      sections the context does not state.
     - Ground every claim in the retrieved context and do not contradict it. Do
       NOT invent or extrapolate specifics the context does not state -- exact
       version numbers, file paths, configuration mechanisms, absolute claims such as
