@@ -39,7 +39,8 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
             api_base=GMI_API_BASE,
             api_key=os.environ["GMI_API_KEY"],
             reasoning_effort="high",
-            allowed_openai_params=["reasoning_effort"],
+            temperature=0.0,
+            allowed_openai_params=["reasoning_effort", "temperature"],
         )
 
         self.rm = CountingRM(dspy.ColBERTv2(url=COLBERT_URL))

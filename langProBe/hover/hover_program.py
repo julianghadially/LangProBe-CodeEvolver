@@ -60,6 +60,8 @@ class QueryExpansion(dspy.Signature):
       - A performer's show snippet         -> mine the VENUE too: "...at the Luxor Las Vegas"
         -> "Luxor Las Vegas"; "...on Broadway at the Neil Simon Theatre" -> "Neil Simon Theatre".
       - An album snippet naming its band   -> the band's article.
+      - A work's snippet naming its author/director/creator -> that person's article
+        (e.g. "The Broken Tower" by Hart Crane -> query "Hart Crane").
 
     ## Relational patterns: read the NAMED entity's OWN snippet
     When the claim says "the film that X is a remake of", "the director of X", "the host of X",
@@ -157,6 +159,17 @@ class ClaimAnalysis(dspy.Signature):
       are DISTINCT articles and BOTH may be required: a "comic book character originally written by
       X" -> output BOTH the character article ("Archie Andrews") AND the comic book's article
       ("Archie comic book"); an album -> also the artist's article; a song -> also the album.
+    - ENUMERATE ALL members of a referenced group/movement/category/trend. When the claim says
+      "another writer associated with the Nouveau Roman trend along with Alain Robbe-Grillet",
+      output EVERY member of that group you can name (Claude Simon, Nathalie Sarraute, Marguerite
+      Duras, Michel Butor, Robert Pinget, ...), not just one or the group article — the gold
+      document is whichever member matches and you cannot know in advance which. Likewise for "the
+      other X", "a member of Y", "along with Z": list ALL plausible candidates as separate queries.
+    - Infer COMPARATIVE / CONTRASTIVE entities the claim implies but does not name. When the claim
+      says "the busiest airport outside of London", the busiest INSIDE London (Heathrow Airport) is
+      an implied comparator and a supporting document — output it. When the claim says "not another
+      writer", that other writer is implied — name them if you can. A superlative/comparison almost
+      always implies the entity it is measured against; output that implied entity's article too.
     - When unsure, output a query rather than nothing — missing documents cost the entire score.
     """
     claim = dspy.InputField(desc="The claim to analyze")
@@ -204,7 +217,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _retrieve_many(self, queries):
         return [(q, self.retrieve_k(q).passages) for q in queries]
 
-    def _context_docs(self, docs, n=45, max_snippet=1200):
+    def _context_docs(self, docs, n=60, max_snippet=1500):
         seen = set()
         uniq = []
         for d in docs:
@@ -249,6 +262,20 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return getattr(self.analyze_claim(claim=claim), "queries", None) or []
         except Exception:
             return []
+
+    @staticmethod
+    def _ordinal_variants(query):
+        """Generate alternate ordinal spellings. Wikipedia article titles use both '3rd'/'3d' and
+        '2nd'/'2d'; a claim may use one form while the gold title uses the other."""
+        import re
+        variants = []
+        for num, suffix, alt in [("2", "nd", "d"), ("3", "rd", "d")]:
+            pattern = re.compile(re.escape(num + suffix), re.IGNORECASE)
+            if pattern.search(query):
+                variant = pattern.sub(num + alt, query)
+                if variant != query:
+                    variants.append(variant)
+        return variants
 
     def _select(self, hop1, query_lists):
         """Dilution-robust selection. Keep each query's EXACT-title match if one was retrieved
@@ -333,6 +360,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             claim_ents + self._safe_analyze(claim) + self._safe_expand(claim, context),
             seen_queries, self.hop2_queries
         )
+        # Add ordinal spelling variants (e.g. "3rd Pursuit Group" -> "3d Pursuit Group") —
+        # Wikipedia titles use both forms and ColBERT won't match across the spelling difference.
+        hop2_variants = []
+        for q in hop2_q:
+            for v in self._ordinal_variants(q):
+                vl = v.lower()
+                if vl not in seen_queries:
+                    seen_queries.add(vl)
+                    hop2_variants.append(v)
+        hop2_q = hop2_q + hop2_variants
         if hop2_q:
             hop2_lists = self._retrieve_many(hop2_q)
             other_lists.extend(hop2_lists)
