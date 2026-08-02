@@ -22,8 +22,8 @@ class QueryExpansion(dspy.Signature):
     What "missing" means (read carefully):
     - An entity is COVERED only if one of the retrieved document TITLES is (or matches) that
       entity. An entity merely MENTIONED inside another article's snippet is NOT covered — it
-      still needs its own article. (e.g. if an award snippet lists "S. Truett Cathy" as a
-      recipient but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy" is missing.)
+      still needs its own article. (e.g. if an award snippet lists "S. Truett Cathy" as a recipient
+      but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy" is missing.)
     - Even entities named directly in the claim may NOT have been retrieved yet. Compare the
       retrieved TITLES to the claim; any claim entity with no matching title is missing.
     - Mine the retrieved SNIPPETS for proper nouns the claim depends on but that lack their own
@@ -59,6 +59,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         self.k = 20
         self.hop2_queries = 4
         self.hop3_queries = 3
+        self.hop1_keep = 10
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
@@ -68,7 +69,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return doc.split(" | ", 1)[0].strip().lower()
 
     @staticmethod
-    def _round_robin_dedup(lists):
+    def _round_robin(lists):
         seen = set()
         out = []
         max_len = max((len(lst) for lst in lists), default=0)
@@ -125,20 +126,44 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         except Exception:
             return []
 
+    def _select(self, hop1, other_lists):
+        """Dilution-robust selection: always keep hop1's top docs (claim-named golds land here)
+        and the top hit of every query (directly-targeted / discovered golds land here), then fill
+        the rest with round-robin for breadth. This keeps claim-named golds regardless of how many
+        query-lists are used, so extra queries can't dilute them out."""
+        seen = set()
+        keep = []
+
+        def add(doc):
+            t = self._title(doc)
+            if t not in seen:
+                seen.add(t)
+                keep.append(doc)
+
+        for d in hop1[: self.hop1_keep]:
+            add(d)
+        for lst in other_lists:
+            if lst:
+                add(lst[0])
+        for d in self._round_robin([hop1] + other_lists):
+            if len(keep) >= MAX_RETRIEVED_DOCS:
+                break
+            add(d)
+        return keep[:MAX_RETRIEVED_DOCS]
+
     def forward(self, claim):
         seen_queries = {claim.strip().lower()}
         hop1 = self.retrieve_k(claim).passages
 
         all_docs = list(hop1)
-        retrieval_lists = [hop1]
+        other_lists = []
 
-        # Claim-named entities that are NOT already in hop1's top-2 are queried directly so they
-        # land at rank 1 (guaranteed inclusion despite round-robin dilution from many lists).
-        # Entities already at hop1 rank 1-2 survive dilution on their own, so we skip them to
-        # keep the query count (and dilution) low.
-        hop1_top2 = {self._title(d) for d in hop1[:2]}
+        # Claim-named entities that are NOT already in hop1's top results are queried directly so
+        # they land at rank 1. Entities already in hop1's top results are kept by _select, so we
+        # skip them to avoid adding redundant query-lists.
+        hop1_top_titles = {self._title(d) for d in hop1[: self.hop1_keep]}
         claim_ents = [e for e in self._safe_entities(claim)
-                      if self._title(e) not in hop1_top2]
+                      if self._title(e) not in hop1_top_titles]
 
         # Hop 2: claim-named entities first, then snippet-mined expansion queries.
         context = self._context_docs(all_docs)
@@ -147,7 +172,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         if hop2_q:
             hop2_lists = self._retrieve_many(hop2_q)
-            retrieval_lists.extend(hop2_lists)
+            other_lists.extend(hop2_lists)
             for lst in hop2_lists:
                 all_docs.extend(lst)
 
@@ -159,9 +184,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         )
         if hop3_q:
             hop3_lists = self._retrieve_many(hop3_q)
-            retrieval_lists.extend(hop3_lists)
+            other_lists.extend(hop3_lists)
             for lst in hop3_lists:
                 all_docs.extend(lst)
 
-        final = self._round_robin_dedup(retrieval_lists)[:MAX_RETRIEVED_DOCS]
+        final = self._select(hop1, other_lists)
         return dspy.Prediction(retrieved_docs=final)
