@@ -38,8 +38,22 @@ class QueryExpansion(dspy.Signature):
       - snippet "...ninth season of Deutschland sucht den Superstar" -> "Deutschland sucht den Superstar (season 9)"
       - snippet "...nominated ... in the 24th Hong Kong Film Awards"  -> "24th Hong Kong Film Awards" (NOT "Hong Kong Film Awards")
       - snippet "...won by Ross Case"                    -> "Ross Case"
+      - snippet 'including "Punchlines" and ...'         -> "Punchlines"
     Prefer the SPECIFIC disambiguated title a snippet gives (with its year/ordinal/season) over the
     generic version, because the generic version retrieves the wrong/neighbor article.
+
+    ## Relational patterns: read the NAMED entity's OWN snippet
+    When the claim says "the film that X is a remake of", "the director of X", "the host of X",
+    "the winner of X", "the band behind X", read the snippet of the article titled X (the entity the
+    claim NAMES) — NOT snippets of other, merely-related articles. The original film/host/winner is
+    stated in X's own article. Do NOT substitute a different article's answer.
+
+    ## NEVER pre-filter or dismiss a named entity
+    This is retrieval, not verification. Do NOT decide an entity is "the wrong country/edition/
+    version" and skip it. If a snippet names a proper noun the claim depends on (e.g. a TV show Paul
+    Melba appeared on, even if it seems British), OUTPUT it — the article itself is the supporting
+    document. An extra low-value query costs almost nothing; a MISSED document zeros the entire
+    score. When in doubt, output the query.
 
     ## Map prose references to Wikipedia disambiguated titles
     - "ninth season" -> append "(season 9)"; "season 4" -> "(season 4)".
@@ -110,9 +124,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 25
-        self.hop2_queries = 8
-        self.hop3_queries = 4
-        self.hop4_queries = 3
+        self.hop2_queries = 10
+        self.hop3_queries = 7
+        self.hop4_queries = 6
         self.hop1_keep = 12
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.extract_entities = dspy.Predict(ClaimEntities)
