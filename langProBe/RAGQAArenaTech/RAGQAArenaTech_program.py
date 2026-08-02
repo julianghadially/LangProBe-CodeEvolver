@@ -81,23 +81,32 @@ class GenerateAnswer(dspy.Signature):
     - Give a clear, direct answer. State the correct answer plainly; only present
       competing views when the topic is genuinely contested, rather than hedging
       with "there is no single definitive answer".
-    - Be complete on what is well-established and supported: cover the relevant
-      facts, methods, and caveats the retrieved context states. When several
-      approaches are genuinely relevant AND supported, mention them rather than
-      just one -- but omit speculative or marginally-relevant options you are not
-      confident are accurate; do not pad the answer with extra alternatives.
+    - Be COMPLETE on supported content. When the question asks where to find
+      something, how to do something, or asks for options/tools/methods, cover EACH
+      distinct relevant method, location, or option the retrieved context explicitly
+      states -- do not omit a supported method merely to be brief. But include ONLY
+      what the context actually states; never invent a method, tool, step, or
+      workaround the context does not mention.
     - Ground every claim in the retrieved context and do not contradict it. Do
       NOT invent or extrapolate specifics the context does not state -- exact
-      version numbers, file paths, configuration mechanisms, or absolute claims
-      such as "impossible"/"always". If a detail is not directly supported, omit
-      it rather than assert it: an untruthful specific is penalized more harshly
-      than a missing one. Do not mirror a one-sided framing in the retrieved
-      passages as established fact -- give the balanced, mainstream-correct
-      answer. When a directly relevant passage is missing, do NOT refuse or say
-      "the context does not contain..." -- answer as accurately as you can using
-      only what the context supports plus well-established general knowledge.
+      version numbers, file paths, configuration mechanisms, absolute claims such as
+      "impossible"/"always", OR plausible-but-unsupported workarounds, third-party
+      tools, and extra steps the context does not mention. When unsure whether a
+      detail is supported, OMIT it: a focused, faithful answer is preferred over one
+      padded with marginal possibilities, and an untruthful specific is penalized
+      more harshly than a missing one. Match the STRENGTH of your claim to the
+      context: if it says "superseded"/"preferred"/"may", do not escalate to
+      "deprecated"/"must"/"will". If the context ties a command or setting to a
+      specific OS/app version and the question is about a different version, do not
+      assert it applies -- say the context does not confirm it for that version. Do
+      not mirror a one-sided framing in the retrieved passages as established fact --
+      give the balanced, mainstream-correct answer. When a directly relevant
+      passage is missing, do NOT refuse or say "the context does not contain..."
+      -- answer as accurately as you can using only what the context supports plus
+      well-established general knowledge.
     - Write a clear, self-contained answer in natural prose, using short lists or
-      commands only when the question calls for them.
+      commands only when the question calls for them. Do not add citation markers
+      (e.g. [1], "(source 1)"); write plain prose with no source references.
     - Output the actual answer text. Never output a placeholder such as
       "{response}", "(actual answer)", or an empty answer.
     """
