@@ -47,6 +47,32 @@ class QueryExpansion(dspy.Signature):
     queries: list[str] = dspy.OutputField(desc="Concise entity-name search queries for missing documents")
 
 
+class ClaimAnalysis(dspy.Signature):
+    """Analyze the claim to identify entities, works, or concepts it refers to but does NOT
+    explicitly name — entities that a supporting Wikipedia document would need to cover.
+
+    This is PURE DOCUMENT RETRIEVAL — do NOT verify, fact-check, or judge whether the claim
+    is true. Just identify what the claim is referring to and output Wikipedia-style search
+    queries for those entities.
+
+    Examples of what to infer:
+    - "The actor who starred in an Oscar winning film with Amber Tamblyn" → the film is
+      "127 Hours", so output "127 Hours"
+    - "A genus containing Butein" → the genus is "Dahlia", so output "Dahlia"
+    - "The followup novel to the Heir to the Empire trilogy" → "Vision of the Future"
+    - "The director of Pacific Rim" → "Guillermo del Toro" (if not already named)
+    - "The band behind an album" → the band's name
+
+    Rules:
+    - Each query is a short Wikipedia-style title/name (1-5 words).
+    - Do NOT repeat entities already explicitly named in the claim.
+    - Do NOT verify whether the claim is true. Just identify what it refers to.
+    - When unsure, output a query rather than nothing — missing documents cost the entire score.
+    """
+    claim = dspy.InputField(desc="The claim to analyze")
+    queries: list[str] = dspy.OutputField(desc="Wikipedia-style search queries for entities the claim refers to")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim.
 
@@ -56,13 +82,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 20
-        self.hop2_queries = 4
-        self.hop3_queries = 3
+        self.k = 25
+        self.hop2_queries = 6
+        self.hop3_queries = 4
+        self.hop4_queries = 3
         self.hop1_keep = 10
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
+        self.analyze_claim = dspy.ChainOfThought(ClaimAnalysis)
 
     @staticmethod
     def _title(doc):
@@ -86,7 +114,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _retrieve_many(self, queries):
         return [self.retrieve_k(q).passages for q in queries]
 
-    def _context_docs(self, docs, n=25, max_snippet=400):
+    def _context_docs(self, docs, n=35, max_snippet=500):
         seen = set()
         uniq = []
         for d in docs:
@@ -123,6 +151,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _safe_expand(self, claim, context):
         try:
             return getattr(self.expand_queries(claim=claim, retrieved_docs=context), "queries", None) or []
+        except Exception:
+            return []
+
+    def _safe_analyze(self, claim):
+        try:
+            return getattr(self.analyze_claim(claim=claim), "queries", None) or []
         except Exception:
             return []
 
@@ -165,10 +199,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         claim_ents = [e for e in self._safe_entities(claim)
                       if self._title(e) not in hop1_top_titles]
 
-        # Hop 2: claim-named entities first, then snippet-mined expansion queries.
+        # Hop 2: claim-named entities first, then claim analysis queries (LM knowledge to infer
+        # what the claim refers to), then snippet-mined expansion queries.
         context = self._context_docs(all_docs)
         hop2_q = self._build_queries(
-            claim_ents + self._safe_expand(claim, context), seen_queries, self.hop2_queries
+            claim_ents + self._safe_analyze(claim) + self._safe_expand(claim, context),
+            seen_queries, self.hop2_queries
         )
         if hop2_q:
             hop2_lists = self._retrieve_many(hop2_q)
@@ -186,6 +222,17 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             hop3_lists = self._retrieve_many(hop3_q)
             other_lists.extend(hop3_lists)
             for lst in hop3_lists:
+                all_docs.extend(lst)
+
+        # Hop 4: final expansion pass to catch deeply-nested entities
+        context = self._context_docs(all_docs)
+        hop4_q = self._build_queries(
+            self._safe_expand(claim, context), seen_queries, self.hop4_queries
+        )
+        if hop4_q:
+            hop4_lists = self._retrieve_many(hop4_q)
+            other_lists.extend(hop4_lists)
+            for lst in hop4_lists:
                 all_docs.extend(lst)
 
         final = self._select(hop1, other_lists)
