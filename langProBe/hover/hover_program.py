@@ -29,7 +29,13 @@ class QueryExpansion(dspy.Signature):
     - Mine the retrieved SNIPPETS for proper nouns the claim depends on but that lack their own
       article: the winner named in a tournament article, the recipient named in an award article,
       the cast named in a film article, the town a school serves, the director of a video, the
-      founder of a company, the band behind an album. Output each such name as a query.
+      founder of a company, the band behind an album, the spouse of a person, the subject of a
+      biographical film. Output each such name as a query.
+    - ALSO use your own world knowledge to infer entities the claim refers to that are not yet
+      in the retrieved titles, even if they are not explicitly mentioned in the snippets.
+      For example: if the claim mentions "The Broken Tower" (a film), use your knowledge that
+      it is about the poet "Hart Crane"; if the claim mentions a person who co-founded a city,
+      use your knowledge of their spouse if the claim depends on them.
 
     Rules:
     - Each query targets ONE entity and is its exact Wikipedia-style title/name, short (1-5
@@ -83,10 +89,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 25
-        self.hop2_queries = 6
+        self.hop2_queries = 8
         self.hop3_queries = 4
         self.hop4_queries = 3
-        self.hop1_keep = 10
+        self.hop1_keep = 12
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
@@ -114,7 +120,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _retrieve_many(self, queries):
         return [self.retrieve_k(q).passages for q in queries]
 
-    def _context_docs(self, docs, n=35, max_snippet=500):
+    def _context_docs(self, docs, n=45, max_snippet=600):
         seen = set()
         uniq = []
         for d in docs:
