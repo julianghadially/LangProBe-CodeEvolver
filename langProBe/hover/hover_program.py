@@ -6,35 +6,46 @@ from langProBe.dspy_program import LangProBeDSPyMetaProgram
 MAX_RETRIEVED_DOCS = 21
 
 
+class ClaimEntities(dspy.Signature):
+    """List every distinct named entity mentioned in the claim — people, works (films, songs,
+    albums, books), organizations, places, events, concepts. Output each as its most common
+    Wikipedia-style article name (proper noun, disambiguated, e.g. "Lolita (1962 film)")."""
+    claim = dspy.InputField(desc="The claim")
+    entities: list[str] = dspy.OutputField(desc="Named entities in the claim, as Wikipedia-style names")
+
+
 class QueryExpansion(dspy.Signature):
-    """You are retrieving Wikipedia documents to support a factual claim. You are given the
-    claim and the documents retrieved so far (title + short snippet, one per line).
+    """You are retrieving Wikipedia documents for a claim. This is PURE DOCUMENT RETRIEVAL —
+    do NOT verify, fact-check, or judge whether the claim is true, and do NOT decide the claim
+    is "supported". Your only job: output search queries for documents STILL MISSING.
 
-    Output concise SEARCH QUERIES that will retrieve the documents STILL MISSING.
-
-    How to decide what is missing:
-    1. Enumerate every distinct entity the claim depends on — people, works, organizations,
-       places, events, concepts. Some are named in the claim; many are only IMPLIED and must be
-       discovered (e.g. "the winner of X", "the founder of Y", "the school serving place Z").
-    2. READ the retrieved snippets: they frequently NAME the missing entities. An award article
-       lists its recipients; a tournament article names the winner; a school article names the
-       town it serves; a film article names its cast. Extract those names.
-    3. Cross-reference the claim with those names. If the claim says "the man who founded a fast
-       food chain in Georgia was given the President's Volunteer Service Award" and a retrieved
-       snippet lists "S. Truett Cathy" as an awardee, then "S. Truett Cathy" and "Chick-fil-A"
-       are missing entities to retrieve.
+    What "missing" means (read carefully):
+    - An entity is COVERED only if one of the retrieved document TITLES is (or matches) that
+      entity. An entity that is merely MENTIONED inside another article's snippet is NOT covered
+      — it still needs its own article retrieved. (e.g. if an award snippet lists "S. Truett
+      Cathy" as a recipient but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy"
+      is missing.)
+    - Even entities named directly in the claim may NOT have been retrieved yet. Check the
+      retrieved TITLES against the claim; any claim entity with no matching title is missing.
+    - Mine the retrieved SNIPPETS for proper nouns the claim depends on but that lack their own
+      article: the winner named in a tournament article, the recipient named in an award
+      article, the cast named in a film article, the town a school serves, the director of a
+      video, the founder of a company, the band behind an album. Output each such name as a query.
 
     Rules:
-    - Each query targets ONE entity and is the entity's exact Wikipedia-style title/name, short
-      (1-5 words), e.g. "Amanda Wyss", "Lisa Raymond", "S. Truett Cathy", "Chick-fil-A",
-      "Vision of the Future", "Bass (voice type)", "Garden City South, New York".
-    - Do NOT write full sentences, questions, or verification/justification text.
+    - Each query targets ONE entity and is its exact Wikipedia-style title/name, short (1-5
+      words), e.g. "Amanda Wyss", "Lisa Raymond", "S. Truett Cathy", "Chick-fil-A",
+      "Eighth Wonder", "Bass (voice type)", "Warren Fu", "Vision of the Future".
+    - Do NOT write full sentences, questions, or justification/verification text.
     - Do NOT repeat a query whose name already matches a retrieved document title.
-    - Cover DISTINCT missing entities; queries must be non-redundant with one another.
+    - Cover DISTINCT missing entities; queries must be non-redundant.
+    - Do NOT return an empty list unless every entity named in the claim AND every entity the
+      claim depends on already has its own retrieved article (by title). When unsure, output a
+      query rather than none.
     """
     claim = dspy.InputField(desc="The claim to find supporting documents for")
     retrieved_docs = dspy.InputField(desc="Documents retrieved so far as '<title> | <snippet>', one per line")
-    queries: list[str] = dspy.OutputField(desc="Up to 4 concise entity-name search queries, one per missing entity")
+    queries: list[str] = dspy.OutputField(desc="Concise entity-name search queries for missing documents")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -47,9 +58,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 20
-        self.num_queries = 4
+        self.num_queries = 5
         self.max_per_cluster = 3
         self.retrieve_k = dspy.Retrieve(k=self.k)
+        self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
 
     @staticmethod
@@ -93,7 +105,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _retrieve_many(self, queries):
         return [self.retrieve_k(q).passages for q in queries]
 
-    def _context_docs(self, docs, n=25, max_snippet=350):
+    def _context_docs(self, docs, n=25, max_snippet=400):
         seen = set()
         uniq = []
         for d in docs:
@@ -121,22 +133,53 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 break
         return out
 
+    def _safe_entities(self, claim):
+        try:
+            return getattr(self.extract_entities(claim=claim), "entities", None) or []
+        except Exception:
+            return []
+
+    def _safe_expand(self, claim, context):
+        try:
+            return getattr(self.expand_queries(claim=claim, retrieved_docs=context), "queries", None) or []
+        except Exception:
+            return []
+
     def forward(self, claim):
         seen_queries = {claim.strip().lower()}
         hop1 = self.retrieve_k(claim).passages
 
+        retrieved_titles = set(self._title(d) for d in hop1)
         all_docs = list(hop1)
         retrieval_lists = [hop1]
 
-        for _ in range(2):  # two entity-discovery expansion hops
-            context = self._context_docs(all_docs)
-            raw = self.expand_queries(claim=claim, retrieved_docs=context).queries
-            queries = self._build_queries(raw, seen_queries, self.num_queries)
-            if not queries:
-                break
-            hop_lists = self._retrieve_many(queries)
-            retrieval_lists.extend(hop_lists)
-            for lst in hop_lists:
+        # Robust base queries: always retrieve own articles for entities named in the claim
+        # that were not already retrieved by hop 1. This cannot be suppressed by the expansion
+        # LM's verification bias, and catches claim-named gold docs (e.g. "Amanda Wyss").
+        claim_ents = [e for e in self._safe_entities(claim)
+                      if self._title(e) not in retrieved_titles]
+
+        # Hop 2: claim-named entities first, then snippet-mined expansion queries.
+        context = self._context_docs(all_docs)
+        hop2_queries = self._build_queries(
+            claim_ents + self._safe_expand(claim, context), seen_queries, self.num_queries
+        )
+        if hop2_queries:
+            hop2_lists = self._retrieve_many(hop2_queries)
+            retrieval_lists.extend(hop2_lists)
+            for lst in hop2_lists:
+                all_docs.extend(lst)
+
+        # Hop 3: expansion that mines hop 2's newly retrieved snippets for further entities
+        # (e.g. a song article naming its video director, an album article naming its band).
+        context = self._context_docs(all_docs)
+        hop3_queries = self._build_queries(
+            self._safe_expand(claim, context), seen_queries, self.num_queries
+        )
+        if hop3_queries:
+            hop3_lists = self._retrieve_many(hop3_queries)
+            retrieval_lists.extend(hop3_lists)
+            for lst in hop3_lists:
                 all_docs.extend(lst)
 
         candidates = self._round_robin_dedup(retrieval_lists)
