@@ -43,7 +43,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 10
-        self.num_queries = 3
+        self.num_queries = 4
+        self._use_reranker = True
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
@@ -72,9 +73,24 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def _retrieve_many(self, queries):
         return [self.retrieve_k(q).passages for q in queries]
 
+    def _build_queries(self, raw, claim, fallback_extra):
+        seen = set()
+        out = []
+        for q in (raw or []):
+            q = (q or "").strip()
+            if q and q.lower() not in seen:
+                seen.add(q.lower())
+                out.append(q)
+        for q in [claim, fallback_extra]:
+            q = (q or "").strip()
+            if q and q.lower() not in seen and len(out) < self.num_queries:
+                seen.add(q.lower())
+                out.append(q)
+        return out[: self.num_queries] if out else [claim]
+
     def _rerank(self, claim, candidates):
         n = len(candidates)
-        pool = candidates[:50] if n > 50 else candidates
+        pool = candidates[:60] if n > 60 else candidates
         npool = len(pool)
         numbered = [f"{i + 1}. {pool[i].split(' | ', 1)[0]}" for i in range(npool)]
         try:
@@ -112,9 +128,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         summary_1 = self.summarize1(claim=claim, passages=hop1).summary
 
         queries2 = self.expand_queries(claim=claim, context=summary_1).queries
-        queries2 = [q for q in (queries2 or []) if q and q.strip()][: self.num_queries]
-        if not queries2:
-            queries2 = [claim]
+        queries2 = self._build_queries(queries2, claim, summary_1)
         hop2_lists = self._retrieve_many(queries2)
 
         all_hop2 = [d for lst in hop2_lists for d in lst]
@@ -123,9 +137,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).summary
 
         queries3 = self.expand_queries(claim=claim, context=summary_2).queries
-        queries3 = [q for q in (queries3 or []) if q and q.strip()][: self.num_queries]
-        if not queries3:
-            queries3 = [claim]
+        queries3 = self._build_queries(queries3, claim, summary_2)
         hop3_lists = self._retrieve_many(queries3)
 
         retrieval_lists = [hop1] + hop2_lists + hop3_lists
@@ -133,7 +145,9 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         if len(candidates) <= MAX_RETRIEVED_DOCS:
             final = candidates
-        else:
+        elif getattr(self, "_use_reranker", True):
             final = self._rerank(claim, candidates)[:MAX_RETRIEVED_DOCS]
+        else:
+            final = candidates[:MAX_RETRIEVED_DOCS]
 
         return dspy.Prediction(retrieved_docs=final)
