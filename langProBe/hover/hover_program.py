@@ -1,5 +1,3 @@
-import re
-
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
@@ -8,29 +6,30 @@ MAX_RETRIEVED_DOCS = 21
 
 class ClaimEntities(dspy.Signature):
     """List every distinct named entity mentioned in the claim — people, works (films, songs,
-    albums, books), organizations, places, events, concepts. Output each as its most common
-    Wikipedia-style article name (proper noun, disambiguated, e.g. "Lolita (1962 film)")."""
+    albums, books, video games), organizations, places, events, concepts. Output each entity as
+    the SPECIFIC name used in the claim, preserving any year, edition or disambiguator
+    (e.g. "2005 NASDAQ-100 Open Women's Doubles", "Lolita (1962 film)", "G.I. Joe: Hall of Fame"),
+    not a generalized category. Use Wikipedia-style article names."""
     claim = dspy.InputField(desc="The claim")
-    entities: list[str] = dspy.OutputField(desc="Named entities in the claim, as Wikipedia-style names")
+    entities: list[str] = dspy.OutputField(desc="Named entities in the claim, as specific Wikipedia-style names")
 
 
 class QueryExpansion(dspy.Signature):
     """You are retrieving Wikipedia documents for a claim. This is PURE DOCUMENT RETRIEVAL —
-    do NOT verify, fact-check, or judge whether the claim is true, and do NOT decide the claim
-    is "supported". Your only job: output search queries for documents STILL MISSING.
+    do NOT verify, fact-check, or judge whether the claim is true, and do NOT decide the claim is
+    "supported". Your only job: output search queries for documents STILL MISSING.
 
     What "missing" means (read carefully):
     - An entity is COVERED only if one of the retrieved document TITLES is (or matches) that
-      entity. An entity that is merely MENTIONED inside another article's snippet is NOT covered
-      — it still needs its own article retrieved. (e.g. if an award snippet lists "S. Truett
-      Cathy" as a recipient but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy"
-      is missing.)
-    - Even entities named directly in the claim may NOT have been retrieved yet. Check the
-      retrieved TITLES against the claim; any claim entity with no matching title is missing.
+      entity. An entity merely MENTIONED inside another article's snippet is NOT covered — it
+      still needs its own article. (e.g. if an award snippet lists "S. Truett Cathy" as a
+      recipient but no retrieved title is "S. Truett Cathy", then "S. Truett Cathy" is missing.)
+    - Even entities named directly in the claim may NOT have been retrieved yet. Compare the
+      retrieved TITLES to the claim; any claim entity with no matching title is missing.
     - Mine the retrieved SNIPPETS for proper nouns the claim depends on but that lack their own
-      article: the winner named in a tournament article, the recipient named in an award
-      article, the cast named in a film article, the town a school serves, the director of a
-      video, the founder of a company, the band behind an album. Output each such name as a query.
+      article: the winner named in a tournament article, the recipient named in an award article,
+      the cast named in a film article, the town a school serves, the director of a video, the
+      founder of a company, the band behind an album. Output each such name as a query.
 
     Rules:
     - Each query targets ONE entity and is its exact Wikipedia-style title/name, short (1-5
@@ -58,8 +57,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     def __init__(self):
         super().__init__()
         self.k = 20
-        self.num_queries = 5
-        self.max_per_cluster = 3
+        self.hop2_queries = 4
+        self.hop3_queries = 3
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.extract_entities = dspy.Predict(ClaimEntities)
         self.expand_queries = dspy.ChainOfThought(QueryExpansion)
@@ -67,15 +66,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     @staticmethod
     def _title(doc):
         return doc.split(" | ", 1)[0].strip().lower()
-
-    @staticmethod
-    def _cluster_key(title):
-        t = title.lower()
-        t = re.sub(r"\([^)]*\)", "", t)
-        t = re.sub(r"^\d{4}[\u2013\-]\s*\d{0,4}\s*", "", t)  # leading "1979-80 " or "2005-"
-        t = re.sub(r"^\d{4}\s+", "", t)  # leading "2005 "
-        t = re.sub(r"[^a-z0-9]+", " ", t).strip()
-        return t
 
     @staticmethod
     def _round_robin_dedup(lists):
@@ -90,16 +80,6 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     if t not in seen:
                         seen.add(t)
                         out.append(doc)
-        return out
-
-    def _diversity_cap(self, docs, max_per_cluster):
-        counts = {}
-        out = []
-        for d in docs:
-            key = self._cluster_key(d.split(" | ", 1)[0])
-            if counts.get(key, 0) < max_per_cluster:
-                counts[key] = counts.get(key, 0) + 1
-                out.append(d)
         return out
 
     def _retrieve_many(self, queries):
@@ -149,23 +129,24 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         seen_queries = {claim.strip().lower()}
         hop1 = self.retrieve_k(claim).passages
 
-        retrieved_titles = set(self._title(d) for d in hop1)
         all_docs = list(hop1)
         retrieval_lists = [hop1]
 
-        # Robust base queries: always retrieve own articles for entities named in the claim
-        # that were not already retrieved by hop 1. This cannot be suppressed by the expansion
-        # LM's verification bias, and catches claim-named gold docs (e.g. "Amanda Wyss").
+        # Claim-named entities that are NOT already in hop1's top-2 are queried directly so they
+        # land at rank 1 (guaranteed inclusion despite round-robin dilution from many lists).
+        # Entities already at hop1 rank 1-2 survive dilution on their own, so we skip them to
+        # keep the query count (and dilution) low.
+        hop1_top2 = {self._title(d) for d in hop1[:2]}
         claim_ents = [e for e in self._safe_entities(claim)
-                      if self._title(e) not in retrieved_titles]
+                      if self._title(e) not in hop1_top2]
 
         # Hop 2: claim-named entities first, then snippet-mined expansion queries.
         context = self._context_docs(all_docs)
-        hop2_queries = self._build_queries(
-            claim_ents + self._safe_expand(claim, context), seen_queries, self.num_queries
+        hop2_q = self._build_queries(
+            claim_ents + self._safe_expand(claim, context), seen_queries, self.hop2_queries
         )
-        if hop2_queries:
-            hop2_lists = self._retrieve_many(hop2_queries)
+        if hop2_q:
+            hop2_lists = self._retrieve_many(hop2_q)
             retrieval_lists.extend(hop2_lists)
             for lst in hop2_lists:
                 all_docs.extend(lst)
@@ -173,16 +154,14 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # Hop 3: expansion that mines hop 2's newly retrieved snippets for further entities
         # (e.g. a song article naming its video director, an album article naming its band).
         context = self._context_docs(all_docs)
-        hop3_queries = self._build_queries(
-            self._safe_expand(claim, context), seen_queries, self.num_queries
+        hop3_q = self._build_queries(
+            self._safe_expand(claim, context), seen_queries, self.hop3_queries
         )
-        if hop3_queries:
-            hop3_lists = self._retrieve_many(hop3_queries)
+        if hop3_q:
+            hop3_lists = self._retrieve_many(hop3_q)
             retrieval_lists.extend(hop3_lists)
             for lst in hop3_lists:
                 all_docs.extend(lst)
 
-        candidates = self._round_robin_dedup(retrieval_lists)
-        candidates = self._diversity_cap(candidates, self.max_per_cluster)
-        final = candidates[:MAX_RETRIEVED_DOCS]
+        final = self._round_robin_dedup(retrieval_lists)[:MAX_RETRIEVED_DOCS]
         return dspy.Prediction(retrieved_docs=final)
