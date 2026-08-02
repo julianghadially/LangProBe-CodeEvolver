@@ -9,7 +9,16 @@ class ClaimEntities(dspy.Signature):
     albums, books, video games), organizations, places, events, concepts. Output each entity as
     the SPECIFIC name used in the claim, preserving any year, edition or disambiguator
     (e.g. "2005 NASDAQ-100 Open Women's Doubles", "Lolita (1962 film)", "G.I. Joe: Hall of Fame"),
-    not a generalized category. Use Wikipedia-style article names."""
+    not a generalized category. Use Wikipedia-style article names.
+
+    A possessive/event phrase that is ITSELF a titled Wikipedia article must be output as the
+    FULL phrase verbatim, not just the proper noun inside it:
+      - "Douglas MacArthur's escape from the Philippines"  (NOT just "Douglas MacArthur")
+      - "Battle of the Bulge", "Treaty of Versailles", "Lincoln's assassination",
+        "MacArthur's escape from the Philippines", "2004 United States election".
+    A binomial species name "Genus species" (e.g. "Enkianthus campanulatus", "Erythroxylum
+    vacciniifolium") means BOTH the species AND its genus have their own article — output BOTH
+    the full species name AND the bare genus ("Enkianthus", "Erythroxylum")."""
     claim = dspy.InputField(desc="The claim")
     entities: list[str] = dspy.OutputField(desc="Named entities in the claim, as specific Wikipedia-style names")
 
@@ -42,6 +51,16 @@ class QueryExpansion(dspy.Signature):
     Prefer the SPECIFIC disambiguated title a snippet gives (with its year/ordinal/season) over the
     generic version, because the generic version retrieves the wrong/neighbor article.
 
+    ## Mine EVERY proper noun in a snippet, not just the first
+    A single work's snippet usually lists MANY names the claim depends on — the full cast, every
+    band member, every director, the venue. Output a query for EACH of them, not just the most
+    prominent one. Stopping after one or two misses a gold document and zeros the score.
+      - A film snippet listing the cast   -> query EVERY named actor (e.g. "Karan Kapoor",
+        "Susanna Thompson"), not just the lead.
+      - A performer's show snippet         -> mine the VENUE too: "...at the Luxor Las Vegas"
+        -> "Luxor Las Vegas"; "...on Broadway at the Neil Simon Theatre" -> "Neil Simon Theatre".
+      - An album snippet naming its band   -> the band's article.
+
     ## Relational patterns: read the NAMED entity's OWN snippet
     When the claim says "the film that X is a remake of", "the director of X", "the host of X",
     "the winner of X", "the band behind X", read the snippet of the article titled X (the entity the
@@ -55,6 +74,20 @@ class QueryExpansion(dspy.Signature):
     document. An extra low-value query costs almost nothing; a MISSED document zeros the entire
     score. When in doubt, output the query.
 
+    ## Concept / category articles are MISSING documents too
+    Concepts (voice types, languages, territory types, taxonomic ranks, genres) have their OWN
+    Wikipedia articles. A concept MENTIONED in a snippet or the claim, but with no matching
+    retrieved TITLE, is still MISSING — do NOT dismiss it as "just a description" or "already
+    covered" because a snippet uses the word. Output its Wikipedia article title as a query:
+      - snippet "...the bass, the lowest vocal range..."  -> "Bass (voice type)"
+      - claim "...the territory where [Gibraltar]..."      -> "British overseas territories"
+      - snippet "...from the Tupi/Guarani word..."         -> BOTH "Tupi language" AND
+        "Guarani language" (and "Tupi–Guarani languages")
+      - a named species' genus is missing                  -> the genus article ("Enkianthus")
+    For a word's etymology, NEVER output just one language: if a snippet names several languages or
+    families as the source of a word, query EACH one's article — the gold is whichever matches, and
+    you cannot know in advance which.
+
     ## Map prose references to Wikipedia disambiguated titles
     - "ninth season" -> append "(season 9)"; "season 4" -> "(season 4)".
     - A year/edition ordinal in a snippet is part of the title — keep it exact
@@ -65,6 +98,9 @@ class QueryExpansion(dspy.Signature):
     If a missing entity is implied by the claim but not in any snippet yet (e.g. the director of a
     named film, a cast member, the election a politician lost, the band behind an album, the spouse
     of a person), use your knowledge to NAME it. Still output a proper-noun name, never a role.
+    A character and the publication it appears in are DISTINCT articles — output BOTH (e.g. for a
+    "comic book character" output the character "Archie Andrews" AND the comic book "Archie comic
+    book"; for an album output the album AND the band).
 
     ## Rules
     - Each query targets ONE entity, is its exact Wikipedia-style title/name, short (1-5 words).
@@ -101,13 +137,26 @@ class ClaimAnalysis(dspy.Signature):
     - "the season Vanessa Krasniqi took part in" -> "Deutschland sucht den Superstar (season 9)"
 
     Rules:
-    - Each query is a short Wikipedia-style title/name (1-5 words), a PROPER NOUN.
+    - Each query is a short Wikipedia-style title/name (1-5 words), a PROPER NOUN or a
+      well-known concept article title.
     - NEVER output a description or role ("director of X", "host of X", "remake of X"). Always
       output the actual name; if you cannot name it, skip it.
     - Map prose to disambiguated Wikipedia titles ("ninth season" -> "(season 9)"; keep a year or
       ordinal that the claim gives exact).
     - Do NOT repeat entities already explicitly named in the claim.
     - Do NOT verify whether the claim is true. Just identify what it refers to.
+    - Infer the Wikipedia article for any CONCEPT / CATEGORY / TYPE the claim depends on, even
+      though it is a common noun with no proper-noun name. These have their own articles and are
+      MISSING documents:
+        - a vocal range ("lowest vocal range" -> "Bass (voice type)"; "highest" -> "Soprano");
+        - a territory type ("the territory" with a British monarch -> "British overseas territories");
+        - the language a word derives from ("Guarani language", "Tupi language");
+        - a taxonomic rank of a named species (the genus/family of "Enkianthus campanulatus"
+          -> "Enkianthus").
+    - Infer the publication/line a work belongs to. A character and the publication it appears in
+      are DISTINCT articles and BOTH may be required: a "comic book character originally written by
+      X" -> output BOTH the character article ("Archie Andrews") AND the comic book's article
+      ("Archie comic book"); an album -> also the artist's article; a song -> also the album.
     - When unsure, output a query rather than nothing — missing documents cost the entire score.
     """
     claim = dspy.InputField(desc="The claim to analyze")
@@ -202,14 +251,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             return []
 
     def _select(self, hop1, query_lists):
-        """Dilution-robust selection. Always keep hop1's top docs (claim-named golds land here).
-        For each query, keep its EXACT-title match if one was retrieved — a doc titled exactly the
-        query is unambiguously the targeted article and must outrank near-miss disambiguations
-        (e.g. query "Boy Hits Car" should keep the band article "Boy Hits Car", not "Boy Hits Car
-        (album)"; query "Ross Case" should keep the tennis player, not legal cases "In re Ross").
-        Fall back to the query's top hit when no exact-title doc exists. Then round-robin for breadth.
-        This keeps claim-named and directly-targeted golds regardless of how many query-lists are
-        used, so extra queries can't dilute them out."""
+        """Dilution-robust selection. Keep each query's EXACT-title match if one was retrieved
+        (a doc titled exactly the query is unambiguously the targeted article and must outrank
+        near-miss disambiguations, e.g. query "Boy Hits Car" keeps the band "Boy Hits Car", not
+        "Boy Hits Car (album)"; query "Ross Case" keeps the tennis player, not "In re Ross"); if
+        no exact-title doc exists, prefer a disambiguated "<query> (<specifier>)" article (not a
+        disambiguation page), else the query's top hit. These per-query headlines are protected
+        FIRST so that, when there are many queries, they are not truncated by the 21 cap. Then
+        hop1's top docs (claim-named golds land here) are reserved, and finally round-robin fills
+        for breadth. This keeps claim-named and directly-targeted golds regardless of how many
+        query-lists are used, so extra queries can't dilute them out."""
         seen = set()
         keep = []
 
@@ -223,17 +274,37 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             if not lst:
                 return None
             ql = q.strip().lower()
+            # 1. An exact-title doc is unambiguously the targeted article.
             for doc in lst:
                 if self._title(doc) == ql:
                     return doc
+            # 2. A disambiguated article titled "<query> (<specifier>)" (but NOT a
+            #    disambiguation page) is the targeted article even when it is not rank 0.
+            #    e.g. query "Franz Ferdinand" -> keep "Franz Ferdinand (band)" over the
+            #    rank-0 "Archduke Franz Ferdinand of Austria"; query "Boy Hits Car" ->
+            #    prefer "Boy Hits Car (band)" over an unrelated rank-0 hit. Take the
+            #    earliest such title so a more-notable match (ranked higher) wins.
+            for doc in lst:
+                t = self._title(doc)
+                if t.startswith(ql + " (") and "disambig" not in t:
+                    return doc
+            # 3. Fall back to the query's top hit.
             return lst[0]
 
-        for d in hop1[: self.hop1_keep]:
-            add(d)
+        # Protect each query's headline FIRST — these are the highest-precision
+        # targeted articles (exact / disambiguated title matches). When there are
+        # many queries, hop1[:hop1_keep] + every headline can exceed 21; adding
+        # headlines first guarantees no targeted gold is truncated by the final 21
+        # cap. For <= ~9 queries the protected SET is unchanged (only the order
+        # is), so this is a no-op there and strictly helps the many-query case.
         for q, lst in query_lists:
             h = headline(q, lst)
             if h is not None:
                 add(h)
+        # Reserve hop1 top results, but never so many that headlines get pushed
+        # past the 21 cap.
+        for d in hop1[: min(self.hop1_keep, MAX_RETRIEVED_DOCS - len(keep))]:
+            add(d)
         lists = [hop1] + [lst for _, lst in query_lists]
         for d in self._round_robin(lists):
             if len(keep) >= MAX_RETRIEVED_DOCS:
