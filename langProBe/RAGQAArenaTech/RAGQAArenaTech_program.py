@@ -13,7 +13,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     3.7GB embedding index lives in a process loaded once, outside the eval.
     """
 
-    def __init__(self, retriever, num_docs=5, max_hops=2):
+    def __init__(self, retriever, num_docs=8, max_hops=2):
         super().__init__()
         self.retriever = retriever
         self.max_hops = max_hops
