@@ -2,6 +2,29 @@ import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram
 
 
+def _dedup_by_title(docs, max_docs=21):
+    """Deduplicate retrieved passages by normalized Wikipedia title.
+
+    ColBERT returns passages as ``"title | passage text"``; multiple passages
+    from the same article share a title, so keeping only the first occurrence
+    frees slots for distinct articles. Titles are normalized with
+    ``dspy.evaluate.normalize_text`` to match the evaluation metric's title
+    equality. Returns at most ``max_docs`` unique passages.
+    """
+    seen = set()
+    unique = []
+    for doc in docs:
+        title = doc.split(" | ")[0]
+        key = dspy.evaluate.normalize_text(title)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(doc)
+        if len(unique) >= max_docs:
+            break
+    return unique
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi hop system for retrieving documents for a provided claim. 
     
@@ -11,7 +34,7 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 7
+        self.k = 10
         self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
         self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
         self.retrieve_k = dspy.Retrieve(k=self.k)
@@ -38,4 +61,5 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
-        return dspy.Prediction(retrieved_docs=hop1_docs + hop2_docs + hop3_docs)
+        retrieved_docs = _dedup_by_title(hop1_docs + hop2_docs + hop3_docs, max_docs=21)
+        return dspy.Prediction(retrieved_docs=retrieved_docs)
