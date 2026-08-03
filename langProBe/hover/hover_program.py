@@ -25,39 +25,70 @@ def _dedup_by_title(docs, max_docs=21):
     return unique
 
 
+def _titles(docs):
+    """Return the raw Wikipedia title (text before ``" | "``) of each passage."""
+    return [doc.split(" | ")[0] for doc in docs]
+
+
+class GenerateHop1Query(dspy.Signature):
+    """Extract the key named entities from the claim and form a concise search query that targets them.
+
+    Focus on proper nouns and salient noun phrases — people, places, organizations, works (films, books, albums), and events — that a Wikipedia article would be titled with. Strip filler words and factual assertions; the goal is a clean retrieval query, not a restatement of the claim."""
+
+    claim = dspy.InputField()
+    query = dspy.OutputField(desc="A concise entity-focused search query for Wikipedia retrieval.")
+
+
+class GenerateDiverseQuery(dspy.Signature):
+    """Generate a search query for Wikipedia entities that are implied by the claim but NOT yet covered by the retrieved titles.
+
+    First, identify the key entities the claim is about. Then compare them against the retrieved titles to find which ones are still missing. Finally, form a query that targets one of those uncovered entities. Do not re-query entities whose titles have already been retrieved; pivot to the next most important uncovered entity."""
+
+    claim = dspy.InputField()
+    summary = dspy.InputField(desc="Summary of the documents retrieved in prior hops.")
+    retrieved_titles = dspy.InputField(desc="Wikipedia article titles already retrieved; avoid re-querying these.")
+    query = dspy.OutputField(desc="A search query targeting an uncovered entity, distinct from prior hop queries.")
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
-    '''Multi hop system for retrieving documents for a provided claim. 
-    
+    '''Multi hop system for retrieving documents for a provided claim.
+
     EVALUATION
-    - This system is assessed by retrieving the correct documents that are most relevant. 
+    - This system is assessed by retrieving the correct documents that are most relevant.
     - The system must provide at most 21 documents at the end of the program.'''
 
     def __init__(self):
         super().__init__()
         self.k = 10
-        self.create_query_hop2 = dspy.ChainOfThought("claim,summary_1->query")
-        self.create_query_hop3 = dspy.ChainOfThought("claim,summary_1,summary_2->query")
+        self.create_query_hop1 = dspy.ChainOfThought(GenerateHop1Query)
+        self.create_query_hop2 = dspy.ChainOfThought(GenerateDiverseQuery)
+        self.create_query_hop3 = dspy.ChainOfThought(GenerateDiverseQuery)
         self.retrieve_k = dspy.Retrieve(k=self.k)
         self.summarize1 = dspy.ChainOfThought("claim,passages->summary")
         self.summarize2 = dspy.ChainOfThought("claim,context,passages->summary")
 
     def forward(self, claim):
-        # HOP 1
-        hop1_docs = self.retrieve_k(claim).passages
+        # HOP 1 -- entity-focused query (not the raw, often noisy claim)
+        hop1_query = self.create_query_hop1(claim=claim).query
+        hop1_docs = self.retrieve_k(hop1_query).passages
         summary_1 = self.summarize1(
             claim=claim, passages=hop1_docs
         ).summary  # Summarize top k docs
 
-        # HOP 2
-        hop2_query = self.create_query_hop2(claim=claim, summary_1=summary_1).query
+        # HOP 2 -- query targets entities NOT yet covered by hop 1
+        hop2_query = self.create_query_hop2(
+            claim=claim, summary=summary_1, retrieved_titles=_titles(hop1_docs)
+        ).query
         hop2_docs = self.retrieve_k(hop2_query).passages
         summary_2 = self.summarize2(
             claim=claim, context=summary_1, passages=hop2_docs
         ).summary
 
-        # HOP 3
+        # HOP 3 -- query targets remaining uncovered entities
         hop3_query = self.create_query_hop3(
-            claim=claim, summary_1=summary_1, summary_2=summary_2
+            claim=claim,
+            summary=summary_2,
+            retrieved_titles=_titles(hop1_docs + hop2_docs),
         ).query
         hop3_docs = self.retrieve_k(hop3_query).passages
 
