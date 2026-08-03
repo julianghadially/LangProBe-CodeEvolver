@@ -425,16 +425,25 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         return variants
 
     def _select(self, hop1, query_lists):
-        """Dilution-robust selection. Keep each query's EXACT-title match if one was retrieved
-        (a doc titled exactly the query is unambiguously the targeted article and must outrank
-        near-miss disambiguations, e.g. query "Boy Hits Car" keeps the band "Boy Hits Car", not
-        "Boy Hits Car (album)"; query "Ross Case" keeps the tennis player, not "In re Ross"); if
-        no exact-title doc exists, prefer a disambiguated "<query> (<specifier>)" article (not a
-        disambiguation page), else the query's top hit. These per-query headlines are protected
-        FIRST so that, when there are many queries, they are not truncated by the 21 cap. Then
-        hop1's top docs (claim-named golds land here) are reserved, and finally round-robin fills
-        for breadth. This keeps claim-named and directly-targeted golds regardless of how many
-        query-lists are used, so extra queries can't dilute them out."""
+        """Dilution-robust selection under the 21-doc cap.
+
+        Each query yields a "headline" — the doc most likely to be that query's targeted gold:
+          1. an EXACT-title match (query == title) — unambiguously the targeted article
+             (e.g. query "Boy Hits Car" keeps the band, not "Boy Hits Car (album)");
+          2. a disambiguated "<query> (<specifier>)" article (not a disambiguation page)
+             (e.g. query "Franz Ferdinand" -> "Franz Ferdinand (band)");
+          3. else the query's top ColBERT hit (a lower-precision guess).
+
+        Protection order (so extra mining queries can NEVER dilute out a gold):
+          a. EXACT headlines — highest precision, protect first.
+          b. hop1[:hop1_keep] — retrieve(claim)'s top docs, where claim-named golds land. These
+             are NOT any query's headline when the entity was already in hop1 (it is skipped to
+             avoid a redundant search), so they must be reserved explicitly BEFORE the many
+             lower-precision headlines, or they get squeezed past rank 21.
+          c. DISAMBIGUATED headlines — high-precision targeted articles.
+          d. Round-robin fill from [hop1] + every query list — this naturally admits the top-hit
+             headlines and any deeper golds, so top-hit headlines are NOT pre-protected (they are
+             the LM's guesses and protecting them all is what used to dilute hop1 claim-golds)."""
         seen = set()
         keep = []
 
@@ -445,39 +454,36 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                 keep.append(doc)
 
         def headline(q, lst):
+            """Return (doc, kind) where kind in {'exact','disambig','top'}, or (None, None)."""
             if not lst:
-                return None
+                return None, None
             ql = q.strip().lower()
-            # 1. An exact-title doc is unambiguously the targeted article.
             for doc in lst:
                 if self._title(doc) == ql:
-                    return doc
-            # 2. A disambiguated article titled "<query> (<specifier>)" (but NOT a
-            #    disambiguation page) is the targeted article even when it is not rank 0.
-            #    e.g. query "Franz Ferdinand" -> keep "Franz Ferdinand (band)" over the
-            #    rank-0 "Archduke Franz Ferdinand of Austria"; query "Boy Hits Car" ->
-            #    prefer "Boy Hits Car (band)" over an unrelated rank-0 hit. Take the
-            #    earliest such title so a more-notable match (ranked higher) wins.
+                    return doc, "exact"
             for doc in lst:
                 t = self._title(doc)
                 if t.startswith(ql + " (") and "disambig" not in t:
-                    return doc
-            # 3. Fall back to the query's top hit.
-            return lst[0]
+                    return doc, "disambig"
+            return lst[0], "top"
 
-        # Protect each query's headline FIRST — these are the highest-precision
-        # targeted articles (exact / disambiguated title matches). When there are
-        # many queries, hop1[:hop1_keep] + every headline can exceed 21; adding
-        # headlines first guarantees no targeted gold is truncated by the final 21
-        # cap. For <= ~9 queries the protected SET is unchanged (only the order
-        # is), so this is a no-op there and strictly helps the many-query case.
+        exact_heads, disambig_heads = [], []
         for q, lst in query_lists:
-            h = headline(q, lst)
-            if h is not None:
-                add(h)
-        # Reserve hop1 top results, but never so many that headlines get pushed
-        # past the 21 cap.
+            h, kind = headline(q, lst)
+            if h is None:
+                continue
+            if kind == "exact":
+                exact_heads.append(h)
+            elif kind == "disambig":
+                disambig_heads.append(h)
+
+        for d in exact_heads:
+            add(d)
         for d in hop1[: min(self.hop1_keep, MAX_RETRIEVED_DOCS - len(keep))]:
+            add(d)
+        for d in disambig_heads:
+            if len(keep) >= MAX_RETRIEVED_DOCS:
+                break
             add(d)
         lists = [hop1] + [lst for _, lst in query_lists]
         for d in self._round_robin(lists):
@@ -495,7 +501,8 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
         # Claim-named entities that are NOT already in hop1's top results are queried directly so
         # they land at rank 1. Entities already in hop1's top results are kept by _select, so we
-        # skip them to avoid adding redundant query-lists.
+        # skip them to avoid adding redundant query-lists (which would crowd the hop2 query budget
+        # and displace the snippet-mining/analysis queries that find non-claim-named golds).
         hop1_top_titles = {self._title(d) for d in hop1[: self.hop1_keep]}
         raw_entities = self._safe_entities(claim)
         claim_ents = [e for e in raw_entities
