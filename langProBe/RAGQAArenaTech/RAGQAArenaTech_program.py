@@ -1,6 +1,6 @@
 import dspy
 from langProBe.dspy_program import LangProBeDSPyMetaProgram, deduplicate
-from .RAGQAArenaTech_utils import GenerateSearchQuery
+from .RAGQAArenaTech_utils import GenerateSearchQuery, GenerateAnswer
 
 
 class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
@@ -18,7 +18,7 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         self.retriever = retriever
         self.max_hops = max_hops
         self.num_docs = num_docs
-        self.respond = dspy.ChainOfThought("context, question -> response")
+        self.respond = dspy.ChainOfThought(GenerateAnswer)
         self.generate_query = [
             dspy.ChainOfThought(GenerateSearchQuery) for _ in range(self.max_hops)
         ]
