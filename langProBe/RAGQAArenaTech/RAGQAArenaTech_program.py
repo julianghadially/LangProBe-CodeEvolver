@@ -14,9 +14,14 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
 
     Query generation includes an intent-clarification step for colloquial/ambiguous
     questions (infer the concrete feature/symptom the user is seeing rather than a
-    literal reading of the words), plus a non-negative fallback to the question on
-    unusable/refusal queries. Synthesis is a single pass over the accumulated
-    context, with a placeholder/parse-error retry. max_hops=3, num_docs=10.
+    literal reading of the words), a narrowed action-oriented clause for how-to
+    questions (target the method/procedure, not the topic), and a non-negative
+    fallback to the question on unusable/refusal queries. Synthesis is a single pass
+    over the accumulated context with conditional protocol-types specificity and a
+    conditional positive-content instruction for quantitative questions, plus a
+    placeholder/parse-error retry. Per-hop retrieval uses num_docs=10 on hop 0 for
+    broad initial coverage and num_docs-3 on later hops to reduce tangential noise.
+    max_hops=3, num_docs=10.
     """
 
     def __init__(self, retriever, num_docs=10, max_hops=3):
@@ -69,7 +74,12 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
         context = []
         for hop in range(self.max_hops):
             query = self._generate_query(hop, context, question)
-            passages = self.search(query, k=self.num_docs)
+            # Broader retrieval on the first hop for initial coverage; narrower
+            # on later hops to reduce tangential noise (later-hop queries are
+            # more targeted, so their top passages are the most relevant and
+            # lower-ranked passages tend to be tangential).
+            k = self.num_docs if hop == 0 else max(self.num_docs - 3, 5)
+            passages = self.search(query, k=k)
             context = deduplicate(context + passages)
         # Single synthesis pass. Retry once on a parse
         # exception or a placeholder non-answer (strictly non-negative).
