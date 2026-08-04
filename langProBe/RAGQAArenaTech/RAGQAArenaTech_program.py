@@ -14,12 +14,15 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
 
     Query generation includes an intent-clarification step for colloquial/ambiguous
     questions (infer the concrete feature/symptom the user is seeing rather than a
-    literal reading of the words), plus a non-negative fallback to the question on
-    unusable/refusal queries. Synthesis is a single pass over the accumulated
-    context, with a placeholder/parse-error retry. max_hops=3, num_docs=8.
+    literal reading of the words), a narrowed action-oriented clause for how-to
+    questions (target the method/procedure, not the topic), and a non-negative
+    fallback to the question on unusable/refusal queries. Synthesis is a single pass
+    over the accumulated context with conditional protocol-types specificity and a
+    conditional positive-content instruction for quantitative questions, plus a
+    placeholder/parse-error retry. max_hops=4, num_docs=10.
     """
 
-    def __init__(self, retriever, num_docs=8, max_hops=3):
+    def __init__(self, retriever, num_docs=10, max_hops=4):
         super().__init__()
         self.retriever = retriever
         self.max_hops = max_hops
