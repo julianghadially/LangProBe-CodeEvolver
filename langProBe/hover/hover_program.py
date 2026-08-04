@@ -100,10 +100,12 @@ class AdaptiveDiscover(dspy.Signature):
 
     The passages may include results from a PRIOR discovery step. This lets you reach entities that are TWO hops from the claim -- an entity named only in a supporting article's passage, not in the claim or the first-round results. Scan ALL accumulated passages for named entities that could support an as-yet-unsupported part of the claim, including entities you only know about because a prior discovery step retrieved their article.
 
+    Passages frequently name the exact Wikipedia article you need -- a filmography entry naming a specific film, a biography naming a specific collaborator, a discography naming a specific album. When a passage mentions a specific named work, person, organization, or place that is still missing from retrieved_titles, that exact name is your strongest query candidate. Prefer it over a generic role or relationship description.
+
     Steps:
-    1. Read the claim and all retrieved passages (including any prior discovery passages). List candidate Wikipedia articles (people, works, organizations, places, concepts) that could support the claim.
+    1. Read the claim and all retrieved passages (including any prior discovery passages). As you read, note every specific named entity you encounter -- people, works, organizations, places -- and whether its article is already in retrieved_titles. List the missing ones as candidates.
     2. Remove only candidates already present in retrieved_titles (already retrieved). Do NOT discard a candidate merely because it is named in the claim -- if its article is still missing, it is exactly what may be needed.
-    3. From the remaining missing candidates -- claim-named, claim-implied, or passage-discovered (including 2-hop entities visible only in prior discovery passages) -- pick the ONE most likely to be the specific Wikipedia article that supports an as-yet-unsupported part of the claim.
+    3. From the remaining missing candidates -- claim-named, claim-implied, or passage-discovered (including 2-hop entities visible only in prior discovery passages) -- pick the ONE most likely to be the specific Wikipedia article that supports an as-yet-unsupported part of the claim. Favor a specific named entity extracted from a passage over a vague role or category.
     4. Form a concise query using the entity's exact name as a Wikipedia article title would. Query the SPECIFIC article (a particular film, ride, place, person, or concept), not a broad category, franchise, or multi-word descriptive phrase; never re-query a title already in retrieved_titles."""
 
     claim = dspy.InputField()
@@ -121,10 +123,13 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 10
+        self.k = 15
         # Phase 1: one-shot parallel claim decomposition (replaces the
         # sequential hop1->summarize->hop2->summarize->hop3 chain, cutting the
         # LM-call chain from 5 to 2 calls to reduce run-to-run variance).
+        # k=15 (raised from 10): iter-15 traces confirmed k=10 drops real golds
+        # at positions 5-10; the larger pool gives discovery more passage
+        # content to read and lets deeper ColBERT results enter the interleave.
         self.decompose = dspy.ChainOfThought(DecomposeClaim)
         # Phase 2: hybrid discovery.  Step 1 keeps iter 6's proven 2-query
         # single-pass discovery (the 2-query hedge recovers 1-level golds even
