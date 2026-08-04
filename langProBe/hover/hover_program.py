@@ -94,22 +94,23 @@ class DiscoverMissingEntities(dspy.Signature):
 
 
 class AdaptiveDiscover(dspy.Signature):
-    """Generate ONE search query for a Wikipedia supporting article that is still MISSING from the retrieved titles.
+    """Generate TWO distinct search queries for Wikipedia supporting articles that are still MISSING from the retrieved titles.
 
     Some missing articles are entities DISCOVERED in the retrieved passages but not named in the claim -- e.g. a film's director or co-star, an author's collaborator, a company's product, or a place linked to a covered entity. Others are entities NAMED or IMPLIED in the claim whose article the earlier queries failed to retrieve -- e.g. the claim's main subject, a named concept, or a referent such as "this religion" or "the attraction" that points to one specific Wikipedia article. BOTH kinds matter: any article still missing from retrieved_titles may be the gold document, regardless of whether its entity appears in the claim.
 
     The passages may include results from a PRIOR discovery step. This lets you reach entities that are TWO hops from the claim -- an entity named only in a supporting article's passage, not in the claim or the first-round results. Scan ALL accumulated passages for named entities that could support an as-yet-unsupported part of the claim, including entities you only know about because a prior discovery step retrieved their article.
 
     Steps:
-    1. Read the claim and all retrieved passages (including any prior discovery passages). List candidate Wikipedia articles (people, works, organizations, places, concepts) that could support the claim.
+    1. Read the claim and all retrieved passages (including any prior discovery passages). SCAN the passage text for PROPER NOUNS -- specific person names, place names, organization names, and work titles (films, books, albums, events) -- that appear in the passages. Each proper noun likely has its own Wikipedia article that could support the claim; these are the strongest candidates. Also consider claim-named or claim-implied entities whose articles are still missing.
     2. Remove only candidates already present in retrieved_titles (already retrieved). Do NOT discard a candidate merely because it is named in the claim -- if its article is still missing, it is exactly what may be needed.
-    3. From the remaining missing candidates -- claim-named, claim-implied, or passage-discovered (including 2-hop entities visible only in prior discovery passages) -- pick the ONE most likely to be the specific Wikipedia article that supports an as-yet-unsupported part of the claim.
-    4. Form a concise query using the entity's exact name as a Wikipedia article title would. Query the SPECIFIC article (a particular film, ride, place, person, or concept), not a broad category, franchise, or multi-word descriptive phrase; never re-query a title already in retrieved_titles."""
+    3. From the remaining missing candidates -- prioritizing proper-noun entities found in the passage text (including 2-hop entities visible only in prior discovery passages) -- pick the TWO most likely to be the specific Wikipedia articles that support as-yet-unsupported parts of the claim. The two queries MUST target DIFFERENT entities (not two phrasings of the same entity). Do NOT query for a role, relationship, or conceptual description -- instead, identify the SPECIFIC person or entity that fills that role by reading the passage, and query for that entity's exact name.
+    4. Form a concise query for each using the entity's exact name as a Wikipedia article title would. Query the SPECIFIC article (a particular film, ride, place, person, or concept), not a broad category, franchise, or multi-word descriptive phrase; never re-query a title already in retrieved_titles."""
 
     claim = dspy.InputField()
     passages = dspy.InputField(desc="All Wikipedia passages retrieved so far (decomposition + any prior discovery) as 'title | passage text'; read their content to discover entities, including 2-hop entities only visible in prior discovery passages.")
-    retrieved_titles = dspy.InputField(desc="Wikipedia article titles already retrieved; the query must target an article NOT in this list.")
-    query = dspy.OutputField(desc="A concise search query (a Wikipedia article title) targeting one still-missing supporting article.")
+    retrieved_titles = dspy.InputField(desc="Wikipedia article titles already retrieved; both queries must target articles NOT in this list.")
+    query1 = dspy.OutputField(desc="A concise search query (a Wikipedia article title) targeting one still-missing supporting article.")
+    query2 = dspy.OutputField(desc="A concise search query (a Wikipedia article title) targeting a DIFFERENT still-missing supporting article.")
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -130,9 +131,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # single-pass discovery (the 2-query hedge recovers 1-level golds even
         # when one query mis-targets via high-salience bias).  Step 2 is a
         # chaining step that reads ALL accumulated passages (incl. step 1's
-        # discovery results) and emits ONE query, reaching 2-hop entities the
+        # discovery results) and emits TWO queries, reaching 2-hop entities the
         # single-pass discovery structurally cannot (validated iter 9: ex 30
         # Additi Gupta -> Ishqbaaaz fixed; iter 10: ex 97 Gene Kelly found).
+        # The 2-query hedge mirrors step 1: a single chaining query has no
+        # recovery from a mis-target (iter 10 round 1 lesson).
         self.discover = dspy.ChainOfThought(DiscoverMissingEntities)
         self.discover_chain = dspy.ChainOfThought(AdaptiveDiscover)
         self.retrieve_k = dspy.Retrieve(k=self.k)
@@ -152,9 +155,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         # queries for still-missing supporting articles (the 2-query hedge
         # recovers 1-level golds even when one query mis-targets).  Step 2: a
         # chaining step reads ALL accumulated passages (incl. step 1's
-        # discovery results) and emits ONE query, reaching 2-hop entities (an
+        # discovery results) and emits TWO queries, reaching 2-hop entities (an
         # entity named only in a supporting article's passage, not in the claim
-        # or the decomposition results) the single-pass discovery cannot.
+        # or the decomposition results) the single-pass discovery cannot.  The
+        # 2-query hedge mirrors step 1's proven design: a single chaining query
+        # has no recovery from a mis-target.
         prior_unique = _dedup_by_title(
             decomp_docs[0] + decomp_docs[1] + decomp_docs[2], max_docs=21
         )
@@ -177,13 +182,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             passages=chain_passages,
             retrieved_titles=_titles(chain_passages),
         )
-        disc_c_docs = self.retrieve_k(disc_c.query).passages
+        disc_c_docs = self.retrieve_k(disc_c.query1).passages
+        disc_d_docs = self.retrieve_k(disc_c.query2).passages
 
-        # Round-robin interleave so all six streams contribute to the final 21
-        # slots; hop-order dedup would let the decomposition streams fill the
+        # Round-robin interleave so all seven streams contribute to the final
+        # 21 slots; hop-order dedup would let the decomposition streams fill the
         # cap and crowd out the discovery streams whose gold typically ranks
         # top-1-3.
         retrieved_docs = _interleave_dedup(
-            decomp_docs + [disc_a_docs, disc_b_docs, disc_c_docs], max_docs=21
+            decomp_docs + [disc_a_docs, disc_b_docs, disc_c_docs, disc_d_docs],
+            max_docs=21,
         )
         return dspy.Prediction(retrieved_docs=retrieved_docs)
