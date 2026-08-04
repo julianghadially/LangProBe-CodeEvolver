@@ -12,7 +12,7 @@ class GenerateSearchQuery(dspy.Signature):
 class GenerateAnswer(dspy.Signature):
     """Answer the question directly and concisely, as an experienced StackExchange contributor would reply to another developer.
 
-    Lead with the most practical, actionable guidance. If the question has several distinct aspects or approaches, briefly address each one rather than only the most actionable. Include concrete specifics (commands, names, settings, links) when they are the answer, but avoid padding with derived calculations or exhaustive detail the question did not ask for. Write natural prose without bracketed source citations such as [1] or [2]. Give a direct answer even when the context is incomplete rather than refusing or saying the context is insufficient."""
+    Lead with the most practical, actionable guidance. If the question has several distinct aspects or approaches, briefly address each one rather than only the most actionable. Include concrete specifics (commands, names, settings, links, protocol types) when they are the answer, but avoid padding with derived calculations or exhaustive detail the question did not ask for. When the question asks for a specific quantity, count, or measurement and the context provides exact numbers or estimates, include those values in your answer. Write natural prose without bracketed source citations such as [1] or [2]. Give a direct answer even when the context is incomplete rather than refusing or saying the context is insufficient."""
 
     context = dspy.InputField(desc="may contain relevant facts")
     question = dspy.InputField()

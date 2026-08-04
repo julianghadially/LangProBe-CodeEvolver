@@ -16,10 +16,10 @@ class SimplifiedBaleen(LangProBeDSPyMetaProgram, dspy.Module):
     questions (infer the concrete feature/symptom the user is seeing rather than a
     literal reading of the words), plus a non-negative fallback to the question on
     unusable/refusal queries. Synthesis is a single pass over the accumulated
-    context, with a placeholder/parse-error retry. max_hops=3, num_docs=8.
+    context, with a placeholder/parse-error retry. max_hops=3, num_docs=12.
     """
 
-    def __init__(self, retriever, num_docs=8, max_hops=3):
+    def __init__(self, retriever, num_docs=12, max_hops=3):
         super().__init__()
         self.retriever = retriever
         self.max_hops = max_hops
