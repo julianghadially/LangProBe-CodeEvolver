@@ -55,6 +55,41 @@ def _interleave_dedup(hop_docs_list, max_docs=21):
     return unique
 
 
+def _weighted_interleave_dedup(hop_docs_list, max_per_stream, max_docs=21):
+    """Round-robin interleave with per-stream slot caps, dedup by normalized title.
+
+    Like ``_interleave_dedup`` but each stream ``i`` is capped at
+    ``max_per_stream[i]`` unique passages. This lets proven streams (e.g.
+    decomposition, whose golds may rank beyond position 2) keep more slots when
+    new discovery streams are added, while the new streams (whose golds
+    typically rank top-1) get fewer slots. Titles are normalized with
+    ``dspy.evaluate.normalize_text`` to match the metric's title equality.
+    """
+    seen = set()
+    unique = []
+    if not hop_docs_list:
+        return unique
+    taken = [0] * len(hop_docs_list)
+    max_len = max(len(docs) for docs in hop_docs_list)
+    for i in range(max_len):
+        for s, docs in enumerate(hop_docs_list):
+            if i >= len(docs):
+                continue
+            if taken[s] >= max_per_stream[s]:
+                continue
+            doc = docs[i]
+            title = doc.split(" | ")[0]
+            key = dspy.evaluate.normalize_text(title)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(doc)
+            taken[s] += 1
+            if len(unique) >= max_docs:
+                return unique
+    return unique
+
+
 def _titles(docs):
     """Return the raw Wikipedia title (text before ``" | "``) of each passage."""
     return [doc.split(" | ")[0] for doc in docs]
@@ -185,12 +220,18 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         disc_c_docs = self.retrieve_k(disc_c.query1).passages
         disc_d_docs = self.retrieve_k(disc_c.query2).passages
 
-        # Round-robin interleave so all seven streams contribute to the final
-        # 21 slots; hop-order dedup would let the decomposition streams fill the
-        # cap and crowd out the discovery streams whose gold typically ranks
-        # top-1-3.
-        retrieved_docs = _interleave_dedup(
+        # Weighted round-robin interleave: decomposition streams get 4 slots
+        # (preserving iter 6/10's allocation — decomp golds may rank at
+        # position 3), discovery streams get 3 (same as iter 6's 5-stream
+        # design), and chaining streams get 2 (their golds are targeted queries
+        # that typically rank top-1).  This prevents the 7th stream from
+        # reducing decomp slots (4->3 in an equal 7-way round-robin) and the
+        # associated slot-loss risk.  Hop-order dedup would let the
+        # decomposition streams fill the cap and crowd out the discovery
+        # streams.
+        retrieved_docs = _weighted_interleave_dedup(
             decomp_docs + [disc_a_docs, disc_b_docs, disc_c_docs, disc_d_docs],
+            max_per_stream=[4, 4, 4, 3, 3, 2, 2],
             max_docs=21,
         )
         return dspy.Prediction(retrieved_docs=retrieved_docs)
