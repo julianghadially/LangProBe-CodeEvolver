@@ -123,13 +123,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.k = 15
+        self.k = 10
         # Phase 1: one-shot parallel claim decomposition (replaces the
         # sequential hop1->summarize->hop2->summarize->hop3 chain, cutting the
         # LM-call chain from 5 to 2 calls to reduce run-to-run variance).
-        # k=15 (raised from 10): iter-15 traces confirmed k=10 drops real golds
-        # at positions 5-10; the larger pool gives discovery more passage
-        # content to read and lets deeper ColBERT results enter the interleave.
         self.decompose = dspy.ChainOfThought(DecomposeClaim)
         # Phase 2: hybrid discovery.  Step 1 keeps iter 6's proven 2-query
         # single-pass discovery (the 2-query hedge recovers 1-level golds even
