@@ -179,10 +179,10 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
          MISSING; then issue up to 3 targeted follow-up queries for the missing entities.
           Repeat for a second round so entities surfaced by round 1's new docs can themselves
           be queried, enabling deep multi-hop chains (e.g. film -> director -> hometown).
-       4. LM list-reranker: from the top candidate pool (by RRF score, excluding the per-query
-          guaranteed hits), an LM reorders docs by claim-relevance; the non-guaranteed final
-          slots are filled from this ordering (rescues golds retrieved but buried below the
-          top-21 by RRF, with zero extra searches). Return the top 21 unique documents.
+       4. LM list-reranker: the baseline top-21 (guaranteed hits + top RRF fill) is protected;
+          the reranker may only PROMOTE buried candidates (ranked below top-21) by displacing
+          the weakest-RRF fill docs (rescues golds retrieved but buried below top-21, with zero
+          extra searches and no demotion of high-RRF golds). Return the top 21 unique documents.
 
     EVALUATION
     - This system is assessed by retrieving ALL the correct supporting documents.
@@ -203,15 +203,16 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     # queries for still-missing supporting entities (penalty is negligible vs. recall).
     EXPAND_ROUNDS = 2
     QUERIES_PER_ROUND = 3
-    # LM list-reranker (final stage). Builds a candidate pool of the top RERANK_POOL_SIZE
-    # docs by RRF score (excluding the per-query guaranteed docs) and asks the LM to order
-    # them by claim-relevance; the non-guaranteed final slots are filled from this ordering
-    # instead of the raw RRF order. This is a NON-BURIAL lever: it adds ZERO ColBERT
-    # searches (no new docs enter the RRF pool), so it cannot bury golds the way extra
-    # expansion queries would. It rescues golds that were RETRIEVED but ranked below the
-    # top-21 by RRF (the burial failure mode). The per-query GUARANTEE_N=2 hits stay
-    # force-included, so single-query exact-title hits keep their architectural protection.
+    # LM list-reranker (final stage). The architecture's baseline output (per-query
+    # GUARANTEE_N=2 hits + the top non-guaranteed docs by RRF) is PROTECTED: those 21 docs are
+    # never removed. The reranker only gets to PROMOTE BURIED candidates (docs ranked below the
+    # top-21 by RRF) into the final set, by displacing the WEAKEST-RRF non-guaranteed fill docs.
+    # This is the "only promote, never demote high-RRF" safety from iter-4 memory: it rescues
+    # golds that were retrieved but buried below the top-21 (the burial failure mode) while
+    # protecting the golds that already ride the RRF fill (which a full rerank would demote).
+    # It adds ZERO ColBERT searches (no new docs enter the RRF pool) -> no burial risk.
     RERANK_POOL_SIZE = 50
+    RERANK_SWAPS = 7       # max buried docs the reranker may promote (weakest fill displaced)
 
     def __init__(self):
         super().__init__()
@@ -293,39 +294,49 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             except Exception:
                 break
 
-        # ---- Final: guaranteed docs first (by best rank), then LM-reranked fill ----
+        # ---- Final: protected baseline top-21, with LM-reranker promoting buried candidates ----
+        # Baseline output (PROTECTED, never removed): guaranteed docs (by best rank) + the top
+        # non-guaranteed docs by RRF. The reranker may only PROMOTE buried docs (ranked below
+        # this baseline top-21) by displacing the WEAKEST-RRF non-guaranteed fill docs.
         guaranteed_ordered = sorted(
             guaranteed, key=lambda t: best_rank.get(t, 1_000_000)
         )
-        # Candidate pool for the reranker = top RERANK_POOL_SIZE by RRF, EXCLUDING the
-        # guaranteed docs (which are already force-included). The reranker reorders these
-        # candidates by claim-relevance; we take its top picks to fill the remaining slots.
-        pool_order = sorted(ranks, key=lambda t: -ranks[t])
-        pool = [t for t in pool_order if t not in guaranteed][: self.RERANK_POOL_SIZE]
+        pool_order = sorted(ranks, key=lambda t: -ranks[t])  # all titles, RRF desc
         fill_budget = self.MAX_DOCS - len(guaranteed_ordered)
-        reranked_fill = []
-        if fill_budget > 0 and pool:
+        # fill_by_rrf is in RRF-desc order; the TAIL is the weakest-RRF fill (displaceable).
+        fill_by_rrf = [t for t in pool_order if t not in guaranteed][:fill_budget]
+        fill_seen = set(fill_by_rrf)
+        buried = [
+            t for t in pool_order
+            if t not in guaranteed and t not in fill_seen
+        ][: self.RERANK_POOL_SIZE]
+        if fill_budget > 0 and buried:
             try:
-                candidates = [_snippet(passages[t]) for t in pool if t in passages]
+                candidates = [_snippet(passages[t]) for t in buried if t in passages]
                 rr = self.rerank(claim=claim, candidates="\n".join(candidates))
+                buried_set = set(buried)
+                promoted = []
+                promoted_set = set()
                 for title_str in _split_titles(rr.ranked):
                     t = _normalize_title(title_str)
-                    if t and t in pool and t not in guaranteed and t not in reranked_fill:
-                        reranked_fill.append(t)
-                        if len(reranked_fill) >= fill_budget:
+                    if not (t and t in buried_set and t not in promoted_set):
+                        continue
+                    # Displace the weakest-RRF fill doc not already displaced/promoted.
+                    # Iterate the tail (weakest RRF) first; guaranteed docs are not in fill_by_rrf.
+                    victim_idx = None
+                    for i in range(len(fill_by_rrf) - 1, -1, -1):
+                        if fill_by_rrf[i] not in promoted_set and fill_by_rrf[i] not in guaranteed:
+                            victim_idx = i
                             break
+                    if victim_idx is None:
+                        break
+                    fill_by_rrf[victim_idx] = t  # swap the promoted buried doc in
+                    promoted.append(t)
+                    promoted_set.add(t)
+                    if len(promoted) >= self.RERANK_SWAPS:
+                        break
             except Exception:
                 pass
-        # Fallback: if the reranker returned too few usable titles, fill the rest by RRF
-        # order so the output still has 21 docs (matches baseline behaviour on failure).
-        if len(reranked_fill) < fill_budget:
-            used = set(guaranteed_ordered) | set(reranked_fill)
-            for t in pool_order:
-                if t in used or t in guaranteed:
-                    continue
-                reranked_fill.append(t)
-                if len(reranked_fill) >= fill_budget:
-                    break
-        ordered = guaranteed_ordered + reranked_fill
+        ordered = guaranteed_ordered + fill_by_rrf
         final = [passages[t] for t in ordered[: self.MAX_DOCS] if t in passages]
         return dspy.Prediction(retrieved_docs=final)
