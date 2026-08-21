@@ -43,6 +43,34 @@ def _dedupe_queries(queries):
     return out
 
 
+def _snippet(passage: str, n: int = 320) -> str:
+    """Reduce a 'title | text' passage to a short snippet for the reranker context."""
+    parts = passage.split(" | ", 1)
+    if len(parts) == 2:
+        title, text = parts
+        text = re.sub(r"\s+", " ", text).strip()
+        if len(text) > n:
+            text = text[:n] + "..."
+        return f"{title} | {text}"
+    return re.sub(r"\s+", " ", passage).strip()[:n]
+
+
+def _split_titles(text: str) -> list:
+    """Parse a block of article titles (one per line, optionally numbered) from LM output."""
+    if not text:
+        return []
+    out = []
+    for ln in re.split(r"[\n\r]+", text):
+        ln = ln.strip()
+        if not ln:
+            continue
+        ln = re.sub(r"^\s*(?:\d+[\.\)]\s*|[-\*\u2022]\s*)", "", ln).strip()
+        ln = ln.strip("\"'“”‘’").strip()
+        if ln:
+            out.append(ln)
+    return out
+
+
 class Decompose(dspy.Signature):
     """You are a Wikipedia retrieval expert. A factual claim requires several Wikipedia
     articles to verify. Write a set of DIVERSE search queries to retrieve those articles.
@@ -112,6 +140,33 @@ class ReasonGap(dspy.Signature):
     )
 
 
+class Rerank(dspy.Signature):
+    """You are selecting the Wikipedia articles that best support verifying a factual claim.
+
+    You are given a factual claim and a list of candidate Wikipedia articles (title | short
+    snippet). Choose which of these candidates are most likely to be REQUIRED supporting
+    articles for the claim, and order them.
+
+    Recall is all-or-nothing: the claim requires ALL of its supporting articles to be
+    present in the final set. An article is a STRONG match if it is the DEDICATED Wikipedia
+    article for a distinct entity, person, work, place, or event that the claim depends on
+    (named in the claim OR reachable via a multi-hop connection, e.g. a co-creator, a
+    hometown, a parent work, an event). An article that merely MENTIONS a required entity in
+    passing is a WEAK match; prefer the entity's OWN dedicated article.
+
+    Output the candidate article TITLES, one per line, MOST relevant first. Include every
+    article likely to be a required supporting article; omit articles clearly unrelated to
+    the claim. Copy the title exactly as given. """
+
+    claim = dspy.InputField()
+    candidates = dspy.InputField(
+        desc="Candidate Wikipedia articles to rank, one per line, 'title | snippet'"
+    )
+    ranked = dspy.OutputField(
+        desc="Candidate article titles, one per line, most relevant first"
+    )
+
+
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     '''Multi-hop retrieval for a claim, optimized for document recall.
 
@@ -122,9 +177,12 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
       3. Gap-analysis-driven multi-hop expansion: reason about what the claim requires,
          which required entities already have a retrieved article, and which are STILL
          MISSING; then issue up to 3 targeted follow-up queries for the missing entities.
-         Repeat for a second round so entities surfaced by round 1's new docs can themselves
-         be queried, enabling deep multi-hop chains (e.g. film -> director -> hometown).
-      4. Return the top 21 unique documents by fused score.
+          Repeat for a second round so entities surfaced by round 1's new docs can themselves
+          be queried, enabling deep multi-hop chains (e.g. film -> director -> hometown).
+       4. LM list-reranker: from the top candidate pool (by RRF score, excluding the per-query
+          guaranteed hits), an LM reorders docs by claim-relevance; the non-guaranteed final
+          slots are filled from this ordering (rescues golds retrieved but buried below the
+          top-21 by RRF, with zero extra searches). Return the top 21 unique documents.
 
     EVALUATION
     - This system is assessed by retrieving ALL the correct supporting documents.
@@ -145,12 +203,22 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     # queries for still-missing supporting entities (penalty is negligible vs. recall).
     EXPAND_ROUNDS = 2
     QUERIES_PER_ROUND = 3
+    # LM list-reranker (final stage). Builds a candidate pool of the top RERANK_POOL_SIZE
+    # docs by RRF score (excluding the per-query guaranteed docs) and asks the LM to order
+    # them by claim-relevance; the non-guaranteed final slots are filled from this ordering
+    # instead of the raw RRF order. This is a NON-BURIAL lever: it adds ZERO ColBERT
+    # searches (no new docs enter the RRF pool), so it cannot bury golds the way extra
+    # expansion queries would. It rescues golds that were RETRIEVED but ranked below the
+    # top-21 by RRF (the burial failure mode). The per-query GUARANTEE_N=2 hits stay
+    # force-included, so single-query exact-title hits keep their architectural protection.
+    RERANK_POOL_SIZE = 50
 
     def __init__(self):
         super().__init__()
         self.retrieve = dspy.Retrieve(k=self.K_QUERY)
         self.decompose = dspy.ChainOfThought(Decompose)
         self.reason_gap = dspy.ChainOfThought(ReasonGap)
+        self.rerank = dspy.ChainOfThought(Rerank)
 
     def _retrieve_and_fuse(self, query, k, ranks, best_rank, passages, guaranteed):
         """Retrieve docs for one query and accumulate RRF scores + representative passages.
@@ -225,13 +293,39 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
             except Exception:
                 break
 
-        # ---- Final: guaranteed docs first (by best rank), then fill by RRF score ----
+        # ---- Final: guaranteed docs first (by best rank), then LM-reranked fill ----
         guaranteed_ordered = sorted(
             guaranteed, key=lambda t: best_rank.get(t, 1_000_000)
         )
-        rest = [
-            t for t in sorted(ranks, key=lambda t: -ranks[t]) if t not in guaranteed
-        ]
-        ordered = guaranteed_ordered + rest
+        # Candidate pool for the reranker = top RERANK_POOL_SIZE by RRF, EXCLUDING the
+        # guaranteed docs (which are already force-included). The reranker reorders these
+        # candidates by claim-relevance; we take its top picks to fill the remaining slots.
+        pool_order = sorted(ranks, key=lambda t: -ranks[t])
+        pool = [t for t in pool_order if t not in guaranteed][: self.RERANK_POOL_SIZE]
+        fill_budget = self.MAX_DOCS - len(guaranteed_ordered)
+        reranked_fill = []
+        if fill_budget > 0 and pool:
+            try:
+                candidates = [_snippet(passages[t]) for t in pool if t in passages]
+                rr = self.rerank(claim=claim, candidates="\n".join(candidates))
+                for title_str in _split_titles(rr.ranked):
+                    t = _normalize_title(title_str)
+                    if t and t in pool and t not in guaranteed and t not in reranked_fill:
+                        reranked_fill.append(t)
+                        if len(reranked_fill) >= fill_budget:
+                            break
+            except Exception:
+                pass
+        # Fallback: if the reranker returned too few usable titles, fill the rest by RRF
+        # order so the output still has 21 docs (matches baseline behaviour on failure).
+        if len(reranked_fill) < fill_budget:
+            used = set(guaranteed_ordered) | set(reranked_fill)
+            for t in pool_order:
+                if t in used or t in guaranteed:
+                    continue
+                reranked_fill.append(t)
+                if len(reranked_fill) >= fill_budget:
+                    break
+        ordered = guaranteed_ordered + reranked_fill
         final = [passages[t] for t in ordered[: self.MAX_DOCS] if t in passages]
         return dspy.Prediction(retrieved_docs=final)
