@@ -15,6 +15,8 @@ langProBe/RAGQAArenaTech/data/
 
 # result files
 *.txt
+# ...but this one is a required runtime asset: metric.py loads it at import time.
+!langProBe/RAGQAArenaTech/rqa_arena_eval/pairwise_lfrqa_system.txt
 *.model
 *.stat
 
