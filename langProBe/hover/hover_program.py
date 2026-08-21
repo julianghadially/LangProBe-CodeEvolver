@@ -64,35 +64,35 @@ class Decompose(dspy.Signature):
 
 class ReasonGap(dspy.Signature):
     """You are verifying a factual claim by retrieving Wikipedia articles. You have already
-    retrieved some Wikipedia passages. Your job is to find what is STILL MISSING and retrieve
-    one missing piece at a time.
+    retrieved some Wikipedia passages, and the titles of ALL retrieved articles are listed in
+    retrieved_titles. Your job is to find the supporting articles that are STILL MISSING and
+    query them.
 
     Think step-by-step:
     1. List the DISTINCT entities, people, works, places, events, and facts that the claim
-       requires in order to be verified (the full multi-hop chain, including entities that
-       are IMPLIED but not named in the claim).
-    2. For each required entity, decide whether the retrieved passages already contain a
-       DEDICATED Wikipedia article about it - check both the passage TITLES and the passage
-       TEXT for an article whose title is exactly that entity.
-    3. Identify the MISSING pieces: required entities that are NAMED LITERALLY in the passage
-       text but do NOT yet have their own retrieved article (e.g. a co-star, an author, a
-       hometown, a work title in quotes, an event like "Death of David Bowie"), OR entities
-       implied by the claim that have not been retrieved at all. Treat an event, a death, a
-       disambiguated work/season, or any distinct Wikipedia-notable concept as its OWN article.
-    4. Pick the SINGLE most important missing entity and output ONE concise Wikipedia search
-       query for it. Use the entity's OWN article title. Use the Wikipedia disambiguated-title
-       style in parentheses when the name is ambiguous (e.g. "The Grapes of Wrath (film)",
-       "The Secret Agent (TV series)", "Deutschland sucht den Superstar (season 9)",
-       "Shim Ji-ho", "Ron Teachworth"). Do NOT combine two entities into one relational
-       query (e.g. avoid "John Arledge John Ford film"); query each entity's own article.
+       REQUIRES to be verified (the full multi-hop chain, including entities IMPLIED but not
+       named in the claim).
+    2. For each required entity, check the retrieved_titles list (and the passage text) to
+       decide whether a DEDICATED Wikipedia article about it has already been retrieved.
+       IMPORTANT: an entity merely MENTIONED in the text of another article is NOT the same
+       as having its own retrieved article. If the entity's own article is not in
+       retrieved_titles, it is MISSING and must be queried, even if its name appears in some
+       other passage's text.
+    3. Identify the MISSING pieces: required entities NAMED LITERALLY in the passage text
+       whose own article is not in retrieved_titles (e.g. a co-star, an author, a hometown,
+       a work title shown in quotes, an event like "Death of David Bowie"), OR entities
+       implied by the claim not yet retrieved. Treat an event, a death, a disambiguated
+       work/season, or any distinct Wikipedia-notable concept as its OWN article.
+    4. Output one concise Wikipedia search query per MISSING entity, up to 3, targeting the
+       most important missing pieces. Use each entity's OWN article title; use the Wikipedia
+       disambiguated-title style in parentheses when ambiguous (e.g. "The Grapes of Wrath
+       (film)", "The Secret Agent (TV series)", "Deutschland sucht den Superstar (season 9)",
+       "Shim Ji-ho", "Ron Teachworth"). Do NOT combine two entities into one relational query
+       (e.g. avoid "John Arledge John Ford film"); query each entity's own article separately.
 
-    If and only if EVERY distinct entity required to verify the claim already has its own
-    retrieved Wikipedia article among the retrieved titles, output action STOP. Otherwise
-    output exactly one new search query (NOT already in prior_queries). When in doubt,
-    propose another query rather than stopping, because a missing supporting article is
-    worse than an extra search.
-
-    Prior queries already issued are listed; do NOT repeat them."""
+    Do NOT target entities already in prior_queries or whose article is already in
+    retrieved_titles. Write 1 to 3 NEW queries, exactly one per line. If and only if every
+    required entity already has its own article in retrieved_titles, output NONE."""
 
     claim = dspy.InputField()
     passages = dspy.InputField(
@@ -105,23 +105,11 @@ class ReasonGap(dspy.Signature):
         desc="Search queries already issued, one per line"
     )
     thought = dspy.OutputField(
-        desc="Step-by-step gap analysis: what the claim requires, what is found, what is missing"
+        desc="Step-by-step gap analysis: what the claim requires, what is found (in retrieved_titles), what is missing"
     )
-    action = dspy.OutputField(
-        desc="Either 'STOP' or a single concise Wikipedia search query for the most important missing entity"
+    search_queries = dspy.OutputField(
+        desc="1 to 3 NEW Wikipedia search queries for missing entities, one per line, or NONE"
     )
-
-
-def _parse_action(text):
-    """Parse a ReasonGap action into 'STOP' or a single query string (or None)."""
-    if not text:
-        return None
-    line = text.strip().splitlines()[0].strip().strip("\"'“”‘’")
-    if not line:
-        return None
-    if line.upper().startswith("STOP"):
-        return "STOP"
-    return line
 
 
 class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
@@ -131,12 +119,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
       1. Decompose the claim into several diverse search queries (one per entity/aspect).
       2. Retrieve a large candidate set per query (high k) and fuse across queries with
          Reciprocal Rank Fusion (RRF), deduplicating by document title.
-      3. ReAct-style adaptive gap analysis: repeatedly reason about what the claim
-         requires, which required entities are already retrieved, and which are STILL
-         MISSING, then issue ONE targeted follow-up query for the most important missing
-         entity; retrieve and fuse. Newly retrieved docs become visible to the next
-         reasoning step, enabling arbitrarily deep multi-hop chains (e.g. film -> director
-         -> hometown).
+      3. Gap-analysis-driven multi-hop expansion: reason about what the claim requires,
+         which required entities already have a retrieved article, and which are STILL
+         MISSING; then issue up to 3 targeted follow-up queries for the missing entities.
+         Repeat for a second round so entities surfaced by round 1's new docs can themselves
+         be queried, enabling deep multi-hop chains (e.g. film -> director -> hometown).
       4. Return the top 21 unique documents by fused score.
 
     EVALUATION
@@ -153,10 +140,11 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
     # that appear in many queries but at lower ranks. RRF alone (k=60) over-rewards
     # cross-query coverage and can drop these single-query hits below the top-21.
     GUARANTEE_N = 2
-    # ReAct loop budget: number of adaptive gap-analysis follow-up queries. Each step
-    # reasons over the current top passages and issues one targeted query, so this is
-    # also the max extra searches (penalty is negligible vs. recovering a missing gold).
-    REACT_STEPS = 7
+    # Gap-analysis expansion rounds. Each round reasons over the current top passages +
+    # the retrieved_titles list and issues up to QUERIES_PER_ROUND targeted follow-up
+    # queries for still-missing supporting entities (penalty is negligible vs. recall).
+    EXPAND_ROUNDS = 2
+    QUERIES_PER_ROUND = 3
 
     def __init__(self):
         super().__init__()
@@ -204,15 +192,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
         for q in queries[1:]:
             self._retrieve_and_fuse(q, self.K_QUERY, ranks, best_rank, passages, guaranteed)
 
-        # ---- Stage 2: ReAct-style adaptive gap-analysis retrieval ----
-        # Each step reasons over the FULL TEXT of the current top fused passages (so specific
-        # entity names are preserved) plus the full list of retrieved titles and prior queries,
-        # then issues ONE targeted query for the most important MISSING supporting entity.
-        # Newly retrieved docs become visible to the next step, enabling deep multi-hop chains.
-        # Stops early on STOP or a repeated/stuck query.
+        # ---- Stage 2: gap-analysis-driven multi-hop expansion ----
+        # Each round feeds the LM the FULL TEXT of the current top fused passages PLUS the
+        # complete retrieved_titles list (so it can tell "mentioned in text" apart from "has
+        # its own article") and asks for up to 3 targeted follow-up queries for STILL-MISSING
+        # supporting entities. Round 2 sees docs newly retrieved in round 1, enabling deeper
+        # multi-hop chains. Stops a round early if the LM reports nothing missing (NONE).
         all_queries = list(queries)
         prior = set(q.lower() for q in queries)
-        for _ in range(self.REACT_STEPS):
+        for _ in range(self.EXPAND_ROUNDS):
             try:
                 top_titles = sorted(ranks, key=lambda t: -ranks[t])[:15]
                 top_passages = [passages[t] for t in top_titles if t in passages]
@@ -225,15 +213,15 @@ class HoverMultiHop(LangProBeDSPyMetaProgram, dspy.Module):
                     retrieved_titles="\n".join(all_titles[:30]),
                     prior_queries="\n".join(all_queries),
                 )
-                action = _parse_action(rg.action)
-                if action is None or action == "STOP":
+                follow_ups = _dedupe_queries(_split_queries(rg.search_queries))
+                follow_ups = [q for q in follow_ups if q.upper() != "NONE"]
+                follow_ups = [q for q in follow_ups if q.lower() not in prior][: self.QUERIES_PER_ROUND]
+                if not follow_ups:
                     break
-                # avoid repeating an already-issued query (LM is stuck -> stop)
-                if action.lower() in prior:
-                    break
-                self._retrieve_and_fuse(action, self.K_QUERY, ranks, best_rank, passages, guaranteed)
-                all_queries.append(action)
-                prior.add(action.lower())
+                for q in follow_ups:
+                    self._retrieve_and_fuse(q, self.K_QUERY, ranks, best_rank, passages, guaranteed)
+                all_queries.extend(follow_ups)
+                prior.update(q.lower() for q in follow_ups)
             except Exception:
                 break
 
