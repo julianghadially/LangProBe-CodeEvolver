@@ -71,23 +71,35 @@ class ReasonGap(dspy.Signature):
     Think step-by-step:
     1. List the DISTINCT entities, people, works, places, events, and facts that the claim
        REQUIRES to be verified (the full multi-hop chain, including entities IMPLIED but not
-       named in the claim).
+       named in the claim). If several candidate entities could satisfy a hop (e.g. several
+       recordings whose choreographer might be the one), treat ALL of them as required until
+       one is confirmed — do not commit to a single guess.
     2. For each required entity, check the retrieved_titles list (and the passage text) to
        decide whether a DEDICATED Wikipedia article about it has already been retrieved.
        IMPORTANT: an entity merely MENTIONED in the text of another article is NOT the same
        as having its own retrieved article. If the entity's own article is not in
        retrieved_titles, it is MISSING and must be queried, even if its name appears in some
        other passage's text.
+       A "(disambiguation)" page is NOT the entity's own article — it only lists candidate
+       articles. If only a disambiguation page (or the wrong disambiguated article) is
+       retrieved, the entity is STILL MISSING; query it again with a DISAMBIGUATING
+       descriptor (its role, profession, nationality, or context) to retrieve its real
+       article (e.g. query "Pablo Escobar drug lord" not just "Pablo Escobar").
+       Do NOT declare an entity covered based on an ASSUMPTION or INFERENCE (e.g. guessing a
+       birth year, a film, or a relationship). An entity is covered ONLY if its OWN dedicated
+       article title is literally in retrieved_titles. If you are unsure, treat it as MISSING.
     3. Identify the MISSING pieces: required entities NAMED LITERALLY in the passage text
        whose own article is not in retrieved_titles (e.g. a co-star, an author, a hometown,
-       a work title shown in quotes, an event like "Death of David Bowie"), OR entities
-       implied by the claim not yet retrieved. Treat an event, a death, a disambiguated
-       work/season, or any distinct Wikipedia-notable concept as its OWN article.
+       a work title shown in quotes, an event like "Death of David Bowie", a tournament
+       partner listed by name), OR entities implied by the claim not yet retrieved. Treat an
+       event, a death, a disambiguated work/season, or any distinct Wikipedia-notable concept
+       as its OWN article.
     4. Output one concise Wikipedia search query per MISSING entity, up to 3, targeting the
-       most important missing pieces. Use each entity's OWN article title; use the Wikipedia
-       disambiguated-title style in parentheses when ambiguous (e.g. "The Grapes of Wrath
-       (film)", "The Secret Agent (TV series)", "Deutschland sucht den Superstar (season 9)",
-       "Shim Ji-ho", "Ron Teachworth"). Do NOT combine two entities into one relational query
+       most important missing pieces. Query the SPECIFIC entity's or work's OWN article
+       directly in Wikipedia disambiguated-title style (e.g. "The Grapes of Wrath (film)",
+       "The Secret Agent (TV series)", "Deutschland sucht den Superstar (season 9)",
+       "Shim Ji-ho", "Ron Teachworth"); do NOT query a filmography, list, or index page when
+       a specific article is needed. Do NOT combine two entities into one relational query
        (e.g. avoid "John Arledge John Ford film"); query each entity's own article separately.
 
     Do NOT target entities already in prior_queries or whose article is already in
