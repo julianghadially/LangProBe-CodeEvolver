@@ -54,9 +54,12 @@ We use the same LangProbe training, validation, and testing sets.
 # Baseline on test set
 python -m simple_eval.evaluate_hotpot --split test
 
-# GEPA-optimized on test set
+# GEPA-optimized on test set. Produce the program JSON first with
+# `python -m gepa_optimize.run_gepa --program hotpot`, which writes
+# gepa_optimize/output_<program>_<timestamp>/ (git-ignored -- optimizer output
+# is never committed back into the repo).
 python -m simple_eval.evaluate_hotpot --split test \
-    --program_path gepa_optimize/output_promptonly_gepa/gepa_optimized_program.json
+    --program_path gepa_optimize/output_<program>_<timestamp>/gepa_optimized_program.json
 ```
 
 Hotpot uses the following components:

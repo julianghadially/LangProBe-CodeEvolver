@@ -5,13 +5,15 @@ Usage:
     # Baseline on test set
     python -m simple_eval.evaluate --split test
 
-    # GEPA-optimized program on test set
+    # GEPA-optimized program on test set. Generate the JSON with
+    # `python -m gepa_optimize.run_gepa --program hotpot`; its output directory
+    # is git-ignored, so no optimized program ships in the repo.
     python -m simple_eval.evaluate --split test \
-        --program_path gepa_optimize/output_promptonly_gepa/gepa_optimized_program.json
+        --program_path gepa_optimize/output_<program>_<timestamp>/gepa_optimized_program.json
 
     # Reproduce GEPA val subsample (seed=42, n=150)
     python -m simple_eval.evaluate --split val --seed 42 --n 150 \
-        --program_path gepa_optimize/output_promptonly_gepa/gepa_optimized_program.json
+        --program_path gepa_optimize/output_<program>_<timestamp>/gepa_optimized_program.json
 """
 
 import argparse

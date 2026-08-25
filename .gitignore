@@ -27,8 +27,13 @@ simple_eval/results/gepa*
 simple_eval/results/
 mlruns
 mlartifacts
-gepa_optimize/output_promptonly_gepa/gepa_logs/
-gepa_optimize/output_hover_CE_202603032032/gepa_logs
+# GEPA optimizer output. run_gepa.py writes gepa_optimize/output_<program>_<ts>/,
+# holding an optimized program JSON (evolved prompt instructions) plus its
+# scores. Two such directories were previously COMMITTED, one of them
+# containing tuned instructions for hover's own create_query_hop2 signature --
+# a prior optimizer's solution to a live benchmark, sitting in the repo the
+# next optimizer reads. Ignore the whole shape so that cannot recur.
+gepa_optimize/output_*/
 .venv
 env
 .env

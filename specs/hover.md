@@ -12,5 +12,10 @@ According to the GEPA paper:
 
 ## Ambiguity in GEPA
 
-**Hop filtering:** The training data in GEPA is filtered to 3-hop only (count_unique_docs == 3), and the test set is unspecified. When we include hop counts of all hops we get 33-36% test results. The GEPA paper doesn't explicitly state whether it filters test examples by hops, and the langProBe repository has no filter by default (whereas the training set is filtered)
+**Hop filtering:** The training data in GEPA is filtered to 3-hop only (count_unique_docs == 3), and the test set is unspecified. The GEPA paper doesn't explicitly state whether it filters test examples by hops, and the langProBe repository has no filter by default (whereas the training set is filtered). Including all hop counts measurably lowers the score.
+
+*(A held-out test-set number for the unfiltered variant used to be quoted here
+and has been removed. This file is readable by the optimizing agent, and a
+prior test score on the benchmark it is being scored against is exactly what
+the holdout fence exists to keep away from it.)*
 
