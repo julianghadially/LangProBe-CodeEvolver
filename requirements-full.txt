@@ -1,0 +1,23 @@
+# Everything the ORIGINAL LangProBe suite needs on top of requirements.txt:
+# other benchmarks (IReRa -> sentence-transformers + torch, MATH ->
+# math-verify, AppWorld -> shortuuid), the langchain programs, the
+# HuggingFace dataset builders (*_data.py), the analysis notebooks and the
+# MLflow-traced simple_eval harness. Not installed by CodeEvolver's runner
+# image or sandbox -- see requirements.txt. Install with
+#   pip install -r requirements-full.txt
+-r requirements.txt
+shortuuid
+seaborn
+langchain
+black==23.11.0
+sentence-transformers==2.2.2
+sentencepiece==0.1.99
+torch==2.10.0
+ipython==8.17.2
+huggingface-hub==0.25.0
+math-verify==0.6.0
+langchain_community
+pybind11>=2.12
+numpy==2.2.6
+datasets==4.5.0
+mlflow==3.14.0

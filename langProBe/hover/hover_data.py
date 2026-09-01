@@ -1,13 +1,18 @@
 from ..benchmark import Benchmark
 import dspy
-from datasets import load_dataset
-import tqdm
 import random
 from .hover_utils import count_unique_docs
 
 
 class hoverBench(Benchmark):
     def init_dataset(self):
+        # Lazy: `datasets` (HF hub builder) and `tqdm` live in
+        # requirements-full.txt, not requirements.txt. This package's __init__
+        # imports this module, and the CodeEvolver path (hover_pipeline) only
+        # needs the committed data/hoverBench_*.json files -- never the builder.
+        from datasets import load_dataset
+        import tqdm
+
         dataset = load_dataset("hover-nlp/hover", revision="refs/convert/parquet")
 
         hf_trainset = dataset["train"]

@@ -1,21 +1,16 @@
+# Runtime requirements for the CodeEvolver benchmarks hosted here (hover and
+# RAGQAArenaTech) and the simple_eval harness. This is the file the runner
+# image (`runner/Dockerfile.bench`) and the sandbox install, so it is kept to
+# what those programs import: DSPy (which brings litellm/openai), requests
+# for the ColBERT / retriever HTTP clients, ujson for the RAGQA data loader,
+# and the DSPy->OpenTelemetry tracing bridge. The full LangProBe suite
+# (IReRa's sentence-transformers + torch, the langchain programs, the HF
+# dataset builders, analysis notebooks, MLflow, ...) is in
+# requirements-full.txt -- do NOT add GPU/torch wheels here, they bloat every
+# benchmark image for programs that never import them.
 dspy==3.1.3
 requests
-shortuuid
-seaborn
-langchain
-black==23.11.0
-sentence-transformers==2.2.2
-sentencepiece==0.1.99
-torch==2.10.0
-ipython==8.17.2
-huggingface-hub==0.25.0
-math-verify==0.6.0
-langchain_community
-pybind11>=2.12
-numpy==2.2.6
-datasets==4.5.0
+ujson
 openinference-instrumentation-dspy
 opentelemetry-api>=1.27.0
 opentelemetry-sdk>=1.27.0
-mlflow==3.14.0
-ujson
