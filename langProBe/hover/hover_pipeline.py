@@ -24,9 +24,11 @@ class HoverMultiHopPipeline(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # DeepSeek-V4-Flash (reasoning_effort="high") on GMI Cloud, with a
-        # per-call fallback to the same model on DeepInfra when GMI answers a
-        # 4xx. Provider wiring lives in langProBe/lm_provider.py.
+        # DeepSeek-V4-Flash (reasoning_effort="high"), served by the preferred
+        # provider with a per-call fallback to the same model on the next one
+        # down the order when it errors. Provider wiring lives in
+        # langProBe/lm_provider.py; $LM_PROVIDER and $LM_FALLBACK repoint the
+        # provider / name the cover / disarm the fallback.
         self.lm = build_task_lm()
 
         self.rm = CountingRM(dspy.ColBERTv2(url=COLBERT_URL))

@@ -39,9 +39,11 @@ class RAGQAArenaTechPipeline(LangProBeDSPyMetaProgram, dspy.Module):
 
     def __init__(self, program: dspy.Module | None = None, retriever=None):
         super().__init__()
-        # DeepSeek-V4-Flash (reasoning_effort="high") on GMI Cloud, with a
-        # per-call fallback to the same model on DeepInfra when GMI answers a
-        # 4xx. Provider wiring lives in langProBe/lm_provider.py.
+        # DeepSeek-V4-Flash (reasoning_effort="high"), served by the preferred
+        # provider with a per-call fallback to the same model on the next one
+        # down the order when it errors. Provider wiring lives in
+        # langProBe/lm_provider.py; $LM_PROVIDER and $LM_FALLBACK repoint the
+        # provider / name the cover / disarm the fallback.
         self.lm = build_task_lm()
         # The pipeline owns the retrieval database and injects it into the program,
         # so the inner program is pure logic the optimizer can freely swap/evolve.

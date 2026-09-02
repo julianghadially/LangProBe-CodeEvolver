@@ -4,6 +4,7 @@ local_cache
 temp
 env/*
 .codeevolver.lock
+.env.local
 
 scratchpad.ipynb
 langProBe/AppWorld/data/
